@@ -306,6 +306,18 @@ describe('buildPrompt — argument parsing (S15)', () => {
     expect(prompt).not.toContain('Requirements: fix the auth bug --reviewer')
   })
 
+  it('forwards --with-comments in the options line and keeps the requirements value', () => {
+    const { prompt } = buildPrompt({
+      baseCommand: 'review',
+      subArgs: ['target', '--fresh', '--with-comments', '--requirements', 'https://app.clickup.com/t/abc'],
+      commandContent: '# review',
+      executionUid: 'uid',
+      localCli: '/abs/cli.js',
+    })
+    expect(prompt).toContain('Options: --fresh --with-comments')
+    expect(prompt).toContain('Requirements: https://app.clickup.com/t/abc')
+  })
+
   it('captures requirements regardless of flag order', () => {
     const { prompt } = buildPrompt({
       baseCommand: 'review',

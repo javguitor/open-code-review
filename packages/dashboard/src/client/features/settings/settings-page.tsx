@@ -146,6 +146,24 @@ export function SettingsPage() {
         <FieldError message={errorFor('language')} />
       </section>
 
+      <section className={SECTION_CLASS}>
+        <h2 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{t('requirements.integrations_title')}</h2>
+        <p className="text-sm">
+          <span className="text-zinc-600 dark:text-zinc-300">{t('requirements.clickup_token')}: </span>
+          <span
+            className={cn(
+              'font-medium',
+              data.integrations?.clickup_token === 'configured'
+                ? 'text-emerald-600 dark:text-emerald-400'
+                : 'text-amber-600 dark:text-amber-400',
+            )}
+          >
+            {t(data.integrations?.clickup_token === 'configured' ? 'requirements.token_configured' : 'requirements.token_missing')}
+          </span>
+        </p>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">{t('requirements.clickup_token_hint')}</p>
+      </section>
+
       <div className="flex items-center gap-3">
         <button
           type="button"

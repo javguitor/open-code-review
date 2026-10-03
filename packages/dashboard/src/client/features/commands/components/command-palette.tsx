@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { Play, ShieldAlert, Sparkles } from 'lucide-react'
 import { useT } from '../../../lib/i18n'
 import type { MessageKey } from '../../../lib/i18n'
@@ -6,6 +6,7 @@ import { cn } from '../../../lib/utils'
 import { useReviewers } from '../hooks/use-reviewers'
 import { ReviewerDefaults, type ReviewerSelection } from './reviewer-defaults'
 import { ReviewerDialog } from './reviewer-dialog'
+import { RequirementsPreview } from '../../requirements/components/requirements-preview'
 
 // ── Command registry ──
 
@@ -32,7 +33,8 @@ const COMMANDS: CommandDef[] = [
     description: 'commands.cmd_review_description',
     params: [
       { name: 'target', type: 'text', label: 'commands.param_target', placeholder: 'commands.param_target_placeholder' },
-      { name: 'requirements', type: 'text', label: 'commands.param_requirements', placeholder: 'commands.param_requirements_placeholder' },
+      { name: 'requirements', type: 'text', label: 'commands.param_requirements', placeholder: 'requirements.placeholder' },
+      { name: 'withComments', type: 'toggle', label: 'requirements.include_comments' },
       { name: 'fresh', type: 'toggle', label: 'commands.param_fresh' },
     ],
   },
@@ -43,7 +45,8 @@ const COMMANDS: CommandDef[] = [
     description: 'commands.cmd_map_description',
     params: [
       { name: 'target', type: 'text', label: 'commands.param_target', placeholder: 'commands.param_target_placeholder' },
-      { name: 'requirements', type: 'text', label: 'commands.param_requirements', placeholder: 'commands.param_requirements_placeholder' },
+      { name: 'requirements', type: 'text', label: 'commands.param_requirements', placeholder: 'requirements.placeholder' },
+      { name: 'withComments', type: 'toggle', label: 'requirements.include_comments' },
       { name: 'fresh', type: 'toggle', label: 'commands.param_fresh' },
     ],
   },
@@ -93,6 +96,9 @@ export function parseCommandString(raw: string): ParsedCommand | null {
     const token = parts[i] ?? ''
     if (token === '--fresh') {
       params['fresh'] = true
+      i++
+    } else if (token === '--with-comments') {
+      params['withComments'] = true
       i++
     } else if (token === '--team' && i + 1 < parts.length) {
       const teamStr = parts[i + 1] ?? ''
@@ -367,6 +373,10 @@ export function CommandPalette({ isRunning, runningCount, onRunCommand, prefill,
     }
 
     const requirements = paramValues['requirements']
+    // Must precede --requirements: the parser treats everything after it as free text.
+    if (paramValues['withComments'] === true && typeof requirements === 'string' && requirements.trim()) {
+      parts.push('--with-comments')
+    }
     if (typeof requirements === 'string' && requirements.trim()) {
       parts.push('--requirements', requirements.trim())
     }
@@ -426,7 +436,8 @@ export function CommandPalette({ isRunning, runningCount, onRunCommand, prefill,
         <div className="space-y-3">
           {selectedCommand.params.map((param) =>
             param.type === 'text' ? (
-              <div key={param.name} className="flex items-center gap-3">
+              <Fragment key={param.name}>
+              <div className="flex items-center gap-3">
                 <label className="w-28 shrink-0 text-right text-xs font-medium text-zinc-500 dark:text-zinc-400">
                   {t(param.label)}
                 </label>
@@ -445,6 +456,16 @@ export function CommandPalette({ isRunning, runningCount, onRunCommand, prefill,
                   )}
                 />
               </div>
+              {param.name === 'requirements' && (
+                <RequirementsPreview
+                  target={typeof paramValues['target'] === 'string' ? paramValues['target'] : ''}
+                  requirements={typeof paramValues['requirements'] === 'string' ? paramValues['requirements'] : ''}
+                  withComments={paramValues['withComments'] === true}
+                  disabled={isRunning}
+                  onUseSource={(url) => setParam('requirements', url)}
+                />
+              )}
+              </Fragment>
             ) : (
               <div key={param.name} className="flex items-center gap-3">
                 <span className="w-28 shrink-0" />

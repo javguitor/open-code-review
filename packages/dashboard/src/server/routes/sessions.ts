@@ -7,8 +7,8 @@
  * workflows without requiring CLI schema changes.
  */
 
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, isAbsolute, join } from 'node:path'
 import { Router } from 'express'
 import type { Database } from '@open-code-review/persistence'
 import { getWorktreeConfig } from '@open-code-review/config/worktree-config'
@@ -24,6 +24,11 @@ import {
   getRoundProgress,
 } from '../db.js'
 import { getPrHead, PrHeadLookupError } from '../services/pr-head.js'
+import {
+  getRequirementsHead,
+  isLookupable,
+  RequirementsHeadLookupError,
+} from '../services/requirements-head.js'
 
 // Phase names must match session-detail-page.tsx constants
 const REVIEW_PHASE_NAMES = [
@@ -187,11 +192,70 @@ async function computeStale(
   return { stale: current === null ? null : current !== session.head_sha, pr_head_sha: current }
 }
 
+// ── Requirements staleness ──
+
+type RequirementsInfo = {
+  /** Title from the session's `requirements/source.json`, null when absent/unreadable. */
+  requirements_title: string | null
+  /** null = not applicable (no source, text/file source, no stored timestamp) or the lookup failed. */
+  requirements_stale: boolean | null
+  /** The provider's current `updated_at`, for the "changed on <date>" banner. */
+  requirements_current_updated_at: string | null
+}
+
+type GetRequirementsHead = (
+  url: string,
+  opts: { force?: boolean; cacheOnly?: boolean },
+) => Promise<string | null>
+
+function readRequirementsTitle(session: SessionRow, ocrDir: string | undefined): string | null {
+  try {
+    const dir = isAbsolute(session.session_dir)
+      ? session.session_dir
+      : join(ocrDir ? dirname(ocrDir) : '.', session.session_dir)
+    const title = (JSON.parse(readFileSync(join(dir, 'requirements', 'source.json'), 'utf-8')) as { title?: unknown }).title
+    return typeof title === 'string' ? title : null
+  } catch {
+    return null
+  }
+}
+
+/** Newer-than when both parse as dates; any difference otherwise (formats vary by provider). */
+function isNewer(current: string, stored: string): boolean {
+  const c = Date.parse(current)
+  const s = Date.parse(stored)
+  return Number.isNaN(c) || Number.isNaN(s) ? current !== stored : c > s
+}
+
+async function computeRequirements(
+  session: SessionRow,
+  ocrDir: string | undefined,
+  getReqHead: GetRequirementsHead,
+  opts: { force?: boolean; cacheOnly?: boolean } = {},
+): Promise<RequirementsInfo> {
+  const info: RequirementsInfo = {
+    requirements_title: readRequirementsTitle(session, ocrDir),
+    requirements_stale: null,
+    requirements_current_updated_at: null,
+  }
+  const url = session.requirements_source_url
+  if (!url || !session.requirements_updated_at || !isLookupable(url)) return info
+  const current = await getReqHead(url, opts)
+  if (current === null) return info
+  return {
+    ...info,
+    requirements_stale: isNewer(current, session.requirements_updated_at),
+    requirements_current_updated_at: current,
+  }
+}
+
 export type SessionsRouterDeps = {
   /** Needed for the PR worktree path; omitted → `worktree_path` is null. */
   ocrDir?: string
   /** Injectable so tests need no `gh`. */
   getPrHead?: typeof getPrHead
+  /** Injectable so tests need no `ocr requirements fetch`. */
+  getRequirementsHead?: GetRequirementsHead
 }
 
 // ── Router ──
@@ -199,6 +263,8 @@ export type SessionsRouterDeps = {
 export function createSessionsRouter(db: Database, deps: SessionsRouterDeps = {}): Router {
   const router = Router()
   const getHead = deps.getPrHead ?? getPrHead
+  const getReqHead: GetRequirementsHead = deps.getRequirementsHead ??
+    ((url, opts) => getRequirementsHead(url, { ...opts, ocrDir: deps.ocrDir ?? '.ocr' }))
 
   const worktreePath = (s: SessionRow): string | null => {
     if (!deps.ocrDir || s.pr_number === null) return null
@@ -213,12 +279,12 @@ export function createSessionsRouter(db: Database, deps: SessionsRouterDeps = {}
       // Spawn `gh` only for active sessions; every other PR session is served
       // from the cache (possibly stale, possibly absent) so a list render never
       // fans out one `gh` per historical round.
-      const stale = await Promise.all(
-        sessions.map((s) =>
-          computeStale(s, getHead, s.status === 'active' ? {} : { cacheOnly: true }),
-        ),
-      )
-      res.json(sessions.map((s, i) => ({ ...enrichSession(db, s), ...stale[i] })))
+      const lookup = (s: SessionRow) => (s.status === 'active' ? {} : { cacheOnly: true })
+      const [stale, reqs] = await Promise.all([
+        Promise.all(sessions.map((s) => computeStale(s, getHead, lookup(s)))),
+        Promise.all(sessions.map((s) => computeRequirements(s, deps.ocrDir, getReqHead, lookup(s)))),
+      ])
+      res.json(sessions.map((s, i) => ({ ...enrichSession(db, s), ...stale[i], ...reqs[i] })))
     } catch (err) {
       console.error('Failed to fetch sessions:', err)
       res.status(500).json({ error: 'Failed to fetch sessions' })
@@ -236,6 +302,7 @@ export function createSessionsRouter(db: Database, deps: SessionsRouterDeps = {}
       res.json({
         ...enrichSession(db, session),
         ...(await computeStale(session, getHead)),
+        ...(await computeRequirements(session, deps.ocrDir, getReqHead)),
         worktree_path: worktreePath(session),
       })
     } catch (err) {
@@ -244,7 +311,7 @@ export function createSessionsRouter(db: Database, deps: SessionsRouterDeps = {}
     }
   })
 
-  // POST /api/sessions/:id/check-updates — Re-read the PR head, bypassing the cache
+  // POST /api/sessions/:id/check-updates — Re-read the PR head and requirements source, bypassing the cache
   router.post('/:id/check-updates', async (req, res) => {
     try {
       const session = getSession(db, req.params['id'] as string)
@@ -252,7 +319,21 @@ export function createSessionsRouter(db: Database, deps: SessionsRouterDeps = {}
         res.status(404).json({ error: 'Session not found' })
         return
       }
-      res.json({ head_sha: session.head_sha, ...(await computeStale(session, getHead, { force: true })) })
+      const pr = await computeStale(session, getHead, { force: true })
+      // A requirements failure is reported, never a 502: only the PR head failing is.
+      let reqs: RequirementsInfo & { requirements_error?: string }
+      try {
+        reqs = await computeRequirements(session, deps.ocrDir, getReqHead, { force: true })
+      } catch (err) {
+        if (!(err instanceof RequirementsHeadLookupError)) throw err
+        reqs = {
+          requirements_title: readRequirementsTitle(session, deps.ocrDir),
+          requirements_stale: null,
+          requirements_current_updated_at: null,
+          requirements_error: err.message,
+        }
+      }
+      res.json({ head_sha: session.head_sha, ...pr, ...reqs })
     } catch (err) {
       if (err instanceof PrHeadLookupError) {
         res.status(502).json({ error: err.message })
