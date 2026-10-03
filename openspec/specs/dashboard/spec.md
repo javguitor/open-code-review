@@ -2178,7 +2178,7 @@ The dashboard SHALL show when a PR-targeted session no longer matches the PR's c
 
 - **WHEN** the user clicks "Check for updates"
 - **THEN** the server refreshes the PR head (bypassing its cache) and updates the badge
-- **AND** if the lookup fails the endpoint answers 502 and the UI shows an error
+- **AND** if the PR-head lookup fails the endpoint still answers 200 with `pr_error` (and the requirements result, when the session has a requirements source), and the UI shows an error
 - **AND** "Re-review" runs the review command with the session's stored `pr_url` (never a bare number), which creates the next round in the same worktree
 
 #### Scenario: Decisions survive a re-review
@@ -2257,3 +2257,33 @@ The dashboard SHALL show a PR session's worktree state and let the user remove i
 
 - **WHEN** a review is posted successfully while an execution of the PR is running
 - **THEN** the success step reports it as kept (`kept_running`) and offers no button
+
+### Requirement: Requirements Field and Source Preview
+
+The review and map command forms SHALL accept a requirements source (URL, path or text), preview it before launching, and suggest links detected in the PR body.
+
+#### Scenario: Preview a ClickUp card
+
+- **WHEN** the user enters a ClickUp URL and clicks Preview
+- **THEN** the dashboard runs `ocr requirements fetch --json --dry-run` and shows title, last update and the first lines; a missing token shows the variable name
+
+#### Scenario: Suggested from the PR
+
+- **GIVEN** a `pr:<n>` target whose body links a card or issue
+- **WHEN** the form renders
+- **THEN** a chip "Use requirements from <title>" fills the field; nothing is fetched until the user acts
+
+#### Scenario: Comments toggle
+
+- **WHEN** the user enables "Include comments"
+- **THEN** the launch passes `--with-comments`
+
+### Requirement: Requirements Staleness
+
+The dashboard SHALL show when the requirements source changed after the review.
+
+#### Scenario: Banner
+
+- **GIVEN** a session with `requirements_source_url` and `requirements_updated_at`
+- **WHEN** "Check for updates" finds a newer `updated_at` at the provider
+- **THEN** the session page shows "Requirements changed on <date>" with a link to the source; nothing is re-fetched into the session automatically
