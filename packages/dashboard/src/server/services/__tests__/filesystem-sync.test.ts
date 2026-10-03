@@ -623,6 +623,20 @@ Info level.
       )
     }
 
+    it('never lowers a round the CLI already opened before its directory exists', async () => {
+      // `ocr state begin` sets current_round = 2 while only rounds/round-1/
+      // exists on disk; a sync in that window must not reset it to 1.
+      const sessionId = '2026-01-01-round-two-pending'
+      mkdirSync(join(sessionsDir, sessionId, 'rounds', 'round-1', 'reviews'), { recursive: true })
+      writeFileSync(join(sessionsDir, sessionId, 'context.md'), '# Context\n')
+      seedSession(sessionId, { phase: 'change-context', phaseNumber: 2, round: 2 })
+
+      await new FilesystemSync(db, sessionsDir).fullScan()
+
+      const session = queryOne(db, 'SELECT current_round FROM sessions WHERE id = ?', [sessionId])
+      expect(session?.['current_round']).toBe(2)
+    })
+
     it('a backfilled session with final.md but no round_completed event derives synthesis, stays open, and is not complete', async () => {
       // The accept-too-soon defect: final.md presence alone must NOT be read as
       // terminal completion. Such a round is at the synthesis phase, the session

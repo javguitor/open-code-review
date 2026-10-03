@@ -370,8 +370,12 @@ export class FilesystemSync {
       // benign projection sync, NOT a close. (Not routed through the CLI's
       // updateSession because that helper doesn't always bump round/run and
       // this raw UPDATE is not a close-guard concern.)
+      // MAX(): never lower a count the CLI already advanced — `ocr state begin`
+      // opens round N+1 before its `rounds/round-N+1/` directory exists, and a
+      // sync in that window would otherwise reset the round to N.
       this.db.run(
-        `UPDATE sessions SET current_round = ?, current_map_run = ?, updated_at = datetime('now')
+        `UPDATE sessions SET current_round = MAX(current_round, ?), current_map_run = MAX(current_map_run, ?),
+           updated_at = datetime('now')
          WHERE id = ?`,
         [currentRound, currentMapRun, sessionId],
       )
