@@ -244,7 +244,7 @@ Every item in `final.md` is one synthesized finding, and its id is the `key` you
 
 - **Blockers** and **Should Fix**: a `**ID**: S<n>` line directly under the item heading (before `**Flagged by**`).
 - **Suggestions**: an `[S<n>]` prefix at the start of each bullet.
-- Keys are unique within the round and each appears exactly once. `synthesis_counts` equals the number of tagged items per section.
+- Keys are unique within the round and each appears exactly once. Items under `### Style` are tagged `[S<n>]` like any other bullet, but their `category` is `"style"`, so they are not counted as suggestions: `synthesis_counts.suggestions` is the number of `synthesis_findings` with `category: "suggestion"`. With `synthesis_findings` present, `synthesis_counts` is optional (derived from them).
 - `ID` and `S<n>` are literal tokens: they stay as written whatever the output language.
 
 ---
@@ -438,4 +438,4 @@ Full reviews available in session directory:
    - Emit one `synthesis_findings` entry per item in `final.md`, with the **post-synthesis** `category` and `severity` (promoted/demoted classification), the merged reviewer findings as `sources`, and the same `S<n>` key that tags the item in `final.md`.
    - Entries of `reviewers[].findings[]` KEEP the category and severity their reviewer assigned; do not rewrite them to the synthesized classification.
    - Every reviewer finding is the source of exactly one synthesized finding (complete partition).
-   - `synthesis_counts`, when present, MUST equal the number of tagged items under Blockers, Should Fix and Suggestions in your final output (`synthesis_counts.blockers`, `synthesis_counts.should_fix`, `synthesis_counts.suggestions`). The dashboard counts from `synthesis_findings` when present.
+   - `synthesis_counts` is optional once `synthesis_findings` is present (the counts are derived from them). When you include it, it MUST equal the number of `synthesis_findings` per category: `blockers` = `category: "blocker"`, `should_fix` = `category: "should_fix"`, `suggestions` = `category: "suggestion"` only. Items you list under `### Style` (`category: "style"`) keep their `[S<n>]` tag but are NOT counted in `suggestions`. Never recategorize `style` as `suggestion` to make the numbers match.

@@ -260,6 +260,27 @@ describe("validateRoundMeta - synthesis_counts with synthesis_findings", () => {
     );
   });
 
+  describe("a `style` synthesized finding (counted apart from suggestions, like counts.ts)", () => {
+    const withStyle = (): Obj[] => {
+      const sf = validSynthesis();
+      (sf[3] as Obj).category = "style";
+      return sf;
+    };
+
+    it("accepts suggestions that exclude the style item (and counts omitted)", () => {
+      expect(() =>
+        validateRoundMeta(payload({ synthesis_findings: withStyle(), synthesis_counts: { blockers: 1, should_fix: 2, suggestions: 0 } })),
+      ).not.toThrow();
+      expect(() => validateRoundMeta(payload({ synthesis_findings: withStyle() }))).not.toThrow();
+    });
+
+    it("rejects counting the style item as a suggestion, with the mismatch message", () => {
+      expect(() =>
+        validateRoundMeta(payload({ synthesis_findings: withStyle(), synthesis_counts: { blockers: 1, should_fix: 2, suggestions: 1 } })),
+      ).toThrow("synthesis_counts.suggestions (1) does not match the 0 synthesized suggestions in synthesis_findings");
+    });
+  });
+
   it("still rejects malformed counts", () => {
     expect(() => validateRoundMeta(payload({ synthesis_counts: { blockers: -1, should_fix: 2, suggestions: 1 } }))).toThrow(/blockers/);
   });

@@ -113,23 +113,31 @@ describe('synthesis findings routes', () => {
     expect(row('SELECT COUNT(*) AS n FROM finding_revisions').n).toBe(0)
   })
 
-  it('the reviewer route refuses a proposal in a round that uses synthesis', async () => {
-    const r = await api('POST', '/findings/1/apply-proposal', {
-      severity: 'low', reason: 'guarded upstream by the gateway', conversation_id: 'c1',
-    })
-    expect(r.status).toBe(404)
-    expect(r.body.code).toBe('not-found')
+  it('reviewer rows of a synthesized round are read-only: decision, revise and apply-proposal answer 409 synthesized-round', async () => {
+    const refused = async (method: string, path: string, body: unknown): Promise<void> => {
+      const r = await api(method, path, body)
+      expect(r.status).toBe(409)
+      expect(r.body.code).toBe('synthesized-round')
+    }
+    await refused('PATCH', '/findings/1/decision', { status: 'dismissed', reason: 'decided on the copy' })
+    await refused('POST', '/findings/1/revise', { field: 'severity', value: 'low', reason: 'on the copy', source: 'user' })
+    await refused('POST', '/findings/1/apply-proposal', { severity: 'low', reason: 'guarded upstream by the gateway', conversation_id: 'c1' })
+    expect(row('SELECT COUNT(*) AS n FROM user_finding_progress').n).toBe(0)
+    expect(row('SELECT COUNT(*) AS n FROM finding_revisions').n).toBe(0)
     expect(row('SELECT severity FROM review_findings WHERE id = 1').severity).toBe('high')
     expect(row('SELECT severity FROM synthesis_findings WHERE id = 1').severity).toBe('high')
+    expect(emitted).toEqual([])
+    // reads stay open: the provenance is still inspectable
+    expect((await api('GET', '/findings/1')).status).toBe(200)
   })
 
-  it('the synthesis route refuses a retired finding (409) and a legacy round', async () => {
+  it('a round whose synthesized rows are all retired is legacy again: the reviewer route writes, the synthesis route answers 409 retired', async () => {
     db.run("UPDATE synthesis_findings SET retired_at = datetime('now') WHERE id = 1")
     const body = { severity: 'low', reason: 'guarded upstream by the gateway', conversation_id: 'c1' }
-    // the round no longer uses synthesis: kind guard says "reviewer", so the synthesis route is wrong-kind
-    expect((await api('POST', '/synthesis-findings/1/apply-proposal', body)).status).toBe(404)
-    // while another live synthesized finding keeps the round on synthesis, the retired one is 409
-    db.run("INSERT INTO synthesis_findings (round_id, key, title, severity, category) VALUES (1, 'S2', 'Another live problem', 'low', 'suggestion')")
-    expect((await api('POST', '/synthesis-findings/1/apply-proposal', body)).status).toBe(409)
+    const retired = await api('POST', '/synthesis-findings/1/apply-proposal', body)
+    expect(retired.status).toBe(409)
+    expect(retired.body.code).toBe('retired')
+    expect((await api('POST', '/findings/1/apply-proposal', body)).status).toBe(200)
+    expect(row('SELECT severity FROM review_findings WHERE id = 1').severity).toBe('low')
   })
 })

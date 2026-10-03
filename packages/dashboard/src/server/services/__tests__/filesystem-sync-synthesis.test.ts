@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mkdirSync, writeFileSync, utimesSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -12,7 +12,6 @@ import {
   listSynthesisFindings,
   reviseSubject,
   setSubjectDecision,
-  setFindingDecision,
   type Database,
 } from '@open-code-review/persistence'
 import { removeTempWorkspace } from '@open-code-review/persistence/test-support'
@@ -135,9 +134,9 @@ describe('synthesized finding ingestion', () => {
     const s2 = synthId('S2')
     setSubjectDecision(db, { kind: 'synthesis', id: s1 }, { status: 'dismissed', reason: 'false positive: parameterized upstream' })
     reviseSubject(db, { kind: 'synthesis', id: s1 }, { field: 'severity', value: 'low', reason: 'unreachable', source: 'user' })
-    // decision on a reviewer copy must not be touched either
+    // a decision made on a reviewer copy before the round was synthesized must not be touched either
     const copy = reviewerRow('SQL injection in login')
-    setFindingDecision(db, { findingId: copy, status: 'confirmed' })
+    db.run("INSERT INTO user_finding_progress (finding_id, status) VALUES (?, 'fixed')", [copy])
 
     for (let i = 0; i < 3; i++) {
       writeMeta([S1, S2])
@@ -153,6 +152,7 @@ describe('synthesized finding ingestion', () => {
     expect(f.severity).toBe('low') // revised value survives a re-sync that says "high"
     expect(getSubjectRevisions(db, { kind: 'synthesis', id: s1 }).map((r) => r.field)).toEqual(['status', 'severity'])
     expect(reviewerRow('SQL injection in login')).toBe(copy)
+    expect(rows('SELECT status FROM user_finding_progress WHERE finding_id = ?', [copy])[0]?.['status']).toBe('fixed')
   })
 
   it('renumbered keys never move a decision: it is retired with its history, the new key starts clean', async () => {
@@ -212,10 +212,11 @@ describe('synthesized finding ingestion', () => {
     writeMeta([S1, S2])
     await scan()
     setSubjectDecision(db, { kind: 'synthesis', id: synthId('S2') }, { status: 'fixed' })
-    writeMeta([S1])
+    // a re-synthesis renumbers the validation problem S3: the decided S2 leaves the live set
+    writeMeta([S1, { ...S2, key: 'S3' }])
     await scan()
-    expect(listSynthesisFindings(db, roundId()).map((f) => f.key)).toEqual(['S1'])
-    expect(listSynthesisFindings(db, roundId(), { includeRetired: true })).toHaveLength(2)
+    expect(listSynthesisFindings(db, roundId()).map((f) => f.key)).toEqual(['S1', 'S3'])
+    expect(listSynthesisFindings(db, roundId(), { includeRetired: true })).toHaveLength(3)
   })
 
   it('a round re-finalized without synthesis_findings drops back to legacy', async () => {
@@ -229,16 +230,55 @@ describe('synthesized finding ingestion', () => {
     expect(rows('SELECT COUNT(*) AS n FROM review_findings')[0]?.['n']).toBe(3)
   })
 
-  it('skips sources that do not resolve instead of failing the round', async () => {
-    writeMeta([{ ...S2, sources: [{ reviewer: 'principal-1', index: 1 }, { reviewer: 'ghost-9', index: 0 }, { reviewer: 'principal-1', index: 99 }] }])
-    await scan()
-    expect(getSources(db, synthId('S2'))).toHaveLength(1)
-  })
+  describe('an invalid synthesis_findings block ingests the round as legacy', () => {
+    let warn: ReturnType<typeof vi.spyOn>
+    beforeEach(() => {
+      warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    })
+    afterEach(() => warn.mockRestore())
 
-  it('an invalid severity falls back to info rather than rolling back the round', async () => {
-    writeMeta([{ ...S2, severity: 'catastrophic' }])
-    await scan()
-    expect(getSynthesisFinding(db, synthId('S2'))?.severity).toBe('info')
+    const expectLegacy = (reason: RegExp): void => {
+      // reviewer rows + verdict are there, no synthesized row, so the round is triaged on reviewer findings
+      expect(rows('SELECT COUNT(*) AS n FROM review_findings')[0]?.['n']).toBe(3)
+      expect(rows('SELECT verdict FROM review_rounds')[0]?.['verdict']).toBe('REQUEST CHANGES')
+      expect(rows('SELECT COUNT(*) AS n FROM synthesis_findings')[0]?.['n']).toBe(0)
+      expect(rows('SELECT COUNT(*) AS n FROM synthesis_finding_sources')[0]?.['n']).toBe(0)
+      expect(warn).toHaveBeenCalledWith(expect.stringMatching(reason))
+    }
+
+    it('duplicate key', async () => {
+      writeMeta([S1, { ...S2, key: 'S1' }])
+      await scan()
+      expectLegacy(/key "S1" is used by more than one/)
+    })
+
+    it('a source that does not resolve (nothing is dropped silently)', async () => {
+      writeMeta([S1, { ...S2, sources: [{ reviewer: 'principal-1', index: 1 }, { reviewer: 'ghost-9', index: 0 }] }])
+      await scan()
+      expectLegacy(/unknown reviewer "ghost-9"/)
+    })
+
+    it('a reviewer finding covered by no synthesized finding', async () => {
+      writeMeta([S1])
+      await scan()
+      expectLegacy(/not covered by any synthesized finding: principal-1\[1\]/)
+    })
+
+    it('an invalid severity', async () => {
+      writeMeta([S1, { ...S2, severity: 'catastrophic' }])
+      await scan()
+      expectLegacy(/invalid severity/)
+    })
+
+    it('counts then follow the reviewer rows, and a previously synthesized round drops back to legacy', async () => {
+      writeMeta([S1, S2])
+      await scan()
+      setSubjectDecision(db, { kind: 'synthesis', id: synthId('S1') }, { status: 'fixed' })
+      writeMeta([S1, { ...S2, key: 'S1' }])
+      await scan()
+      expect(listSynthesisFindings(db, roundId())).toHaveLength(0)
+      expect(rows('SELECT blocker_count, total_finding_count FROM review_rounds')[0]).toMatchObject({ blocker_count: 2, total_finding_count: 3 })
+    })
   })
 
   it('links verifications/synthesis-<id>.md only for that round, keeps an existing path', async () => {

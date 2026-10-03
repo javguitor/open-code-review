@@ -16,6 +16,13 @@ For a round that uses synthesis, the dashboard SHALL treat the synthesized findi
 - **THEN** the panel shows a read-only "Merged from N reviewer findings" section with each source's reviewer handle, original title, severity, category, location and summary
 - **AND** no decision, verification or revision control exists on a source row
 
+#### Scenario: Provenance is read-only on every write path
+
+- **GIVEN** a round that uses synthesis
+- **WHEN** a decision, revision, verification or chat proposal is addressed to a reviewer finding of that round (HTTP route, `ocr finding verify|revise --id`, or the `verify <id>` command)
+- **THEN** it is refused with the code `synthesized-round` (HTTP 409) and nothing is written
+- **AND** a round whose synthesized rows are all retired is a legacy round again, so its reviewer rows are writable
+
 #### Scenario: Legacy round unchanged
 
 - **GIVEN** a round whose `round-meta.json` has no `synthesis_findings`

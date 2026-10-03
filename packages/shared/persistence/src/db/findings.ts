@@ -17,6 +17,7 @@
  */
 
 import type { Database } from "./engine.js";
+import type { SynthesisLocation } from "../state/types.js";
 import { resultToRow, resultToRows } from "./result-mapper.js";
 import {
   DECISION_STATUSES,
@@ -89,11 +90,7 @@ export type FindingRevisionRow = {
   created_at: string;
 };
 
-export type SynthesisLocation = {
-  file_path: string;
-  line_start?: number;
-  line_end?: number;
-};
+export type { SynthesisLocation };
 
 /** A deduplicated finding emitted by the synthesis (`synthesis_findings` row + its decision). */
 export type SynthesisFindingRow = {
@@ -167,7 +164,13 @@ const SUBJECT_TABLES: Record<FindingSubject["kind"], SubjectTables> = {
 
 export class FindingError extends Error {
   constructor(
-    readonly code: "not-found" | "invalid-value" | "reason-required" | "reason-too-short" | "retired",
+    readonly code:
+      | "not-found"
+      | "invalid-value"
+      | "reason-required"
+      | "reason-too-short"
+      | "retired"
+      | "synthesized-round",
     message: string,
   ) {
     super(message);
@@ -330,13 +333,47 @@ function requireSubject<S extends FindingSubject>(db: Database, subject: S): Sub
   return row;
 }
 
-/** A retired finding left the synthesis: it cannot be decided, revised, verified or targeted by a proposal. */
+/**
+ * SQL predicate (`roundIdExpr` = a SQL expression for a `review_rounds.id`): the round has at least one
+ * live synthesized finding. The one definition of "the round uses synthesis"; set-wise queries
+ * (dashboard stats) interpolate it, per-round callers use {@link roundUsesSynthesis}.
+ */
+export const roundUsesSynthesisSql = (roundIdExpr: string): string =>
+  `EXISTS (SELECT 1 FROM synthesis_findings x WHERE x.round_id = ${roundIdExpr} AND x.retired_at IS NULL)`;
+
+/** A round is triaged on its synthesized findings (and its reviewer rows are provenance) iff any is live. */
+export function roundUsesSynthesis(db: Database, roundId: number): boolean {
+  const row = resultToRow<{ used: number }>(db.exec(`SELECT ${roundUsesSynthesisSql("?")} AS used`, [roundId]));
+  return row?.used === 1;
+}
+
+/** True when `f` is a reviewer row of a round triaged on synthesized findings (read-only provenance). */
+export function isSynthesizedProvenance(db: Database, f: Pick<FindingRow, "reviewer_output_id">): boolean {
+  const row = resultToRow<{ used: number }>(
+    db.exec(
+      `SELECT ${roundUsesSynthesisSql("ro.round_id")} AS used FROM reviewer_outputs ro WHERE ro.id = ?`,
+      [f.reviewer_output_id],
+    ),
+  );
+  return row?.used === 1;
+}
+
+/**
+ * The one guard every mutator passes through. A retired finding left the synthesis; a reviewer row
+ * of a synthesized round is provenance. Neither can be decided, revised, verified or targeted by a proposal.
+ */
 function requireActionable<S extends FindingSubject>(db: Database, subject: S): SubjectRow<S> {
   const finding = requireSubject(db, subject);
   if (!isActionable(finding)) {
     throw new FindingError(
       "retired",
       `${SUBJECT_TABLES[subject.kind].label} ${subject.id} is retired (it left the synthesis) and can no longer be changed`,
+    );
+  }
+  if (subject.kind === "reviewer" && isSynthesizedProvenance(db, finding as FindingRow)) {
+    throw new FindingError(
+      "synthesized-round",
+      `Finding ${subject.id} belongs to a round triaged on synthesized findings: it is read-only provenance. Act on the synthesized finding that merges it`,
     );
   }
   return finding;

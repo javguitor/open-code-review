@@ -845,7 +845,7 @@ Synthesis prose follows the configured `language`; headings, labels, verdicts an
 
    > **CRITICAL — Reviewer findings keep the reviewer's own category**: Each entry of `reviewers[].findings[]` keeps the `category` and `severity` its reviewer assigned. They are provenance: do NOT rewrite them to the synthesized classification. Promotions and demotions (a `should_fix` promoted to `blocker`, a `blocker` demoted to `should_fix`) are expressed only in the `category` and `severity` of the matching entry of `synthesis_findings` (below). The dashboard derives all counts from `synthesis_findings`, so if they don't match `final.md` it will show wrong numbers.
 
-   > **CRITICAL — Every `final.md` item is one `synthesis_findings` entry**: Multiple reviewers often flag the same issue independently, so `reviewers[].findings[]` has more entries than `final.md` lists. Emit exactly one `synthesis_findings` entry per item you will list in `final.md` (each numbered item under `## Blockers` and `## Should Fix`, each bullet under `## Suggestions`), and list the reviewer findings it merges as `sources`. `synthesis_counts` (optional) is then the number of entries per category; when you include it, it MUST equal that tally.
+   > **CRITICAL — Every `final.md` item is one `synthesis_findings` entry**: Multiple reviewers often flag the same issue independently, so `reviewers[].findings[]` has more entries than `final.md` lists. Emit exactly one `synthesis_findings` entry per item you will list in `final.md` (each numbered item under `## Blockers` and `## Should Fix`, each bullet under `## Suggestions`), and list the reviewer findings it merges as `sources`. `synthesis_counts` (optional) is then the number of entries per category (`suggestions` = entries with `category: "suggestion"`; `style` entries are counted separately and are not part of it); when you include it, it MUST equal that tally.
 
    **Assign keys**: number the synthesized findings `S1`, `S2`, ... (unique within the round, pattern `^S[0-9]+$`). Pipe the JSON BEFORE writing `final.md` (this step precedes step 8), so the keys already exist when you write the prose; step 8 writes the same keys next to each item.
 
@@ -932,7 +932,7 @@ Synthesis prose follows the configured `language`; headings, labels, verdicts an
    3. Count from `synthesis_findings` for dashboard display (falls back to `synthesis_counts`, then to derived counts, for older reviews)
    4. Record a `round_completed` orchestration event in SQLite
 
-   **`synthesis_counts`**: Optional once `synthesis_findings` is present. It is the **deduplicated** count after merging cross-reviewer duplicates, i.e. the number of `synthesis_findings` per category and the number of tagged items under each section of `final.md`.
+   **`synthesis_counts`**: Optional once `synthesis_findings` is present. It is the **deduplicated** count after merging cross-reviewer duplicates, i.e. the number of `synthesis_findings` per category: `blockers`, `should_fix` and `suggestions` (only `category: "suggestion"`; `style` items are tagged in `final.md` under `### Style` but are not counted in `suggestions`).
 
    **`synthesis_findings`**: one entry per `final.md` item.
    - `key`: `S<n>`, unique within the round; the same token goes in `final.md`.

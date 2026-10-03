@@ -8,12 +8,12 @@ import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs'
 import { join, basename, dirname, relative, sep } from 'node:path'
 import { watch, type FSWatcher } from 'chokidar'
 import {
-  FINDING_SEVERITIES,
   commitReasonClose,
   insertEvent,
   insertSession,
   type Database,
 } from '@open-code-review/persistence'
+import { validateSynthesisFindings } from '@open-code-review/persistence/state'
 import { normalizeVerdict, resolveRoundCounts } from '@open-code-review/platform'
 import type { Server as SocketIOServer } from 'socket.io'
 import { parseMapMd } from './parsers/map-parser.js'
@@ -893,12 +893,29 @@ export class FilesystemSync {
     // the banner renders its neutral fallback rather than inventing a gate.
     const normalizedVerdict = normalizeVerdict(meta.verdict) ?? meta.verdict
 
+    // The file may be hand-edited or written by an older validator, so only the
+    // `synthesis_findings` block is re-validated (partition, keys, sources): when it is
+    // invalid the round is ingested as legacy (reviewer rows only) instead of losing
+    // sources silently or rolling the whole round back. The rest of the file is not
+    // re-validated: that would hide older rounds (AC-8).
+    let synthesisValid = meta.synthesis_findings !== undefined
+    if (synthesisValid) {
+      try {
+        validateSynthesisFindings(meta as unknown as Record<string, unknown>)
+      } catch (err) {
+        synthesisValid = false
+        console.warn(
+          `[FilesystemSync] Ignoring synthesis_findings in ${filePath} (ingesting the round as legacy): ${err instanceof Error ? err.message : String(err)}`,
+        )
+      }
+    }
+
     // Compute counts via the SINGLE shared rule (defect D3) so the dashboard
-    // reader and the CLI writer cannot derive counts differently: prefer the
-    // deduplicated synthesis_counts when present, else derive per-category from
-    // findings[].category.
+    // reader and the CLI writer cannot derive counts differently: tally the
+    // synthesized findings when ingested, else prefer the deduplicated
+    // synthesis_counts, else derive per-category from findings[].category.
     const { blockerCount, shouldFixCount, suggestionCount, reviewerCount, totalFindingCount } =
-      resolveRoundCounts(meta)
+      resolveRoundCounts(synthesisValid ? meta : { ...meta, synthesis_findings: undefined })
 
     // ── Begin transaction for atomic multi-step mutation ──
     this.db.run('BEGIN TRANSACTION')
@@ -994,10 +1011,10 @@ export class FilesystemSync {
       reconcileSynthesisFindings(
         this.db,
         roundId,
-        (Array.isArray(meta.synthesis_findings) ? meta.synthesis_findings : []).map((sf) => ({
+        (synthesisValid ? meta.synthesis_findings! : []).map((sf) => ({
           key: sf.key ?? '',
           title: sf.title ?? '',
-          severity: (FINDING_SEVERITIES as readonly string[]).includes(sf.severity ?? '') ? sf.severity! : 'info',
+          severity: sf.severity ?? 'info', // validated above
           category: sf.category ?? null,
           locations: (sf.locations ?? []).flatMap((l) =>
             typeof l.file_path === 'string'

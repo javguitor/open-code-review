@@ -77,7 +77,7 @@ export function tryClaimFinalization(entry: ProcessEntry | undefined): boolean {
  * A finished `verify <finding-id>` / `verify --synthesis <id>` run may have recorded a verdict: tell the
  * pages of that finding's session so the workbench refreshes without a reload.
  */
-function emitVerifyRoundUpdated(io: SocketIOServer, db: Database, executionId: number): void {
+export function emitVerifyRoundUpdated(io: SocketIOServer, db: Database, executionId: number): void {
   try {
     const row = db.exec('SELECT command, args FROM command_executions WHERE id = ?', [executionId])[0]?.values[0]
     if (typeof row?.[0] !== 'string' || !/^(?:ocr\s+)?verify(?:\s|$)/.test(row[0])) return

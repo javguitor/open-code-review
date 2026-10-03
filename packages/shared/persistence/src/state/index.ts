@@ -134,7 +134,7 @@ export {
 export type { WorkflowKind } from "./phase-graph.js";
 
 // Round-meta / map-meta validation + count helpers.
-export { validateRoundMeta, computeRoundCounts } from "./round-meta.js";
+export { validateRoundMeta, validateSynthesisFindings, computeRoundCounts } from "./round-meta.js";
 export { validateMapMeta, computeMapCounts } from "./map-meta.js";
 
 // Shared metadata sanitizer.
@@ -976,8 +976,10 @@ export async function stateCompleteRound(
   // round-meta.json path so callers can't tell an idempotent retry apart
   // from the first write by the absence of metaPath. If the terminal event is
   // present but the on-disk artifact is missing (a crash between the DB commit
-  // and the write, or a deleted file), re-materialize it from the recorded
-  // metadata — WITHOUT appending a duplicate event or re-advancing the round.
+  // and the write, or a deleted file), re-materialize it — WITHOUT appending a
+  // duplicate event or re-advancing the round. NOTE: it is written from THIS
+  // call's validated payload (the DB keeps no copy of the recorded one), so a
+  // delete-then-re-pipe replaces the round's metadata with the new payload.
   const already = db.exec(
     `SELECT 1 FROM orchestration_events
        WHERE session_id = ? AND event_type = 'round_completed' AND round = ? LIMIT 1`,

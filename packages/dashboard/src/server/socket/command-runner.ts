@@ -32,6 +32,8 @@ import {
   getFinding,
   getSession,
   getSynthesisFinding,
+  isSynthesizedProvenance,
+  type FindingRow,
 } from '@open-code-review/persistence'
 import { getWorkflowHardDeadlineMs } from '@open-code-review/config/runtime-config'
 import {
@@ -172,6 +174,14 @@ export function registerCommandHandlers(
         }
         if (!isActionable(target)) {
           emitError({ error: `${label} ${verifyTarget.id} is retired and cannot be verified` })
+          return
+        }
+        // Reviewer rows of a synthesized round are read-only provenance (persistence would refuse the write
+        // after the agent had spent a run): point at the synthesized finding instead.
+        if (!isSynthesis && isSynthesizedProvenance(db, target as FindingRow)) {
+          emitError({
+            error: `Finding ${verifyTarget.id} belongs to a round triaged on synthesized findings; verify the synthesized finding with "verify --synthesis <id>"`,
+          })
           return
         }
       }
@@ -414,7 +424,7 @@ function spawnCliCommand(
 // ── AI workflow command spawn (adapter strategy) ──
 
 /** Session/round of the finding a `verify` run targets (undefined for other commands / unknown ids). */
-function verifyTargetOf(
+export function verifyTargetOf(
   db: Database,
   baseCommand: string,
   subArgs: string[],

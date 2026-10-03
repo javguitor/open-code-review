@@ -36,6 +36,7 @@ import {
   dbPathFor,
   resultToRows,
   resultToRow,
+  roundUsesSynthesisSql,
   type Database,
   type WorkflowType,
   type SessionStatus,
@@ -393,19 +394,10 @@ export type FindingRevisionStats = {
   synthesis_category: string | null
 }
 
-/** Revision counts and original (synthesis) severity/category for every revised finding of a round. */
-export function getRevisionStatsForRound(db: Database, roundId: number): Map<number, FindingRevisionStats> {
-  const rows = resultToRows<{ finding_id: number; field: string; old_value: string | null }>(
-    db.exec(
-      `SELECT fr.finding_id, fr.field, fr.old_value
-       FROM finding_revisions fr
-       JOIN review_findings rf ON rf.id = fr.finding_id
-       JOIN reviewer_outputs ro ON ro.id = rf.reviewer_output_id
-       WHERE ro.round_id = ?
-       ORDER BY fr.id ASC`,
-      [roundId]
-    )
-  )
+type RevisionLogRow = { finding_id: number; field: string; old_value: string | null }
+
+/** Folds a revision log (oldest first) into per-finding counts + the first severity/category `old_value`. */
+function aggregateRevisionStats(rows: RevisionLogRow[]): Map<number, FindingRevisionStats> {
   const stats = new Map<number, FindingRevisionStats>()
   for (const r of rows) {
     const s = stats.get(r.finding_id) ?? {
@@ -419,9 +411,24 @@ export function getRevisionStatsForRound(db: Database, roundId: number): Map<num
   return stats
 }
 
+/** Revision counts and original (synthesis) severity/category for every revised finding of a round. */
+export function getRevisionStatsForRound(db: Database, roundId: number): Map<number, FindingRevisionStats> {
+  return aggregateRevisionStats(resultToRows<RevisionLogRow>(
+    db.exec(
+      `SELECT fr.finding_id, fr.field, fr.old_value
+       FROM finding_revisions fr
+       JOIN review_findings rf ON rf.id = fr.finding_id
+       JOIN reviewer_outputs ro ON ro.id = rf.reviewer_output_id
+       WHERE ro.round_id = ?
+       ORDER BY fr.id ASC`,
+      [roundId]
+    )
+  ))
+}
+
 /** Same as `getRevisionStatsForRound`, over `synthesis_finding_revisions` (keyed by synthesized id). */
 export function getSynthesisRevisionStatsForRound(db: Database, roundId: number): Map<number, FindingRevisionStats> {
-  const rows = resultToRows<{ finding_id: number; field: string; old_value: string | null }>(
+  return aggregateRevisionStats(resultToRows<RevisionLogRow>(
     db.exec(
       `SELECT r.synthesis_finding_id AS finding_id, r.field, r.old_value
        FROM synthesis_finding_revisions r
@@ -430,18 +437,7 @@ export function getSynthesisRevisionStatsForRound(db: Database, roundId: number)
        ORDER BY r.id ASC`,
       [roundId]
     )
-  )
-  const stats = new Map<number, FindingRevisionStats>()
-  for (const r of rows) {
-    const s = stats.get(r.finding_id) ?? {
-      finding_id: r.finding_id, revision_count: 0, synthesis_severity: null, synthesis_category: null,
-    }
-    s.revision_count++
-    if (r.field === 'severity' && s.synthesis_severity === null) s.synthesis_severity = r.old_value
-    if (r.field === 'category' && s.synthesis_category === null) s.synthesis_category = r.old_value
-    stats.set(r.finding_id, s)
-  }
-  return stats
+  ))
 }
 
 export type DecidedFindingRow = {
@@ -861,7 +857,7 @@ export function getStats(db: Database): StatsResult {
            JOIN reviewer_outputs ro ON ro.id = rf.reviewer_output_id
            LEFT JOIN user_finding_progress ufp ON ufp.finding_id = rf.id
            WHERE rf.is_blocker = 1 AND rf.retired_at IS NULL
-             AND NOT EXISTS (SELECT 1 FROM synthesis_findings x WHERE x.round_id = ro.round_id AND x.retired_at IS NULL)
+             AND NOT ${roundUsesSynthesisSql('ro.round_id')}
              AND (ufp.status IS NULL OR ufp.status NOT IN (${resolvedList}))
           ) + (SELECT COUNT(*) FROM synthesis_findings sf
            LEFT JOIN synthesis_finding_decisions sd ON sd.synthesis_finding_id = sf.id

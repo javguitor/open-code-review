@@ -10,7 +10,7 @@
  * revisions is retired (`retired_at`), not reassigned.
  */
 
-import type { Database } from '@open-code-review/persistence'
+import type { Database, SynthesisLocation } from '@open-code-review/persistence'
 import { FINAL_DECISIONS } from '@open-code-review/persistence/finding-rules'
 
 export type IncomingFinding = {
@@ -205,7 +205,7 @@ export type IncomingSynthesisFinding = {
   severity: string
   category: string | null
   /** Primary location first; empty when the synthesis gave none. */
-  locations: Array<{ file_path: string; line_start?: number; line_end?: number }>
+  locations: SynthesisLocation[]
   summary: string | null
   flaggedBy?: string[]
   evidence?: string
@@ -254,14 +254,13 @@ function loadExistingSynthesis(db: Database, roundId: number): ExistingSynthesis
  * unmatched incoming rows are inserted. Retire/delete runs BEFORE the inserts so a
  * reused `key` never meets its predecessor in the live-key unique index. Source
  * links are derived data: rebuilt for every kept row, dropped for retired ones.
- * Returns the row id of each incoming item, by incoming index.
  */
 export function reconcileSynthesisFindings(
   db: Database,
   roundId: number,
   incoming: IncomingSynthesisFinding[],
   sqlNow: string,
-): number[] {
+): void {
   const existing = loadExistingSynthesis(db, roundId)
   const identity = (key: string, file: string | null): string => `${key}|${normPath(file)}`
   const byIdentity = new Map(existing.map((e) => [identity(e.key, e.filePath), e]))
@@ -282,8 +281,8 @@ export function reconcileSynthesisFindings(
     }
   }
 
-  const ids: number[] = []
   incoming.forEach((f, i) => {
+    let rowId: number
     const primary = f.locations[0]
     const locations = f.locations.length > 0 ? JSON.stringify(f.locations) : null
     const flagged = f.flaggedBy === undefined ? null : JSON.stringify(f.flaggedBy)
@@ -298,14 +297,14 @@ export function reconcileSynthesisFindings(
          primary?.line_end ?? null, locations, f.summary, f.evidence ?? null, flagged,
          f.category === 'blocker' ? 1 : 0, sqlNow],
       )
-      ids[i] = lastInsertId(db)
+      rowId = lastInsertId(db)
     } else {
-      ids[i] = row.id
+      rowId = row.id
       // A revised severity / category (and the is_blocker it implies) is the user's current value: kept.
       db.run(
         `UPDATE synthesis_findings SET
            title = ?, file_path = ?, line_start = ?, line_end = ?, locations_json = ?, summary = ?,
-           parsed_at = ?, retired_at = NULL,
+           parsed_at = ?,
            severity = CASE WHEN ? THEN severity ELSE ? END,
            category = CASE WHEN ? OR ? IS NULL THEN category ELSE ? END,
            is_blocker = CASE WHEN ? THEN is_blocker ELSE ? END,
@@ -320,13 +319,12 @@ export function reconcileSynthesisFindings(
          flagged, f.evidence ?? null, row.id],
       )
     }
-    db.run('DELETE FROM synthesis_finding_sources WHERE synthesis_finding_id = ?', [ids[i]!])
+    db.run('DELETE FROM synthesis_finding_sources WHERE synthesis_finding_id = ?', [rowId])
     for (const findingId of new Set(f.sourceFindingIds)) {
       db.run(
         'INSERT OR IGNORE INTO synthesis_finding_sources (synthesis_finding_id, finding_id) VALUES (?, ?)',
-        [ids[i]!, findingId],
+        [rowId, findingId],
       )
     }
   })
-  return ids
 }

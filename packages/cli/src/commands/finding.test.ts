@@ -141,4 +141,14 @@ describe("finding --synthesis-id", () => {
     expect(await runRevise(root, { synthesisId: "1", field: "severity", value: "low", reason: "r", source: "user" })).toMatchObject({ ok: false, code: "retired" });
     expect(await runShow(root, { synthesisId: "1" })).toMatchObject({ ok: true });
   });
+
+  it("refuses --id on a reviewer finding of the synthesized round (provenance), but still shows it", async () => {
+    const refused = { ok: false, code: "synthesized-round" };
+    expect(await runVerify(root, { id: "1", status: "supported", note: "n" })).toMatchObject(refused);
+    expect(await runRevise(root, { id: "2", field: "severity", value: "high", reason: "r", source: "user" })).toMatchObject(refused);
+    expect(await runShow(root, { id: "1" })).toMatchObject({ ok: true });
+    const d = await db();
+    expect(getFinding(d, 1)!.verification_status).toBeNull();
+    expect(d.exec("SELECT COUNT(*) FROM finding_revisions")[0]!.values[0]![0]).toBe(0);
+  });
 });

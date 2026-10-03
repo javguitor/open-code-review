@@ -67,7 +67,7 @@ export type CountableSynthesisCounts = {
 export type CountableRoundMeta = {
   reviewers?: Array<{ findings?: CountableFinding[] | null } | null> | null;
   synthesis_counts?: CountableSynthesisCounts | null;
-  /** Deduplicated findings from the synthesis; when present and non-empty they win over everything else. */
+  /** Deduplicated findings from the synthesis; when present (even an empty array: a synthesis of zero findings) they win over everything else. */
   synthesis_findings?: CountableFinding[] | null;
 };
 

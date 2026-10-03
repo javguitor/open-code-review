@@ -104,8 +104,15 @@ describe('round with synthesized findings', () => {
     expect(rd.current_counts).toEqual({ blockers: 1, should_fix: 1, suggestions: 0 })
     expect(rd.verdict_after_decisions).toBe('REQUEST CHANGES')
 
-    // deciding a reviewer copy changes nothing (it is provenance)
-    setFindingDecision(db, { findingId: r[0]!, status: 'dismissed', reason: 'decided on the copy only' })
+    // a reviewer copy is read-only provenance now...
+    expect(() => setFindingDecision(db, { findingId: r[0]!, status: 'dismissed', reason: 'decided on the copy only' })).toThrow(
+      expect.objectContaining({ code: 'synthesized-round' }),
+    )
+    // ...but a decision it already carried (made before the round was synthesized) is shown, and counts for nothing
+    db.run(
+      "INSERT INTO user_finding_progress (finding_id, status, reason, decided_at) VALUES (?, 'dismissed', 'decided on the copy only', datetime('now'))",
+      [r[0]!],
+    )
     rd = (await get('/s1/rounds/1')).body
     expect(rd.open_counts.blockers).toBe(1)
     expect(rd.verdict_after_decisions).toBe('REQUEST CHANGES')

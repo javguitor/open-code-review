@@ -4,8 +4,10 @@
 
 import { Router } from 'express'
 import {
+  FINDING_SEVERITIES,
   getSources,
   listSynthesisFindings,
+  roundUsesSynthesis,
   type Database,
   type SynthesisFindingRow,
   type SynthesisLocation,
@@ -90,11 +92,6 @@ export type SynthesisFindingView = Omit<SynthesisFindingRow, 'round_id' | 'sessi
 
 export type AnyFindingView = FindingView | SynthesisFindingView
 
-/** A round uses synthesis iff it has at least one live synthesized finding. */
-function liveSynthesis(db: Database, roundId: number): SynthesisFindingRow[] {
-  return listSynthesisFindings(db, roundId)
-}
-
 function previousRound(db: Database, round: ReviewRoundRow) {
   return round.round_number > 1 ? getRound(db, round.session_id, round.round_number - 1) : undefined
 }
@@ -130,7 +127,7 @@ function buildFindingViews(db: Database, round: ReviewRoundRow, findings: Findin
   })
 }
 
-const SEVERITY_RANK: Record<string, number> = { critical: 1, high: 2, medium: 3, low: 4, info: 5 }
+const SEVERITY_RANK: Record<string, number> = Object.fromEntries(FINDING_SEVERITIES.map((s, i) => [s, i + 1]))
 
 const locationsOf = (f: Pick<SynthesisFindingRow, 'locations' | 'file_path' | 'line_start' | 'line_end'>): SynthesisLocation[] =>
   f.locations && f.locations.length > 0
@@ -138,6 +135,17 @@ const locationsOf = (f: Pick<SynthesisFindingRow, 'locations' | 'file_path' | 'l
     : f.file_path !== null
       ? [{ file_path: f.file_path, ...(f.line_start !== null && { line_start: f.line_start }), ...(f.line_end !== null && { line_end: f.line_end }) }]
       : []
+
+/** The hint is informational: a corrupt `locations_json` must not 500 the round endpoint. */
+function parseStoredLocations(raw: string | null): SynthesisLocation[] | null {
+  if (!raw) return null
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return Array.isArray(parsed) ? (parsed as SynthesisLocation[]) : null
+  } catch {
+    return null
+  }
+}
 
 /** Inclusive line ranges overlap; a location without a line never overlaps. */
 function rangesOverlap(a: SynthesisLocation, b: SynthesisLocation): boolean {
@@ -154,7 +162,6 @@ function rangesOverlap(a: SynthesisLocation, b: SynthesisLocation): boolean {
  */
 function synthesisPreviousDecision(
   db: Database,
-  round: ReviewRoundRow,
   f: SynthesisFindingRow,
   sources: SynthesisSourceView[],
   cache: { prev: ReviewRoundRow | undefined; prevSynthesized: boolean; synthesized?: ReturnType<typeof getDecidedSynthesisFindingsForRound>; legacy?: ReturnType<typeof getDecidedFindingsForRound> },
@@ -167,7 +174,7 @@ function synthesisPreviousDecision(
     cache.synthesized ??= getDecidedSynthesisFindingsForRound(db, prev.id)
     const match = cache.synthesized.find((d) => {
       const theirs = locationsOf({
-        locations: d.locations_json ? (JSON.parse(d.locations_json) as SynthesisLocation[]) : null,
+        locations: parseStoredLocations(d.locations_json),
         file_path: d.file_path, line_start: null, line_end: null,
       })
       const similar = titleSimilarity(d.title, f.title) >= HINT_MIN_SIMILARITY
@@ -194,7 +201,7 @@ function synthesisPreviousDecision(
 function buildSynthesisViews(db: Database, round: ReviewRoundRow, rows: SynthesisFindingRow[]): SynthesisFindingView[] {
   const stats = getSynthesisRevisionStatsForRound(db, round.id)
   const prev = previousRound(db, round)
-  const cache = { prev, prevSynthesized: prev !== undefined && liveSynthesis(db, prev.id).length > 0 }
+  const cache = { prev, prevSynthesized: prev !== undefined && roundUsesSynthesis(db, prev.id) }
   return rows
     .map((f): SynthesisFindingView => {
       const { round_id: _r, session_id: _s, round_number: _n, ...rest } = f
@@ -207,7 +214,7 @@ function buildSynthesisViews(db: Database, round: ReviewRoundRow, rows: Synthesi
         synthesis_severity: rev?.synthesis_severity ?? f.severity,
         synthesis_category: rev?.synthesis_category ?? f.category,
         revision_count: rev?.revision_count ?? 0,
-        previous_round_decision: f.retired_at === null ? synthesisPreviousDecision(db, round, f, sources, cache) : null,
+        previous_round_decision: f.retired_at === null ? synthesisPreviousDecision(db, f, sources, cache) : null,
         sources,
       }
     })
@@ -222,7 +229,7 @@ function buildRoundFindings(
   db: Database,
   round: ReviewRoundRow,
 ): { kind: 'synthesis' | 'reviewer'; views: AnyFindingView[] } {
-  if (liveSynthesis(db, round.id).length > 0) {
+  if (roundUsesSynthesis(db, round.id)) {
     return { kind: 'synthesis', views: buildSynthesisViews(db, round, listSynthesisFindings(db, round.id, { includeRetired: true })) }
   }
   return { kind: 'reviewer', views: buildFindingViews(db, round, getFindingsForRound(db, round.id)) }
@@ -230,7 +237,7 @@ function buildRoundFindings(
 
 /** Reviewer findings of a synthesized round point at the synthesized finding that merged them. */
 function attachSynthesizedBy(db: Database, round: ReviewRoundRow, views: FindingView[]): FindingView[] {
-  if (liveSynthesis(db, round.id).length === 0) return views
+  if (!roundUsesSynthesis(db, round.id)) return views
   const byFinding = new Map<number, NonNullable<FindingView['synthesized_by']>>()
   for (const sf of listSynthesisFindings(db, round.id)) {
     for (const src of getSources(db, sf.id)) {

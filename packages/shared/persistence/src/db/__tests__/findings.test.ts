@@ -11,6 +11,7 @@ import {
   getFindingRevisions,
   getSynthesisFinding,
   listSynthesisFindings,
+  roundUsesSynthesis,
   getSources,
   getSubjectRevisions,
   reviseSubject,
@@ -358,9 +359,31 @@ describe("subject-generic mutators (synthesized findings)", () => {
     );
   });
 
-  it("reviewer wrappers keep addressing reviewer findings, whatever the synthesized ids are", () => {
+  it("reviewer rows of a synthesized round are read-only provenance for every mutator", () => {
+    const provenance = { code: "synthesized-round" };
+    expect(roundUsesSynthesis(db, 1)).toBe(true);
+    expect(() => setFindingDecision(db, { findingId: 1, status: "read" })).toThrowError(expect.objectContaining(provenance));
+    expect(() => reviseFinding(db, { findingId: 1, field: "severity", value: "low", reason: "r", source: "user" })).toThrowError(expect.objectContaining(provenance));
+    expect(() => recordVerification(db, { findingId: 1, status: "supported", note: "n" })).toThrowError(expect.objectContaining(provenance));
+    expect(() => applyProposal(db, { findingId: 1, status: "confirmed", reason: "x".repeat(25), conversationId: "c" })).toThrowError(expect.objectContaining(provenance));
+    expect(getFinding(db, 1)!.decision).toBeNull();
+    expect(getFindingRevisions(db, 1)).toEqual([]);
+  });
+
+  it("a round whose synthesized rows are all retired is legacy again: reviewer rows are writable", () => {
+    db.run("UPDATE synthesis_findings SET retired_at = datetime('now')");
+    expect(roundUsesSynthesis(db, 1)).toBe(false);
     setFindingDecision(db, { findingId: 1, status: "read" });
     expect(getFinding(db, 1)!.decision?.status).toBe("read");
+  });
+
+  it("reviewer wrappers keep addressing reviewer findings of legacy rounds, whatever the synthesized ids are", () => {
+    db.run("INSERT INTO review_rounds (session_id, round_number) VALUES ('s1', 2)");
+    db.run("INSERT INTO reviewer_outputs (round_id, reviewer_type, file_path) VALUES (2, 'r', 'g.md')");
+    db.run("INSERT INTO review_findings (reviewer_output_id, title, severity, category) VALUES (2, 'legacy finding', 'high', 'blocker')");
+    expect(roundUsesSynthesis(db, 2)).toBe(false);
+    setFindingDecision(db, { findingId: 2, status: "read" });
+    expect(getFinding(db, 2)!.decision?.status).toBe("read");
     expect(getSynthesisFinding(db, 1)!.decision).toBeNull();
   });
 });

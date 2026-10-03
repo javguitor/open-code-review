@@ -50,7 +50,7 @@ function indexReviewers(reviewers: Array<Record<string, unknown>>): ReviewerFind
         `synthesis_findings cannot resolve sources: reviewer "${id}" appears more than once in reviewers[]`,
       );
     }
-    index.set(id, (r.findings as unknown[]).length);
+    index.set(id, Array.isArray(r.findings) ? r.findings.length : 0);
   }
   return index;
 }
@@ -60,8 +60,11 @@ function indexReviewers(reviewers: Array<Record<string, unknown>>): ReviewerFind
  * the complete-partition rule: every reviewer finding is the source of exactly
  * one synthesized finding. Every error names the offending key or source
  * (`S2`, `principal-1[3]`) so the Tech Lead can fix and re-pipe the payload.
+ *
+ * Exported on its own so the dashboard ingest can check just this block of a
+ * `round-meta.json` it did not write (it must not reject the whole file).
  */
-function validateSynthesisFindings(obj: Record<string, unknown>): void {
+export function validateSynthesisFindings(obj: Record<string, unknown>): void {
   const items = obj.synthesis_findings;
   if (!Array.isArray(items)) {
     throw new Error("synthesis_findings must be an array");

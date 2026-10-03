@@ -8,7 +8,7 @@
  * single `finding_id` field.
  */
 
-import { listSynthesisFindings, type Database, type FindingSubject } from '@open-code-review/persistence'
+import { listSynthesisFindings, roundUsesSynthesis, type Database, type FindingSubject } from '@open-code-review/persistence'
 import { isActionable } from '@open-code-review/persistence/finding-rules'
 import { getFindingsForRound } from '../db.js'
 import type { ChatContextFinding } from './chat-context.js'
@@ -21,9 +21,11 @@ export type RoundChatSubjects = {
 
 /** The findings a chat about `roundId` may address: synthesized ones when the round uses synthesis, else reviewer ones. */
 export function roundChatSubjects(db: Database, roundId: number): RoundChatSubjects {
-  const synthesized = listSynthesisFindings(db, roundId)
-  if (synthesized.length > 0) {
-    return { kind: 'synthesis', findings: synthesized.map((f) => ({ id: f.id, key: f.key, title: f.title })) }
+  if (roundUsesSynthesis(db, roundId)) {
+    return {
+      kind: 'synthesis',
+      findings: listSynthesisFindings(db, roundId).map((f) => ({ id: f.id, key: f.key, title: f.title })),
+    }
   }
   return {
     kind: 'reviewer',

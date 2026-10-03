@@ -11,12 +11,10 @@
 import { Router, type Request, type Response } from 'express'
 import type { Server as SocketIOServer } from 'socket.io'
 import { emitRoundUpdatedForFinding, emitRoundUpdatedForSynthesisFinding } from '../services/round-events.js'
-import { roundChatSubjects } from '../services/chat-subjects.js'
 import { buildSourceViews } from '../services/synthesis-sources.js'
 import {
   FINDING_REVISION_SOURCES,
   FindingError,
-  resultToRow,
   applySubjectProposal,
   getFinding,
   getSubjectRevisions,
@@ -42,7 +40,7 @@ function parseId(raw: unknown): number | null {
 /** Maps domain errors to HTTP (codes come from persistence); anything else is a 500. */
 function sendError(res: Response, err: unknown, what: string): void {
   if (err instanceof FindingError) {
-    const status = err.code === 'not-found' ? 404 : err.code === 'retired' ? 409 : 400
+    const status = err.code === 'not-found' ? 404 : err.code === 'retired' || err.code === 'synthesized-round' ? 409 : 400
     res.status(status).json({ error: err.message, code: err.code })
     return
   }
@@ -59,8 +57,6 @@ type KindRoutes = {
   /** The response for a finding: its current values, revisions and (synthesized only) `sources`. */
   detail: (id: number) => object
   emit: (io: SocketIOServer | undefined, db: Database, id: number) => void
-  /** SQL returning the `review_rounds.id` of the finding (`?` = finding id). */
-  roundSql: string
 }
 
 export function createFindingsRouter(db: Database, io?: SocketIOServer): Router {
@@ -74,7 +70,6 @@ export function createFindingsRouter(db: Database, io?: SocketIOServer): Router 
       get: (id) => getFinding(db, id),
       detail: (id) => ({ ...getFinding(db, id)!, revisions: getSubjectRevisions(db, { kind: 'reviewer', id }) }),
       emit: emitRoundUpdatedForFinding,
-      roundSql: 'SELECT ro.round_id AS id FROM review_findings f JOIN reviewer_outputs ro ON ro.id = f.reviewer_output_id WHERE f.id = ?',
     },
     {
       base: '/synthesis-findings',
@@ -87,11 +82,10 @@ export function createFindingsRouter(db: Database, io?: SocketIOServer): Router 
         revisions: getSubjectRevisions(db, { kind: 'synthesis', id }),
       }),
       emit: emitRoundUpdatedForSynthesisFinding,
-      roundSql: 'SELECT round_id AS id FROM synthesis_findings WHERE id = ?',
     },
   ]
 
-  for (const { base, kind, label, get, detail, emit, roundSql } of kinds) {
+  for (const { base, kind, label, get, detail, emit } of kinds) {
     /** Parses `:id`, 404s an unknown one, and runs `fn`; domain errors map through `sendError`. */
     const handle = (
       path: string,
@@ -161,12 +155,8 @@ export function createFindingsRouter(db: Database, io?: SocketIOServer): Router 
     // One persistence transaction; revisions are logged as `source: chat`.
     handle('/apply-proposal', 'post', 'apply proposal', false, (id, req) => {
       const { severity, category, status, reason, conversation_id } = (req.body ?? {}) as Record<string, unknown>
-      // Ids of the two kinds collide, and a round is triaged on exactly one kind: a proposal addressed to
-      // the other kind's route is refused, so it can never land on the same-numbered row of the wrong table.
-      const roundId = resultToRow<{ id: number }>(db.exec(roundSql, [id]))?.id
-      if (roundId !== undefined && roundChatSubjects(db, roundId).kind !== kind) {
-        throw new FindingError('not-found', `${label} ${id} is not a finding of this round's kind`)
-      }
+      // Ids of the two kinds collide, but each route addresses its own table, and persistence refuses
+      // reviewer rows of a synthesized round (409 `synthesized-round`) and retired rows (409 `retired`).
       return mutate(id, () =>
         applySubjectProposal(db, subject(id), {
           severity: severity as string | undefined,
