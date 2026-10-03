@@ -58,6 +58,11 @@ describe("getWorktreeConfig", () => {
     expect(getWorktreeConfig(ocrDir)).toEqual({ ...defaults(), cleanup: "on-close" });
   });
 
+  it("reads cleanup: after-post", () => {
+    writeConfig("worktrees:\n  cleanup: after-post\n");
+    expect(getWorktreeConfig(ocrDir)).toEqual({ ...defaults(), cleanup: "after-post" });
+  });
+
   it("falls back to keep for an invalid cleanup value", () => {
     writeConfig("worktrees:\n  cleanup: sometimes\n");
     expect(getWorktreeConfig(ocrDir).cleanup).toBe("keep");

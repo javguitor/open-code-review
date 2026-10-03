@@ -20,6 +20,11 @@
       "source": "./src/language-config.ts",
       "default": "./src/language-config.ts"
     },
+    "./config-writer": {
+      "types": "./src/config-writer.ts",
+      "source": "./src/config-writer.ts",
+      "default": "./src/config-writer.ts"
+    },
     "./worktree-config": {
       "types": "./src/worktree-config.ts",
       "source": "./src/worktree-config.ts",

@@ -15,7 +15,7 @@ import { parse as parseYaml } from "yaml";
 
 export const DEFAULT_OUTPUT_LANGUAGE = "en";
 
-const LANGUAGE_TAG = /^[a-z]{2,3}(-[a-z0-9]{2,8})*$/i;
+export const LANGUAGE_TAG = /^[a-z]{2,3}(-[a-z0-9]{2,8})*$/i;
 
 /**
  * Agent-side copy: `packages/agents/skills/ocr/references/language-policy.md`.
