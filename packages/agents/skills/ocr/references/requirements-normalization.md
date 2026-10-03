@@ -10,11 +10,11 @@ How the Tech Lead turns raw requirement sources into the normalized `requirement
 .ocr/sessions/{id}/requirements/
 ├── source.md        # raw content: title, description, checklists, custom fields, comments (with --with-comments)
 ├── source.json      # { type, id, url, title, fetched_at, updated_at, author, with_comments }
-├── source-2.md      # a second source, if any
+├── source-2.md      # a second source (different URL), if any
 └── source-2.json
 ```
 
-Read **every** `requirements/source*.md` (and its `.json` for the link and `updated_at`). `ocr requirements list --session "$SESSION_ID" --json` lists them.
+Each URL has exactly one `source[-n]` pair: fetching a URL again replaces its files, so a file is always the latest version of its source and two files are always two different sources. Read **every** `requirements/source*.md` (and its `.json` for the link and `updated_at`). `ocr requirements list --session "$SESSION_ID" --json` lists them.
 
 ## Never fetch sources yourself
 
@@ -64,7 +64,7 @@ Write to the session root (not inside `requirements/`), using exactly this struc
    - `(quoted)`: the source states it. Keep the source's wording or a faithful, minimal paraphrase; quote short phrases verbatim in quotation marks when the wording matters.
    - `(derived)`: the source only implies it. Add a derived criterion only when the source clearly implies it, and say from what (`derived from: "<quote or section>"`). A reviewer's "Not Met" on a derived criterion must be traceable to the inference.
 3. **Number sequentially** as `AC-1`, `AC-2`, ... across all sources. Numbers are stable references for reviewers and the synthesis; never renumber after reviewers have started.
-4. **Multiple sources**: one `## Source` line each; if sources conflict, keep both criteria and add the conflict to `## Open Questions`.
+4. **Multiple sources**: one `## Source` line each (every file is a distinct source, never an old/new version of the same one); if two different sources conflict, keep both criteria and add the conflict to `## Open Questions`. A changed criterion between a previous `requirements.md` and the refreshed source is an update, not a conflict: use the source as it is now.
 5. **Comments refine criteria** (only present with `--with-comments`). When a comment changes, narrows or adds a criterion, cite it in the AC: `(quoted) — per comment by <author>, <date>`. Do not let a comment silently override the description; if they conflict, record it under `## Open Questions`.
 6. **Quote, don't paste.** Keep `requirements.md` short: the full text stays in `requirements/source*.md`, which reviewers can open when they need the original wording.
 7. **Plain text / file sources with no clear criteria**: still produce `## Acceptance Criteria`, with the statements as `(quoted)` ACs. If there is truly nothing assessable, write `None stated.` and put the reason under `## Open Questions`.

@@ -1,4 +1,6 @@
 import { statSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { RequirementsError, type SourceType } from "./types.js";
 
 const CLICKUP_RE = /^https:\/\/app\.clickup\.com\/t\/([^/?#\s]+)(?:\/([^/?#\s]+))?\/?(?:[?#]\S*)?$/;
@@ -27,13 +29,35 @@ export function parseGitHubUrl(input: string): GitHubRef | null {
   };
 }
 
+const PATH_EXT_RE = /\.(md|markdown|txt|rst|ya?ml|json)$/i;
+
+/** Single-line input that reads as a path rather than prose. */
+/** A single token (no whitespace) with a separator or a document extension — a sentence like "log in/out" is text. */
+function looksLikePath(input: string): boolean {
+  return !/\s/.test(input) && (/[/\\]/.test(input) || PATH_EXT_RE.test(input));
+}
+
+/** Local path for a `file://` URL or plain path (trimmed), resolved against the cwd. */
+export function toFilePath(input: string): string {
+  const trimmed = input.trim();
+  if (!/^file:\/\//i.test(trimmed)) return resolve(trimmed);
+  try {
+    return fileURLToPath(trimmed);
+  } catch {
+    throw new RequirementsError("invalid-source", `Invalid file URL "${trimmed}"`);
+  }
+}
+
 /**
  * Classifies a user-supplied source. Order matters: known provider URLs first,
  * then any other http(s) URL is rejected (we never fetch arbitrary web pages),
- * then an existing file, and everything else is literal text.
+ * then an existing file. Input that looks like a path (or a `file://` URL) but
+ * does not exist is `not-found` — never silently stored as text. Anything else
+ * is literal text.
  */
 export function detectSourceType(input: string): SourceType {
   const trimmed = input.trim();
+  if (!trimmed) throw new RequirementsError("invalid-source", "Empty requirements source");
   if (parseClickUpUrl(trimmed)) return "clickup";
   const gh = parseGitHubUrl(trimmed);
   if (gh) return gh.kind === "issue" ? "github-issue" : "github-pr";
@@ -44,15 +68,26 @@ export function detectSourceType(input: string): SourceType {
         "Save the content to a file or pass it as text instead.",
     );
   }
-  try {
-    const stat = statSync(trimmed);
-    if (stat.isFile()) return "file";
-    if (stat.isDirectory()) {
-      throw new RequirementsError("invalid-source", `"${trimmed}" is a directory, not a file`);
+  const isFileUrl = /^file:\/\//i.test(trimmed);
+  if (isFileUrl || looksLikePath(trimmed)) {
+    const abs = toFilePath(trimmed);
+    let isFile = false;
+    try {
+      const stat = statSync(abs);
+      if (stat.isDirectory()) {
+        throw new RequirementsError("invalid-source", `"${trimmed}" is a directory, not a file`);
+      }
+      isFile = stat.isFile();
+    } catch (error) {
+      if (error instanceof RequirementsError) throw error;
     }
-  } catch (error) {
-    if (error instanceof RequirementsError) throw error;
-    // Not a path (ENOENT, name too long, newline in text, ...) → literal text.
+    if (isFile) return "file";
+    throw new RequirementsError("not-found", `File not found: ${abs}`);
+  }
+  try {
+    if (statSync(trimmed).isFile()) return "file";
+  } catch {
+    // Not a path → literal text.
   }
   return "text";
 }

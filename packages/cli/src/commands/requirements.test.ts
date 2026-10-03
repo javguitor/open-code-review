@@ -60,7 +60,7 @@ describe("requirements fetch", () => {
     expect(row?.requirements_updated_at).toBe("2026-01-01T00:00:00.000Z");
   });
 
-  it("a second source goes to source-2 and does not replace the session url", async () => {
+  it("a different url takes the next free slot and does not replace the session url", async () => {
     const deps = { fetchImpl: clickupFetch(), env: { CLICKUP_API_TOKEN: "t" } };
     await runFetch(root, { source: "https://app.clickup.com/t/abc123", session: "s1" }, deps);
     const second = await runFetch(root, { source: "Another requirement\nbody", session: "s1" }, deps);
@@ -70,6 +70,35 @@ describe("requirements fetch", () => {
 
     const listed = await runList(root, "s1");
     expect(listed.ok && listed.sources.map((s) => s.files.md)).toEqual(["source.md", "source-2.md"]);
+  });
+
+  it("re-fetching a url replaces its files in place (same names, no source-2)", async () => {
+    const env = { CLICKUP_API_TOKEN: "t" };
+    const url = "https://app.clickup.com/t/abc123";
+    const first = await runFetch(root, { source: url, session: "s1" }, { env, fetchImpl: clickupFetch() });
+    await runFetch(root, { source: "Other\nbody", session: "s1" }, { env });
+    const newer = JSON.parse(fixture("clickup-task.json"));
+    newer.name = "Renamed card";
+    const again = await runFetch(root, { source: url, session: "s1" }, { env, fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify(newer))) });
+    expect(first.ok && again.ok && again.files).toEqual(first.ok && first.files);
+    expect(readFileSync(join(sessionDir, "requirements", "source.md"), "utf-8")).toContain("# Renamed card");
+    expect(JSON.parse(readFileSync(join(sessionDir, "requirements", "source.json"), "utf-8")).title).toBe("Renamed card");
+    expect(existsSync(join(sessionDir, "requirements", "source-3.md"))).toBe(false);
+    const listed = await runList(root, "s1");
+    expect(listed.ok && listed.sources.map((s) => s.files.md)).toEqual(["source.md", "source-2.md"]);
+  });
+
+  it("re-fetching the same literal text replaces rather than appends", async () => {
+    await runFetch(root, { source: "Same text\nbody", session: "s1" });
+    await runFetch(root, { source: "Same text\nbody", session: "s1" });
+    const listed = await runList(root, "s1");
+    expect(listed.ok && listed.sources).toHaveLength(1);
+  });
+
+  it("a missing path is not-found and writes nothing", async () => {
+    const r = await runFetch(root, { source: "./docs/typo.md", session: "s1" });
+    expect(r).toMatchObject({ ok: false, code: "not-found" });
+    expect(existsSync(join(sessionDir, "requirements"))).toBe(false);
   });
 
   it("re-fetching the same url updates updated_at", async () => {
@@ -83,6 +112,8 @@ describe("requirements fetch", () => {
       { ...deps, fetchImpl: vi.fn().mockResolvedValue(new Response(JSON.stringify(newer))) },
     );
     expect((await sessionRow())?.requirements_updated_at).toBe("2026-02-01T00:00:00.000Z");
+    expect(JSON.parse(readFileSync(join(sessionDir, "requirements", "source.json"), "utf-8")).updated_at).toBe("2026-02-01T00:00:00.000Z");
+    expect(existsSync(join(sessionDir, "requirements", "source-2.json"))).toBe(false);
   });
 
   it("dry-run writes nothing", async () => {

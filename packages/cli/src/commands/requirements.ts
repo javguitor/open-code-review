@@ -20,7 +20,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { isAbsolute, join } from "node:path";
 import { requireOcrSetup } from "../lib/guards.js";
 import { ensureDatabase, getSession, updateSession } from "@open-code-review/persistence";
-import { detectSourceType } from "../requirements/detect.js";
+import { detectSourceType, toFilePath } from "../requirements/detect.js";
 import { CLICKUP_TOKEN_ENV, fetchClickUp } from "../requirements/clickup.js";
 import { fetchGitHub, type RunGh } from "../requirements/github.js";
 import { fromFile } from "../requirements/file.js";
@@ -64,6 +64,7 @@ export async function resolveSource(
   deps: FetchDeps = {},
 ): Promise<RequirementSource> {
   const type = detectSourceType(input);
+  input = input.trim();
   switch (type) {
     case "clickup":
       return fetchClickUp(input, {
@@ -75,7 +76,7 @@ export async function resolveSource(
     case "github-pr":
       return fetchGitHub(input, { withComments, runGh: deps.runGh });
     case "file":
-      return fromFile(input);
+      return fromFile(toFilePath(input));
     case "text":
       return fromText(input, deps.now);
   }
@@ -95,7 +96,11 @@ async function resolveSessionDir(
   return { sessionDir, row };
 }
 
-/** Writes `source[-n].md/json` into `<sessionDir>/requirements/`, using the next free index. */
+/**
+ * Writes `source[-n].md/json` into `<sessionDir>/requirements/`. Upserts by `url`:
+ * a URL already stored replaces its pair in place (one file per source, so
+ * normalization never sees two versions); a new URL takes the next free slot.
+ */
 export function writeSourceFiles(
   sessionDir: string,
   md: string,
@@ -103,14 +108,29 @@ export function writeSourceFiles(
 ): { md: string; json: string } {
   const dir = join(sessionDir, "requirements");
   mkdirSync(dir, { recursive: true });
+  const body = `${JSON.stringify(json, null, 2)}\n`;
   for (let n = 1; ; n++) {
     const stem = n === 1 ? "source" : `source-${n}`;
     const mdPath = join(dir, `${stem}.md`);
     const jsonPath = join(dir, `${stem}.json`);
-    if (existsSync(mdPath) || existsSync(jsonPath)) continue;
-    writeFileSync(mdPath, md, { flag: "wx" });
-    writeFileSync(jsonPath, `${JSON.stringify(json, null, 2)}\n`, { flag: "wx" });
-    return { md: mdPath, json: jsonPath };
+    if (!existsSync(mdPath) && !existsSync(jsonPath)) {
+      writeFileSync(mdPath, md, { flag: "wx" });
+      writeFileSync(jsonPath, body, { flag: "wx" });
+      return { md: mdPath, json: jsonPath };
+    }
+    if (storedUrl(jsonPath) === json.url) {
+      writeFileSync(mdPath, md);
+      writeFileSync(jsonPath, body);
+      return { md: mdPath, json: jsonPath };
+    }
+  }
+}
+
+function storedUrl(jsonPath: string): string | null {
+  try {
+    return (JSON.parse(readFileSync(jsonPath, "utf-8")) as { url?: string }).url ?? null;
+  } catch {
+    return null;
   }
 }
 
@@ -133,7 +153,7 @@ export async function runFetch(
     let files: FetchSuccess["files"] = null;
     if (target) {
       files = writeSourceFiles(target.sessionDir, md, json);
-      // The first source wins; re-fetching the same URL refreshes its timestamp.
+      // The first source wins; re-fetching the same URL replaces its files and refreshes its timestamp.
       const current = target.row.requirements_source_url;
       if (current === null || current === json.url) {
         updateSession(await ensureDatabase(ocrDir), opts.session!, {

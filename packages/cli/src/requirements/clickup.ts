@@ -96,9 +96,12 @@ function extractChecklists(task: ClickUpTask): Checklist[] {
   }));
 }
 
+/** Per-request cap so a stalled ClickUp call cannot hang the CLI (or the dashboard waiting on it). */
+const CLICKUP_TIMEOUT_MS = 15_000;
+
 export async function fetchClickUp(
   url: string,
-  opts: { withComments: boolean; token: string | undefined; fetchImpl?: FetchFn },
+  opts: { withComments: boolean; token: string | undefined; fetchImpl?: FetchFn; timeoutMs?: number },
 ): Promise<RequirementSource> {
   const ref = parseClickUpUrl(url);
   if (!ref) throw new RequirementsError("invalid-source", `Not a ClickUp task URL: ${url}`);
@@ -110,6 +113,7 @@ export async function fetchClickUp(
     );
   }
   const doFetch = opts.fetchImpl ?? fetch;
+  const timeoutMs = opts.timeoutMs ?? CLICKUP_TIMEOUT_MS;
   // Custom ids (`/t/<team>/<custom-id>`) must be flagged on the API call.
   const custom = ref.teamId
     ? `&custom_task_ids=true&team_id=${encodeURIComponent(ref.teamId)}`
@@ -121,8 +125,15 @@ export async function fetchClickUp(
     try {
       res = await doFetch(`${API}${pathAndQuery}`, {
         headers: { Authorization: token, Accept: "application/json" },
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (error) {
+      if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+        throw new RequirementsError(
+          "fetch-failed",
+          `ClickUp did not respond within ${Math.round(timeoutMs / 1000)}s; try again later.`,
+        );
+      }
       throw new RequirementsError(
         "fetch-failed",
         `Could not reach ClickUp: ${error instanceof Error ? error.message : String(error)}`,

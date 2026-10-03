@@ -151,4 +151,17 @@ describe("fetchClickUp", () => {
       }),
     ).rejects.toMatchObject({ code: "fetch-failed" });
   });
+
+  it("a request that never resolves aborts via the signal → fetch-failed (timeout)", async () => {
+    const f = vi.fn(
+      (_url: string | URL | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal!.reason));
+        }),
+    );
+    await expect(
+      fetchClickUp("https://app.clickup.com/t/abc123", { withComments: false, token: TOKEN, fetchImpl: f, timeoutMs: 20 }),
+    ).rejects.toMatchObject({ code: "fetch-failed", message: expect.stringContaining("did not respond") });
+    expect(f.mock.calls[0]![1]?.signal).toBeInstanceOf(AbortSignal);
+  });
 });

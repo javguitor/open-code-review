@@ -275,13 +275,21 @@ Requirements come from `--requirements <url|path|text>` (and, for `--with-commen
 The session already exists at this point (`ocr state begin` ran at the top of Phase 1), which `--session` requires. Fetch URLs and paths with the CLI, never yourself:
 
 ```bash
-# URL or existing path. Add --with-comments ONLY if the user asked for comments.
-ocr requirements fetch "<value>" --session "$SESSION_ID" --json
-# Literal text: keeps working inline, but fetching it as `text` is recommended for traceability
-ocr requirements fetch "<text>" --session "$SESSION_ID" --json
+# Options FIRST, then `--`, then the value single-quoted (commander only parses options before `--`).
+# Add --with-comments ONLY if the user asked for comments.
+ocr requirements fetch --session "$SESSION_ID" --json -- '<url-or-path>'
+# Short literal text: same form. Escape each single quote inside the value as '\''
+ocr requirements fetch --session "$SESSION_ID" --json -- '- [ ] users can log in'
+# Multi-line or long literal text: write it to a temp file (quoted heredoc, nothing expands) and pass the path
+cat > "$TMPDIR/req.md" <<'OCR_REQ_EOF'
+<pasted text>
+OCR_REQ_EOF
+ocr requirements fetch --session "$SESSION_ID" --json -- "$TMPDIR/req.md"
 ```
 
-- Writes `requirements/source.md` + `source.json` (further sources: `source-2.*`, ...) and records the source URL and the provider's `updated_at` on the session. No need to pass `--requirements-url` / `--requirements-updated-at` to `ocr state begin` unless you are recreating a session whose sources already exist.
+- Always use `-- '<value>'`: without `--`, a value starting with `-` (a pasted checklist) is parsed as an option; inside double quotes the shell would expand `$()` and backticks from pasted text. Single quotes prevent both.
+- A path that does not exist (or a `file://` URL to a missing file) fails with `code: "not-found"`; it is never stored as text. Resolve paths against the right checkout (PR worktree vs main) before calling.
+- Writes `requirements/source.md` + `source.json` (a different URL takes the next slot, `source-2.*`, ...; fetching a URL already stored replaces its files in place) and records the source URL and the provider's `updated_at` on the session. No need to pass `--requirements-url` / `--requirements-updated-at` to `ocr state begin` unless you are recreating a session whose sources already exist.
 - Output is `{ "ok": true, "source", "preview", "files" }`, or exit 1 with `{ "ok": false, "code", "error" }`.
 - **NEVER** fetch a ClickUp or GitHub URL yourself (no WebFetch, no `curl`, no MCP). If `code` is `missing-token`: stop requirements handling, tell the user to export `CLICKUP_API_TOKEN`, and continue the review without requirements only if the user agrees. In a non-interactive run (dashboard): continue without requirements and say so in `context.md`. For other codes, report `error` and apply the same rule.
 
