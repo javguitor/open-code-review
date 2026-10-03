@@ -152,19 +152,19 @@ When reviewers disagree:
 
 ### Step 5: Assess Requirements (if provided)
 
-If requirements were provided, evaluate each against the implementation:
+If requirements were provided, evaluate each against the implementation. When `requirements.md` has numbered criteria (`### AC-n:`), emit **one row per AC** and reference it as `AC-n` in the first column; never merge or skip ACs:
 
 ```markdown
 ## Requirements Assessment
 
 | Requirement | Status | Notes | Flagged By |
 |-------------|--------|-------|------------|
-| Users can log in via OAuth | ✓ Met | Implementation complete | @principal-1 |
-| Session tokens expire after 24h | ? Unclear | Expiry logic not visible in diff | @security-1 |
-| Failed logins are rate-limited | ✗ Gap | No rate limiting found | @security-1 |
+| AC-1: Users can log in via OAuth | ✓ Met | Implementation complete | @principal-1 |
+| AC-2: Session tokens expire after 24h | ? Unclear | Expiry logic not visible in diff | @security-1 |
+| AC-3: Failed logins are rate-limited | ✗ Gap | No rate limiting found | @security-1 |
 
-**Gaps identified**: 1 requirement not met (rate limiting)
-**Needs clarification**: 1 requirement unclear (token expiry)
+**Gaps identified**: 1 requirement not met (AC-3 rate limiting)
+**Needs clarification**: 1 requirement unclear (AC-2 token expiry)
 ```
 
 A requirements gap MAY be a blocker if it represents a critical feature. The reviewer who identifies the gap makes the blocking determination.
@@ -319,12 +319,12 @@ The CLI **rejects** a contradictory pair (exit 7, nothing written), so pick the 
 
 ## Requirements Assessment
 
-{If requirements were provided}
+{If requirements were provided. One row per `AC-n` when `requirements.md` has numbered criteria.}
 
 | Requirement | Status | Notes | Reviewer |
 |-------------|--------|-------|----------|
-| Users can log in via OAuth | ✓ Met | Implementation complete | @principal-1 |
-| Rate limiting on login | ✗ Gap | Not implemented | @security-1 |
+| AC-1: Users can log in via OAuth | ✓ Met | Implementation complete | @principal-1 |
+| AC-2: Rate limiting on login | ✗ Gap | Not implemented | @security-1 |
 
 ---
 

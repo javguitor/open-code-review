@@ -143,7 +143,7 @@ This phase is **identical** to the review workflow's context discovery. See `ref
 1. **Load OCR Configuration** — Read `.ocr/config.yaml`
 2. **Pull OpenSpec Context** — If enabled, read specs and active changes
 3. **Discover Reference Files** — AGENTS.md, CLAUDE.md, etc.
-4. **Gather Requirements** — If user provided specs/proposals/tickets
+4. **Gather Requirements** — If user provided specs/proposals/tickets (`--requirements <url|path|text>`). Exactly as in review workflow step 1d (`references/workflow.md`): the session already exists (Phase 0 Step 4), so run `ocr requirements fetch "<value>" --session "$SESSION_ID" --json` (add `--with-comments` only if the user asked), then normalize `requirements/source*.md` into `requirements.md` per `references/requirements-normalization.md`. NEVER fetch a ClickUp/GitHub URL yourself; on `missing-token` stop requirements handling, tell the user to export `CLICKUP_API_TOKEN`, and continue without requirements only if they agree (non-interactive: continue and note it in `context.md`). For PR targets without `--requirements`, scan the PR body (`gh pr view "$PR_URL" --json body --jq .body`) for ClickUp/GitHub issue URLs and print `Requirements found in the PR body: <urls> — re-run with --requirements <url> to use them`; never fetch them automatically.
 5. **Merge Into discovered-standards.md**
 
 ### Map-Specific: Load Redundancy Config
@@ -169,7 +169,7 @@ code-review-map:
 ### Phase 1 Checkpoint
 
 - [ ] `discovered-standards.md` written (or reused from existing session)
-- [ ] If requirements provided: `requirements.md` written
+- [ ] If requirements provided: fetched with `ocr requirements fetch` and `requirements.md` written (`AC-n` criteria)
 - [ ] Agent redundancy config loaded
 - [ ] `ocr state advance` called with `--phase "map-context"`
 

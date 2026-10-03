@@ -28,7 +28,7 @@ code on its merits.
 
 ## Requirements Context (if provided)
 
-{content of requirements.md - specs, proposals, tickets, or user-provided context}
+{content of requirements.md - specs, proposals, tickets, or user-provided context. When it has `### AC-n:` criteria, reference them by number. The raw originals are in requirements/source*.md if you need the exact wording.}
 
 ## Tech Lead Guidance
 
@@ -93,7 +93,9 @@ Headings and labels below are literal and stay English in every language; bodies
 
 ## Requirements Assessment (if requirements provided)
 [How does the code measure up against stated requirements?]
-- Requirement X: Met / Partially Met / Not Met / Cannot Assess
+- One row per criterion when `requirements.md` has `### AC-n:` entries, referenced as `AC-n` (e.g. `AC-3: Not Met — <why>`), status Met / Partially Met / Not Met / Cannot Assess
+- Without numbered criteria: `Requirement X: <status>`
+- A `(derived)` criterion marked Not Met should say whether the gap is real or the inference is doubtful
 - Notes on requirements gaps or deviations
 
 ## Findings
@@ -104,7 +106,7 @@ Headings and labels below are literal and stay English in every language; bodies
 - **Issue**: [What's wrong]
 - **Why It Matters**: [Impact]
 - **Suggestion**: [How to fix]
-- **Requirements Impact**: [If relevant, which requirement this affects]
+- **Requirements Impact**: [If relevant, which requirement this affects, e.g. `AC-2`]
 
 ### Finding 2: [Title]
 ...

@@ -64,6 +64,7 @@ Reviewers need context about what the code SHOULD do. Accept requirements **flex
 - **Inline**: "review this against the requirement that users must be rate-limited"
 - **Document reference**: "see the spec at openspec/changes/add-auth/proposal.md"
 - **Pasted text**: Bug reports, acceptance criteria, Jira descriptions
+- **ClickUp task / GitHub issue URL**: pass `--requirements <url>`; the CLI fetches it (`ocr requirements fetch`, needs `CLICKUP_API_TOKEN` for ClickUp) — never fetch it yourself. The Tech Lead normalizes it into numbered `AC-n` criteria (`references/requirements-normalization.md`)
 - **No explicit requirements**: Proceed with discovered standards + best practices
 
 When a user references a document, **read it**. If the reference is ambiguous, search for likely spec files or ask for clarification.
@@ -183,7 +184,8 @@ All review artifacts are stored in `.ocr/sessions/{YYYY-MM-DD}-{branch}/`:
 | File | Description |
 |------|-------------|
 | `discovered-standards.md` | Merged project context (shared) |
-| `requirements.md` | User-provided requirements (shared, if any) |
+| `requirements/` | Raw requirement sources fetched by the CLI (shared, if any) |
+| `requirements.md` | Normalized requirements with `AC-n` criteria (shared, if any) |
 | `context.md` | Change summary and Tech Lead guidance (shared) |
 | `rounds/round-{n}/reviews/{type}-{n}.md` | Individual reviewer outputs (per-round) |
 | `rounds/round-{n}/discourse.md` | Cross-reviewer discussion (per-round) |

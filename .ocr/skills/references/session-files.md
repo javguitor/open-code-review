@@ -9,7 +9,11 @@ Every OCR session creates files in `.ocr/sessions/{session-id}/`:
 ```
 .ocr/sessions/{YYYY-MM-DD}-{branch}/
 ├── discovered-standards.md # Merged project context (shared across rounds)
-├── requirements.md         # User-provided requirements (if any, shared)
+├── requirements/           # Raw requirement sources fetched by `ocr requirements fetch` (if any, shared across rounds)
+│   ├── source.md           # Raw content (title, description, checklists, custom fields, comments)
+│   ├── source.json         # { type, id, url, title, fetched_at, updated_at, author, with_comments }
+│   └── source-2.md/.json   # Further sources
+├── requirements.md         # Normalized requirements: ## Source, AC-n criteria, Out of Scope, Open Questions (if any, shared)
 ├── context.md              # Phase 2+3: Change summary + Tech Lead guidance (shared)
 ├── map/                    # Code Review Map artifacts (optional)
 │   └── runs/
@@ -109,7 +113,8 @@ OCR uses a **run-based architecture** for maps, parallel to review rounds.
 
 | File | When Created | Description |
 |------|--------------|-------------|
-| `requirements.md` | Phase 1 | User-provided requirements, specs, or acceptance criteria |
+| `requirements/source[-n].md`, `.json` | Phase 1 | Raw requirement sources written by `ocr requirements fetch` (never by the model); shared across rounds |
+| `requirements.md` | Phase 1 | Normalized requirements with numbered `AC-n` criteria (`references/requirements-normalization.md`) |
 
 ## Reviewer File Naming
 
