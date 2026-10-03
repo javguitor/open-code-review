@@ -50,7 +50,7 @@ describe("renderSourceMarkdown heading levels", () => {
       comments: [{ author: "ana", date: "2026-10-01", text: "# Re" }],
     });
     expect(md).toContain("## Description\n\n### Spike: thing\n\n#### Context\ntext\n\n#### Recommendation");
-    expect(md).toContain("### ana — 2026-10-01\n\n### Re");
+    expect(md).toContain("### ana — 2026-10-01\n\n#### Re");
     expect(md.split("\n").filter((l) => /^#{1,2} /.test(l))).toEqual([
       "# Card",
       "## Description",

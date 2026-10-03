@@ -528,8 +528,8 @@ export class FilesystemSync {
   /**
    * Reconcile a map run's sections and files in place. Rows are keyed by their
    * natural unique keys (section_number, file_path) and updated with ON CONFLICT,
-   * so ids — and everything keyed on them (user_file_progress, notes, chat
-   * targets) — survive re-parses. Only sections/files that disappeared from the
+   * so ids — and the review progress keyed on them (user_file_progress) —
+   * survive re-parses. Only sections/files that disappeared from the
    * source are deleted. A file that merely moved between sections keeps its
    * review progress (carried over by path).
    */
@@ -640,25 +640,28 @@ export class FilesystemSync {
 
     // Upsert map_run in place: INSERT OR REPLACE would delete the row (foreign_keys=ON)
     // and cascade away every section/file/progress row hanging off it.
-    this.db.run(
-      `INSERT INTO map_runs (session_id, run_number, file_count, map_md_path, parsed_at, source)
-       VALUES (?, ?, ?, ?, ?, 'parser')
-       ON CONFLICT(session_id, run_number) DO UPDATE SET
-         file_count = excluded.file_count, map_md_path = excluded.map_md_path,
-         parsed_at = excluded.parsed_at, source = excluded.source`,
-      [sessionId, runNumber, parsed.sections.reduce((sum, s) => sum + s.files.length, 0), filePath, sqlNow()],
-    )
-
-    // Get map_run ID
-    const runRow = queryFirst(
-      this.db,
-      'SELECT id FROM map_runs WHERE session_id = ? AND run_number = ?',
-      [sessionId, runNumber],
-    )
-    const mapRunId = runRow?.['id'] as number | undefined
-    if (!mapRunId) return
-
-    this.syncMapChildren(mapRunId, parsed.sections)
+    // One transaction with the children: a mid-sync failure must not leave a
+    // half-reconciled map behind a parsed_at that already advanced (shouldSkip).
+    const synced = this.db.transaction(() => {
+      this.db.run(
+        `INSERT INTO map_runs (session_id, run_number, file_count, map_md_path, parsed_at, source)
+         VALUES (?, ?, ?, ?, ?, 'parser')
+         ON CONFLICT(session_id, run_number) DO UPDATE SET
+           file_count = excluded.file_count, map_md_path = excluded.map_md_path,
+           parsed_at = excluded.parsed_at, source = excluded.source`,
+        [sessionId, runNumber, parsed.sections.reduce((sum, s) => sum + s.files.length, 0), filePath, sqlNow()],
+      )
+      const runRow = queryFirst(
+        this.db,
+        'SELECT id FROM map_runs WHERE session_id = ? AND run_number = ?',
+        [sessionId, runNumber],
+      )
+      const mapRunId = runRow?.['id'] as number | undefined
+      if (!mapRunId) return false
+      this.syncMapChildren(mapRunId, parsed.sections)
+      return true
+    })
+    if (!synced) return
 
     // Safety net: recover a map session whose CLI finalize landed the terminal
     // `map_completed` event but crashed before the close ran. Closes ONLY when
@@ -1044,50 +1047,45 @@ export class FilesystemSync {
     }
 
     // Compute derived counts
-    const sectionCount = meta.sections.length
-    const fileCount = meta.sections.reduce((sum, s) => sum + (s.files?.length ?? 0), 0)
+    const metaSections = meta.sections
+    const sectionCount = metaSections.length
+    const fileCount = metaSections.reduce((sum, s) => sum + (s.files?.length ?? 0), 0)
 
-    // ── Begin transaction for atomic multi-step mutation ──
-    this.db.run('BEGIN TRANSACTION')
     try {
-      // Update map_runs with orchestrator data
-      this.db.run(
-        `UPDATE map_runs
-         SET file_count = ?, section_count = ?, source = 'orchestrator', parsed_at = ?
-         WHERE session_id = ? AND run_number = ?`,
-        [fileCount, sectionCount, sqlNow(), sessionId, runNumber],
-      )
+      this.db.transaction(() => {
+        // Update map_runs with orchestrator data
+        this.db.run(
+          `UPDATE map_runs
+           SET file_count = ?, section_count = ?, source = 'orchestrator', parsed_at = ?
+           WHERE session_id = ? AND run_number = ?`,
+          [fileCount, sectionCount, sqlNow(), sessionId, runNumber],
+        )
 
-      // Get map_run ID
-      const runRow = queryFirst(
-        this.db,
-        'SELECT id FROM map_runs WHERE session_id = ? AND run_number = ?',
-        [sessionId, runNumber],
-      )
-      const mapRunId = runRow?.['id'] as number | undefined
-      if (!mapRunId) {
-        this.db.run('COMMIT')
-        return
-      }
+        // Get map_run ID
+        const runRow = queryFirst(
+          this.db,
+          'SELECT id FROM map_runs WHERE session_id = ? AND run_number = ?',
+          [sessionId, runNumber],
+        )
+        const mapRunId = runRow?.['id'] as number | undefined
+        if (!mapRunId) return
 
-      this.syncMapChildren(
-        mapRunId,
-        meta.sections.map((section) => ({
-          sectionNumber: section.section_number ?? 0,
-          title: section.title ?? 'Untitled',
-          description: section.description ?? null,
-          files: (section.files ?? []).map((file) => ({
-            filePath: file.file_path ?? '',
-            role: file.role ?? null,
-            linesAdded: file.lines_added ?? 0,
-            linesDeleted: file.lines_deleted ?? 0,
+        this.syncMapChildren(
+          mapRunId,
+          metaSections.map((section) => ({
+            sectionNumber: section.section_number ?? 0,
+            title: section.title ?? 'Untitled',
+            description: section.description ?? null,
+            files: (section.files ?? []).map((file) => ({
+              filePath: file.file_path ?? '',
+              role: file.role ?? null,
+              linesAdded: file.lines_added ?? 0,
+              linesDeleted: file.lines_deleted ?? 0,
+            })),
           })),
-        })),
-      )
-
-      this.db.run('COMMIT')
+        )
+      })
     } catch (err) {
-      this.db.run('ROLLBACK')
       console.error(`[FilesystemSync] Error in processMapMeta for ${filePath}:`, err)
       return
     }

@@ -31,10 +31,10 @@ const ATX_HEADING = /^( {0,3})(#{1,6})(?=[ \t]|$)/;
 const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 
 /**
- * Pushes every ATX heading in provider-supplied markdown down two levels (capped at 6) so it can
- * never collide with this file's own `##` sections. Fenced code blocks are left untouched.
+ * Pushes every ATX heading in provider-supplied markdown down `by` levels (capped at 6; default 2 so it
+ * can never collide with this file's own `##` sections). Fenced code blocks are left untouched.
  */
-export function shiftHeadings(markdown: string): string {
+export function shiftHeadings(markdown: string, by = 2): string {
   let fence: string | null = null;
   return markdown
     .split("\n")
@@ -52,7 +52,7 @@ export function shiftHeadings(markdown: string): string {
       return line.replace(
         ATX_HEADING,
         (_m, indent: string, hashes: string) =>
-          `${indent}${"#".repeat(Math.min(hashes.length + 2, 6))}`,
+          `${indent}${"#".repeat(Math.min(hashes.length + by, 6))}`,
       );
     })
     .join("\n");
@@ -90,7 +90,7 @@ export function renderSourceMarkdown(source: RequirementSource): string {
   if (source.comments) {
     out.push("## Comments", "");
     if (source.comments.length === 0) out.push("_No comments._", "");
-    for (const c of source.comments) out.push(`### ${c.author} — ${c.date}`, "", shiftHeadings(c.text.trim()), "");
+    for (const c of source.comments) out.push(`### ${c.author} — ${c.date}`, "", shiftHeadings(c.text.trim(), 3), "");
   }
 
   return `${out.join("\n").trimEnd()}\n`;

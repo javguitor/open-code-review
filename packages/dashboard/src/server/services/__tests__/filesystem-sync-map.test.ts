@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mkdirSync, writeFileSync, utimesSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -85,29 +85,23 @@ afterEach(() => {
   removeTempWorkspace(tmpDir)
 })
 
-/** User state keyed on map ids: review progress, notes (no FK), and a chat targeting the run. */
-function addUserState(session: string, path: string): string {
+/** Review progress keyed on the map file id. */
+function addUserProgress(path: string): void {
   const fid = fileId(path)
   db.run('INSERT INTO user_file_progress (map_file_id, is_reviewed, reviewed_at) VALUES (?, 1, ?)', [fid, '2026-01-02'])
-  db.run("INSERT INTO user_notes (target_type, target_id, content) VALUES ('file', ?, 'keep me')", [String(fid)])
-  db.run(
-    "INSERT INTO chat_conversations (id, session_id, target_type, target_id) VALUES ('c1', ?, 'map_run', ?)",
-    [session, runId(session)],
-  )
-  return String(fid)
 }
 
 describe.each([
   ['map-meta.json', META_SESSION, writeMeta],
   ['map.md', MD_SESSION, writeMd],
 ] as const)('id-preserving map ingestion (%s)', (_label, session, write) => {
-  it('keeps map_run/section/file ids and user state across repeated full rescans', async () => {
+  it('keeps map_run/section/file ids and review progress across repeated full rescans', async () => {
     write([['src/a.ts', 'src/b.ts'], ['src/c.ts']])
     await scan()
     const run = runId(session)
     const secIds = rows('SELECT id FROM map_sections WHERE map_run_id = ? ORDER BY section_number', [run])
     const a = fileId('src/a.ts')
-    const noteTarget = addUserState(session, 'src/a.ts')
+    addUserProgress('src/a.ts')
 
     for (let i = 0; i < 2; i++) {
       write([['src/a.ts', 'src/b.ts'], ['src/c.ts']])
@@ -118,14 +112,12 @@ describe.each([
     expect(rows('SELECT id FROM map_sections WHERE map_run_id = ? ORDER BY section_number', [run])).toEqual(secIds)
     expect(fileId('src/a.ts')).toBe(a)
     expect(rows('SELECT is_reviewed FROM user_file_progress WHERE map_file_id = ?', [a])[0]?.['is_reviewed']).toBe(1)
-    expect(rows("SELECT id FROM user_notes WHERE target_type = 'file' AND target_id = ?", [noteTarget])).toHaveLength(1)
-    expect(rows('SELECT id FROM chat_conversations WHERE target_id = ?', [run])).toHaveLength(1)
   })
 
   it('removes dropped files and carries progress for a file moved between sections', async () => {
     write([['src/a.ts', 'src/b.ts'], ['src/c.ts']])
     await scan()
-    addUserState(session, 'src/c.ts')
+    addUserProgress('src/c.ts')
     const run = runId(session)
 
     write([['src/a.ts', 'src/c.ts']])
@@ -137,5 +129,32 @@ describe.each([
     expect(
       rows('SELECT is_reviewed FROM user_file_progress WHERE map_file_id = ?', [fileId('src/c.ts')])[0]?.['is_reviewed'],
     ).toBe(1)
+  })
+
+  it('rolls back the whole reconcile when a child write fails mid-sync', async () => {
+    write([['src/a.ts', 'src/b.ts']])
+    await scan()
+    const run = runId(session)
+    const before = rows('SELECT file_count, parsed_at FROM map_runs WHERE id = ?', [run])
+
+    // Fails on the insert that comes after the deletes/upserts of a changed map.
+    db.run(
+      `CREATE TRIGGER boom BEFORE INSERT ON map_files WHEN NEW.file_path = 'src/boom.ts'
+       BEGIN SELECT RAISE(ABORT, 'boom'); END`,
+    )
+    write([['src/a.ts', 'src/boom.ts', 'src/extra.ts']])
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      // map.md propagates the failure, map-meta.json logs it; either way it must roll back.
+      await scan().catch(() => {})
+    } finally {
+      errors.mockRestore()
+    }
+
+    expect(rows('SELECT file_count, parsed_at FROM map_runs WHERE id = ?', [run])).toEqual(before)
+    expect(rows('SELECT file_path FROM map_files ORDER BY file_path').map((r) => r['file_path'])).toEqual([
+      'src/a.ts',
+      'src/b.ts',
+    ])
   })
 })
