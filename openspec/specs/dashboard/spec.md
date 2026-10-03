@@ -581,14 +581,14 @@ round detail page, using the GitHub CLI (`gh pr review`).
 
 - **GIVEN** the user clicks "Post to GitHub" on a review round page
 - **WHEN** the client emits a `post:check-gh` Socket.IO event with the session ID
-- **THEN** the server checks `gh auth status` and looks up the PR via `gh pr list --head <branch>`
+- **THEN** the server checks `gh auth status` and resolves the PR from the session's `pr_url` when present, otherwise via `gh pr list --head <branch>`
 - **AND** the server resolves the PR author and the authenticated `gh` user into
   `ownership: "own" | "other" | "unknown"`, where `unknown` means either lookup failed
 - **AND** the server emits `post:gh-result` with `{ authenticated, prNumber, prUrl, branch, ownership }`
 
 #### Scenario: Branch resolution for encoded names
 
-- **GIVEN** the session branch is stored with hyphens (e.g. `feat-my-feature`)
+- **GIVEN** the session has no `pr_url` and its branch is stored with hyphens (e.g. `feat-my-feature`)
 - **WHEN** no PR is found for the literal branch name
 - **THEN** the server SHALL try restoring common slash prefixes (e.g. `feat/my-feature`, `fix/my-feature`) and check each candidate
 - **AND** the first matching PR is returned with the resolved branch name
@@ -597,8 +597,8 @@ round detail page, using the GitHub CLI (`gh pr review`).
 
 - **GIVEN** GitHub auth is confirmed and a PR is detected
 - **WHEN** the user chooses "Post Team Review" with a selected state
-- **THEN** the raw `final.md` content is submitted via `gh pr review <prNumber> --<state> --body-file`
-- **AND** a `post:submit-result` event is emitted with `{ success, commentUrl }`
+- **THEN** the raw `final.md` content is submitted via `gh pr review <prUrl> --<state> --body-file`
+- **AND** a `post:submit-result` event is emitted with `{ success, commentUrl, state, downgraded }`
 
 #### Scenario: Missing state defaults to comment
 
@@ -669,7 +669,7 @@ round detail page, using the GitHub CLI (`gh pr review`).
 #### Scenario: No open PR found
 
 - **GIVEN** GitHub auth succeeds
-- **WHEN** no open PR matches the session branch (including slash-prefix candidates)
+- **WHEN** the session has no `pr_url` and no open PR matches the session branch (including slash-prefix candidates)
 - **THEN** the dialog shows an error message indicating no PR was found for the branch
 
 #### Scenario: Post submission failure
@@ -2115,3 +2115,74 @@ The dashboard client SHALL render all user-facing copy through a message diction
 
 - **WHEN** `language` is changed in `.ocr/config.yaml` and the dashboard restarted
 - **THEN** existing sessions, rounds and findings are shown with their stored content unchanged; only the interface chrome switches
+
+### Requirement: PR Target in the Command Palette
+
+The dashboard command palette SHALL accept `pr:<number>` and GitHub PR URLs as review and map targets and forward them to the workflow in canonical form.
+
+#### Scenario: Target hint
+
+- **WHEN** the review or map command form renders
+- **THEN** the target field's placeholder lists `pr:123`, branch, commit range and path
+
+#### Scenario: Shape validation only
+
+- **GIVEN** the user enters `pr:abc`
+- **WHEN** the command is submitted
+- **THEN** the dashboard rejects it with a message describing the accepted forms and runs nothing
+- **AND** `pr:123` and `https://github.com/o/r/pull/123` are forwarded as they are
+
+#### Scenario: Browser URLs are normalized
+
+- **GIVEN** the user pastes `https://github.com/o/r/pull/123/files?w=1#diff-abc` (or `/commits`, `/checks`)
+- **WHEN** the command is submitted
+- **THEN** the target is forwarded as `https://github.com/o/r/pull/123`
+
+#### Scenario: Owner and repo charset
+
+- **GIVEN** a PR URL whose owner does not match `[A-Za-z0-9-]+` or whose repo does not match `[A-Za-z0-9._-]+` (for example containing `$(…)`, backticks or quotes)
+- **WHEN** the command is submitted
+- **THEN** the dashboard rejects it with the accepted-forms message and runs nothing
+
+### Requirement: Stale Review Detection
+
+The dashboard SHALL show when a PR-targeted session no longer matches the PR's current head.
+
+#### Scenario: Stale badge
+
+- **GIVEN** a session with `head_sha` and `pr_url`
+- **WHEN** the PR's current `headRefOid` differs from `head_sha`
+- **THEN** the session card and session detail show "Stale — PR moved to <sha7>"
+- **AND** round pages show no stale indicator
+
+#### Scenario: Not applicable
+
+- **GIVEN** a session without `pr_url` (branch, staged or range target)
+- **WHEN** the session renders
+- **THEN** no stale indicator is shown and no `gh` call is made
+
+#### Scenario: Sessions list spawns `gh` only for active sessions
+
+- **GIVEN** a mix of active and closed PR sessions
+- **WHEN** the sessions list is requested
+- **THEN** the server looks up the PR head only for active sessions and serves the cached head, without spawning `gh`, for closed ones
+- **AND** the session detail looks the PR up for any session
+
+#### Scenario: Passive lookup failure
+
+- **GIVEN** `gh` fails or times out during a list or detail request
+- **WHEN** a head was previously known for that PR
+- **THEN** the last known head is served and no error is shown
+
+#### Scenario: Check for updates and re-review
+
+- **WHEN** the user clicks "Check for updates"
+- **THEN** the server refreshes the PR head (bypassing its cache) and updates the badge
+- **AND** if the lookup fails the endpoint answers 502 and the UI shows an error
+- **AND** "Re-review" runs the review command with the session's stored `pr_url` (never a bare number), which creates the next round in the same worktree
+
+#### Scenario: Decisions survive a re-review
+
+- **GIVEN** finding decisions recorded in round 1
+- **WHEN** round 2 completes
+- **THEN** the round-1 decisions remain visible on the round-1 findings (decisions are keyed by finding id)

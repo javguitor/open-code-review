@@ -2,7 +2,9 @@
 
 ## Purpose
 The SQLite state layer provides a durable, concurrent-safe single source of truth for all OCR data — workflow state, parsed artifacts, and user interactions — shared by the CLI, AI agents, and dashboard server via `.ocr/data/ocr.db`.
+
 ## Requirements
+
 ### Requirement: SQLite as Single Source of Truth
 
 The system SHALL use a SQLite database at `.ocr/data/ocr.db` as the single source of truth for all OCR state, replacing `state.json` as the primary state medium.
@@ -723,3 +725,22 @@ evidence — see `Forward-Resume of a Stranded Mid-Pipeline Run`.)
 - **WHEN** any consumer reads the derivation's `next_action`
 - **THEN** the value SHALL be exactly one of `none`, `finish`, `forward_resume`, or `abort_or_fresh`
 
+### Requirement: Reviewed Ref Columns
+
+The `sessions` table SHALL carry nullable `base_ref`, `head_ref`, `head_sha`, `pr_number` and `pr_url` columns (migration 15) so a session states exactly what it reviewed (`head_ref` is the local ref reviewed, `refs/ocr/pr/<n>`; `branch` stays the PR head branch name), and `round-meta.json` MAY carry `head_sha`.
+
+#### Scenario: Migration is additive
+
+- **GIVEN** a database at schema version 14 with existing sessions
+- **WHEN** migration 15 runs
+- **THEN** the new columns exist, existing rows have `NULL` in them, and every existing reader keeps working
+
+#### Scenario: Begin persists the refs
+
+- **WHEN** `ocr state begin --pr-number 123 --pr-url <url> --base-ref main --head-ref feat/x --head-sha <sha>` runs
+- **THEN** the session row stores those values, and a later `begin` for the same session with a new `--head-sha` updates it
+
+#### Scenario: Round meta accepts head_sha
+
+- **WHEN** `complete-round` receives JSON with `"head_sha": "<40-hex>"`
+- **THEN** it is validated as an optional string and written to `round-meta.json`; JSON without it is still accepted
