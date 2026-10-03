@@ -9,6 +9,9 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { getOutputLanguage, languagePolicy } from '@open-code-review/config/language-config'
 
+/** A finding of the round under discussion (id as the dashboard knows it). */
+export type ChatContextFinding = { id: number; title: string }
+
 export type ChatTarget =
   | { type: 'map_run'; sessionId: string; runNumber: number }
   | { type: 'review_round'; sessionId: string; roundNumber: number }
@@ -20,7 +23,12 @@ export type ChatTarget =
  * For review rounds, reads final.md and all reviewer markdown files.
  * When `codeRoot` is given, states where the code under review lives.
  */
-export function buildChatContext(ocrDir: string, target: ChatTarget, codeRoot?: string): string {
+export function buildChatContext(
+  ocrDir: string,
+  target: ChatTarget,
+  codeRoot?: string,
+  findings: ChatContextFinding[] = [],
+): string {
   const sessionsDir = join(ocrDir, 'sessions')
 
   const context =
@@ -28,9 +36,14 @@ export function buildChatContext(ocrDir: string, target: ChatTarget, codeRoot?: 
       ? buildMapRunContext(sessionsDir, target.sessionId, target.runNumber)
       : buildReviewRoundContext(sessionsDir, target.sessionId, target.roundNumber)
 
+  const withProposals =
+    target.type === 'review_round' && findings.length > 0
+      ? `${context}\n\n${proposalInstructions(findings)}`
+      : context
+
   const withRoot = codeRoot
-    ? `${context}\n\nThe code under review is at ${codeRoot} (your working directory); read files from there.`
-    : context
+    ? `${withProposals}\n\nThe code under review is at ${codeRoot} (your working directory); read files from there.`
+    : withProposals
   const policy = languagePolicy(getOutputLanguage(ocrDir))
   return policy ? `${withRoot}\n\n${policy}` : withRoot
 }
@@ -117,4 +130,23 @@ function buildReviewRoundContext(
   }
 
   return parts.join('\n')
+}
+
+/** Tells the model how to propose a change to a finding; the user, not the model, applies it. */
+function proposalInstructions(findings: ChatContextFinding[]): string {
+  const list = findings.map((f) => `- ${f.id}: ${f.title.replace(/\s+/g, ' ').trim()}`)
+  return [
+    '<finding-proposals>',
+    'You may propose a change to a finding of THIS round (never of another round) when the user',
+    'asks about it and you conclude it should change. Emit exactly one fenced block per proposal:',
+    '',
+    '```ocr-proposal',
+    '{"finding_id": <id>, "severity"?: "critical|high|medium|low|info", "category"?: "blocker|should_fix|suggestion|style", "status"?: "confirmed|dismissed|fixed|wont_fix", "reason": "<why, at least 20 characters>"}',
+    '```',
+    '',
+    'Include at least one of severity, category or status. The user decides whether to apply it;',
+    'you cannot change findings yourself. Finding ids of this round:',
+    ...list,
+    '</finding-proposals>',
+  ].join('\n')
 }

@@ -34,6 +34,7 @@ import {
   shellSplit,
   buildPrompt,
   extractPerInstanceModels,
+  validateVerifyArgs,
 } from './prompt-builder.js'
 import {
   MAX_CONCURRENT,
@@ -95,7 +96,7 @@ const ALLOWED_COMMANDS = new Set([
 ])
 
 /** AI workflow commands — spawned via the AI CLI adapter strategy. */
-const AI_COMMANDS = new Set(['map', 'review', 'translate-review-to-single-human', 'address', 'create-reviewer', 'sync-reviewers'])
+const AI_COMMANDS = new Set(['map', 'review', 'translate-review-to-single-human', 'address', 'verify', 'create-reviewer', 'sync-reviewers'])
 
 /**
  * Registers the `command:run` socket handler for a connected client.
@@ -131,6 +132,13 @@ export function registerCommandHandlers(
           error: `Command "${command}" is not allowed`,
           allowed: [...ALLOWED_COMMANDS, ...AI_COMMANDS].map((c) => `ocr ${c}`),
         })
+        return
+      }
+
+      // `verify` takes exactly one finding id (positive integer) and nothing else.
+      const verifyError = baseCommand === 'verify' ? validateVerifyArgs(subArgs) : null
+      if (verifyError) {
+        socket.emit('command:error', { error: verifyError })
         return
       }
 

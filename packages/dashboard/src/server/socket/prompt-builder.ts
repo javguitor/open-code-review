@@ -106,6 +106,13 @@ export function escapeUserHeaders(value: string): string {
   )
 }
 
+export const VERIFY_ARGS_ERROR = 'Usage: verify <finding-id> (a positive integer).'
+
+/** `verify` takes exactly one positive-integer finding id; returns an error message or null. */
+export function validateVerifyArgs(subArgs: string[]): string | null {
+  return subArgs.length === 1 && /^[1-9]\d*$/.test(subArgs[0]!) ? null : VERIFY_ARGS_ERROR
+}
+
 /** Accepted PR target forms: `pr:<n>` or `https://github.com/<owner>/<repo>/pull/<n>`. */
 const PR_TARGET_SHAPE = /^(?:pr:[1-9]\d*|https:\/\/github\.com\/[A-Za-z0-9-]+\/[A-Za-z0-9._-]+\/pull\/[1-9]\d*\/?)$/
 /** Intent is deliberately broader than the shape (any charset), so a hostile owner/repo is an error, not free text. */
@@ -194,7 +201,11 @@ export function buildPrompt(opts: BuildPromptOptions): {
   // the trusted operational blocks.
   const userContentLines: string[] = []
 
-  if (baseCommand === 'create-reviewer' || baseCommand === 'sync-reviewers') {
+  if (baseCommand === 'verify') {
+    // Validated upstream (validateVerifyArgs); re-checked so a bad id can never reach the prompt.
+    targetError = validateVerifyArgs(subArgs)
+    userContentLines.push(`Finding ID: ${escapeUserHeaders(subArgs[0] ?? '')}`)
+  } else if (baseCommand === 'create-reviewer' || baseCommand === 'sync-reviewers') {
     const argsStr = subArgs.length > 0 ? subArgs.join(' ') : 'none'
     userContentLines.push(`Arguments: ${escapeUserHeaders(argsStr)}`)
   } else {
@@ -298,7 +309,8 @@ export function buildPrompt(opts: BuildPromptOptions): {
   }
 
   // ── Trusted block 2: Dashboard linkage ──
-  if (executionUid && localCli) {
+  // `verify` is phase-less: it never opens a workflow session, so no `state begin` linkage.
+  if (executionUid && localCli && baseCommand !== 'verify') {
     promptLines.push(
       '',
       '## Dashboard Linkage (REQUIRED for terminal handoff)',
