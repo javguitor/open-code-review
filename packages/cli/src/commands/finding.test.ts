@@ -70,6 +70,7 @@ describe("finding show", () => {
     const r = await runShow(root, { id: "1" });
     expect(r.ok && r.finding.category).toBe("suggestion");
     expect(r.ok && r.revisions).toHaveLength(1);
+    expect(r.ok && [r.finding.session_id, r.finding.round_number]).toEqual(["s1", 1]);
     expect(await runShow(root, { id: "7" })).toMatchObject({ ok: false, code: "not-found" });
   });
 });

@@ -6,6 +6,7 @@ import {
   reviseFinding,
   setFindingDecision,
   recordVerification,
+  applyProposal,
   getFinding,
   getFindingRevisions,
   FindingError,
@@ -40,6 +41,11 @@ describe("getFinding", () => {
     expect(f.flagged_by).toEqual(["@a", "@b"]);
     expect(f.decision).toBeNull();
     expect(f.verification_status).toBeNull();
+  });
+  it("returns the owning session id and round number", () => {
+    const f = getFinding(db, 1)!;
+    expect(f.session_id).toBe("s1");
+    expect(f.round_number).toBe(1);
   });
   it("returns undefined for an unknown id", () => {
     expect(getFinding(db, 99)).toBeUndefined();
@@ -133,5 +139,90 @@ describe("transactionality", () => {
     db.run("DROP TABLE finding_revisions");
     expect(() => reviseFinding(db, { findingId: 1, field: "severity", value: "low", reason: "r", source: "user" })).toThrow();
     expect(getFinding(db, 1)!.severity).toBe("high");
+  });
+});
+
+describe("reviseFinding category / is_blocker", () => {
+  it("keeps is_blocker in step with category in the same update", () => {
+    db.run("UPDATE review_findings SET is_blocker = 1 WHERE id = 1");
+    expect(reviseFinding(db, { findingId: 1, field: "category", value: "suggestion", reason: "r", source: "user" }).is_blocker).toBe(0);
+    expect(reviseFinding(db, { findingId: 1, field: "category", value: "blocker", reason: "r", source: "user" }).is_blocker).toBe(1);
+  });
+  it("does not touch is_blocker when only severity changes", () => {
+    db.run("UPDATE review_findings SET is_blocker = 1 WHERE id = 1");
+    expect(reviseFinding(db, { findingId: 1, field: "severity", value: "low", reason: "r", source: "user" }).is_blocker).toBe(1);
+  });
+});
+
+describe("decision reason rules", () => {
+  it("rejects a too-short reason for dismissed/wont_fix, keeps an optional one elsewhere", () => {
+    expect(() => setFindingDecision(db, { findingId: 1, status: "dismissed", reason: "short" })).toThrow(/at least 10/);
+    expect(getFindingRevisions(db, 1)).toEqual([]);
+    const f = setFindingDecision(db, { findingId: 1, status: "confirmed", reason: "x" });
+    expect(f.decision!.reason).toBe("x");
+  });
+});
+
+describe("no-op writes", () => {
+  it("reviseFinding with the current value writes nothing", () => {
+    const f = reviseFinding(db, { findingId: 1, field: "severity", value: "high", reason: "same", source: "user" });
+    expect(f.severity).toBe("high");
+    expect(getFindingRevisions(db, 1)).toEqual([]);
+  });
+  it("setFindingDecision with the current status writes nothing (incl. unread without a row)", () => {
+    setFindingDecision(db, { findingId: 1, status: "unread" });
+    expect(getFinding(db, 1)!.decision).toBeNull();
+    setFindingDecision(db, { findingId: 1, status: "confirmed" });
+    setFindingDecision(db, { findingId: 1, status: "confirmed", reason: "again" });
+    expect(getFindingRevisions(db, 1)).toHaveLength(1);
+    expect(getFinding(db, 1)!.decision!.reason).toBeNull();
+  });
+  it("recordVerification with an identical status, note and file writes nothing", () => {
+    recordVerification(db, { findingId: 1, status: "supported", note: "first" });
+    const f = recordVerification(db, { findingId: 1, status: "supported", note: "first" });
+    expect(f.verification_note).toBe("first");
+    expect(getFindingRevisions(db, 1)).toHaveLength(1);
+  });
+
+  it("recordVerification re-run with the same status but a new note records it", () => {
+    recordVerification(db, { findingId: 1, status: "supported", note: "first" });
+    const f = recordVerification(db, { findingId: 1, status: "supported", note: "second" });
+    expect(f.verification_note).toBe("second");
+    expect(getFindingRevisions(db, 1)).toHaveLength(2);
+  });
+});
+
+describe("applyProposal", () => {
+  it("applies severity, category and status in one go, all as chat revisions", () => {
+    const f = applyProposal(db, { findingId: 1, severity: "low", category: "suggestion", status: "dismissed", reason: "not exploitable here", conversationId: "conv-9" });
+    expect(f).toMatchObject({ severity: "low", category: "suggestion", is_blocker: 0 });
+    expect(f.decision).toMatchObject({ status: "dismissed", reason: "not exploitable here" });
+    const revs = getFindingRevisions(db, 1);
+    expect(revs.map((r) => r.field)).toEqual(["severity", "category", "status"]);
+    expect(revs.every((r) => r.source === "chat" && r.conversation_id === "conv-9")).toBe(true);
+  });
+
+  it("skips fields already at the proposed value", () => {
+    applyProposal(db, { findingId: 1, severity: "high", category: "should_fix", reason: "downgrade", conversationId: "c" });
+    expect(getFindingRevisions(db, 1).map((r) => r.field)).toEqual(["category"]);
+    applyProposal(db, { findingId: 1, severity: "high", category: "should_fix", reason: "again", conversationId: "c" });
+    expect(getFindingRevisions(db, 1)).toHaveLength(1);
+  });
+
+  it("validates everything first: nothing is written on a bad field", () => {
+    expect(() => applyProposal(db, { findingId: 1, severity: "low", status: "dismissed", reason: "short", conversationId: "c" })).toThrow(/at least 10/);
+    expect(() => applyProposal(db, { findingId: 1, severity: "huge", reason: "a reason", conversationId: "c" })).toThrow(FindingError);
+    expect(() => applyProposal(db, { findingId: 1, reason: "a reason", conversationId: "c" })).toThrow(/at least one/);
+    expect(() => applyProposal(db, { findingId: 1, severity: "low", reason: "a reason", conversationId: " " })).toThrow(FindingError);
+    expect(() => applyProposal(db, { findingId: 9, severity: "low", reason: "a reason", conversationId: "c" })).toThrow(/not found/);
+    expect(getFinding(db, 1)!.severity).toBe("high");
+    expect(getFindingRevisions(db, 1)).toEqual([]);
+  });
+
+  it("rolls back every field when a later write fails", () => {
+    db.run("DROP TABLE user_finding_progress");
+    expect(() => applyProposal(db, { findingId: 1, severity: "low", status: "confirmed", reason: "r", conversationId: "c" })).toThrow();
+    expect(db.exec("SELECT severity FROM review_findings WHERE id = 1")[0]!.values[0]![0]).toBe("high");
+    expect(getFindingRevisions(db, 1)).toEqual([]);
   });
 });

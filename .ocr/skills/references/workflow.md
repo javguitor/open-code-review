@@ -346,10 +346,12 @@ See `references/context-discovery.md` for detailed algorithm.
 ### Steps
 
 1. Identify the review target:
-   - Staged changes: `git diff --cached`
-   - Unstaged changes: `git diff`
-   - Commit range: `git diff {range}`
-   - PR (`pr:<n>` or a PR URL): already resolved in Phase 0 (`references/pr-target.md`); `git diff origin/<base>...refs/ocr/pr/<n>` — run in the main checkout
+   - Staged changes: `git -c core.quotePath=false diff --no-color --src-prefix=a/ --dst-prefix=b/ --cached`
+   - Unstaged changes: `git -c core.quotePath=false diff --no-color --src-prefix=a/ --dst-prefix=b/`
+   - Commit range: `git -c core.quotePath=false diff --no-color --src-prefix=a/ --dst-prefix=b/ {range}`
+   - PR (`pr:<n>` or a PR URL): already resolved in Phase 0 (`references/pr-target.md`); `git -c core.quotePath=false diff --no-color --src-prefix=a/ --dst-prefix=b/ origin/<base>...refs/ocr/pr/<n>` — run in the main checkout
+
+   Always use the full prefix/quote/color flags above for any diff you save as `diff.patch`: the user's git config (`diff.mnemonicPrefix`, `diff.noprefix`, `color.diff`, `core.quotePath`) would otherwise change the format (`c/`/`i/` prefixes, escape codes, octal-quoted paths) and the dashboard could not match file paths with findings.
 
 2. Gather supporting context:
    ```bash
@@ -372,9 +374,9 @@ See `references/context-discovery.md` for detailed algorithm.
 4. Save the diff to `.ocr/sessions/{id}/rounds/round-{n}/diff.patch` — the exact output of the command from step 1, written verbatim (no filtering, no trimming), so the dashboard can render it:
    ```bash
    mkdir -p ".ocr/sessions/$SESSION_ID/rounds/round-$CURRENT_ROUND"
-   git diff --cached > ".ocr/sessions/$SESSION_ID/rounds/round-$CURRENT_ROUND/diff.patch"
-   # Other targets: `git diff`, `git diff {range}`, or for PRs
-   # `git diff origin/<base>...refs/ocr/pr/<n>` (run in the main checkout)
+   git -c core.quotePath=false diff --no-color --src-prefix=a/ --dst-prefix=b/ --cached > ".ocr/sessions/$SESSION_ID/rounds/round-$CURRENT_ROUND/diff.patch"
+   # Other targets: drop `--cached`, or use `{range}`, or for PRs
+   # `origin/<base>...refs/ocr/pr/<n>` (run in the main checkout) with the same flags
    ```
    Re-reviews write a new `diff.patch` in the new round directory; earlier rounds keep theirs. Do not write the diff to `/tmp`.
 
@@ -403,7 +405,7 @@ See `references/context-discovery.md` for detailed algorithm.
 - [ ] Session directory created: `.ocr/sessions/{id}/`
 - [ ] `rounds/round-1/reviews/` subdirectory created
 - [ ] `context.md` written with change summary
-- [ ] `rounds/round-{n}/diff.patch` written (exact `git diff` output of the target)
+- [ ] `rounds/round-{n}/diff.patch` written (exact output of the flagged `git diff` of the target)
 
 ---
 

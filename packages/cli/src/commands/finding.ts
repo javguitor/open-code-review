@@ -10,6 +10,9 @@
  *   revise --id --field --value --reason --source [--conversation]
  *   show   --id
  *
+ * All subcommands resolve `.ocr/` from the MAIN checkout: inside a linked
+ * worktree (e.g. a PR worktree) `cwd/.ocr` belongs to the PR, not to the shared DB.
+ *
  * `--json` prints exactly one object:
  *   ok:   { ok: true, finding, revisions }
  *   fail: { ok: false, code, error }   (exit 1)
@@ -19,6 +22,7 @@ import { Command } from "commander";
 import chalk from "chalk";
 import { join } from "node:path";
 import { requireOcrSetup } from "../lib/guards.js";
+import { resolveMainCheckout } from "../lib/main-checkout.js";
 import {
   ensureDatabase,
   FindingError,
@@ -120,8 +124,9 @@ const verifySubcommand = new Command("verify")
   .option("--file <path>", "Path to the full verification write-up")
   .option("--json", "Output one JSON object")
   .action(async (o: { id: string; status: string; note: string; file?: string; json?: boolean }) => {
-    requireOcrSetup(process.cwd());
-    const r = await runVerify(process.cwd(), o);
+    const root = resolveMainCheckout(process.cwd());
+    requireOcrSetup(root);
+    const r = await runVerify(root, o);
     emit(r, o.json, `Finding ${o.id} verification: ${o.status}`);
   });
 
@@ -136,8 +141,9 @@ const reviseSubcommand = new Command("revise")
   .option("--json", "Output one JSON object")
   .action(
     async (o: { id: string; field: string; value: string; reason: string; source: string; conversation?: string; json?: boolean }) => {
-      requireOcrSetup(process.cwd());
-      const r = await runRevise(process.cwd(), o);
+      const root = resolveMainCheckout(process.cwd());
+      requireOcrSetup(root);
+      const r = await runRevise(root, o);
       emit(r, o.json, `Finding ${o.id} ${o.field} -> ${o.value}`);
     },
   );
@@ -147,8 +153,9 @@ const showSubcommand = new Command("show")
   .requiredOption("--id <n>", "Finding id")
   .option("--json", "Output one JSON object")
   .action(async (o: { id: string; json?: boolean }) => {
-    requireOcrSetup(process.cwd());
-    const r = await runShow(process.cwd(), o);
+    const root = resolveMainCheckout(process.cwd());
+    requireOcrSetup(root);
+    const r = await runShow(root, o);
     if (!o.json && r.ok) {
       console.log(JSON.stringify({ finding: r.finding, revisions: r.revisions }, null, 2));
       return;

@@ -177,6 +177,7 @@ export {
   reviseFinding,
   setFindingDecision,
   recordVerification,
+  applyProposal,
 } from "./findings.js";
 export type {
   FindingRow,
@@ -188,6 +189,7 @@ export type {
   ReviseFindingParams,
   SetFindingDecisionParams,
   RecordVerificationParams,
+  ApplyProposalParams,
 } from "./findings.js";
 
 export { resultToRows, resultToRow } from "./result-mapper.js";

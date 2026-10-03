@@ -9,19 +9,12 @@
 
 import type { Database } from "./engine.js";
 import { resultToRow, resultToRows } from "./result-mapper.js";
+import { DECISION_STATUSES, MIN_DECISION_REASON_LENGTH, reasonProblem } from "../finding-rules.js";
 
 export const FINDING_SEVERITIES = ["critical", "high", "medium", "low", "info"] as const;
 /** `review_findings.category` has no DB CHECK; this mirrors the round-meta vocabulary. */
 export const FINDING_CATEGORIES = ["blocker", "should_fix", "suggestion", "style"] as const;
-export const FINDING_DECISION_STATUSES = [
-  "unread",
-  "read",
-  "acknowledged",
-  "confirmed",
-  "dismissed",
-  "fixed",
-  "wont_fix",
-] as const;
+export const FINDING_DECISION_STATUSES = DECISION_STATUSES;
 export const FINDING_VERIFICATION_STATUSES = [
   "pending",
   "reproduced",
@@ -35,13 +28,13 @@ export type FindingDecisionStatus = (typeof FINDING_DECISION_STATUSES)[number];
 export type FindingVerificationStatus = (typeof FINDING_VERIFICATION_STATUSES)[number];
 export type FindingRevisionSource = (typeof FINDING_REVISION_SOURCES)[number];
 
-/** Decisions that must carry a human-readable reason. */
-const REASON_REQUIRED: ReadonlySet<string> = new Set(["dismissed", "wont_fix"]);
 /** Decisions that stamp `decided_at` (the rest are reading-progress states). */
 const FINAL_DECISIONS: ReadonlySet<string> = new Set(["confirmed", "dismissed", "fixed", "wont_fix"]);
 
 export type FindingRow = {
   id: number;
+  session_id: string;
+  round_number: number;
   reviewer_output_id: number;
   title: string;
   severity: string;
@@ -116,7 +109,14 @@ function parseFlaggedBy(raw: unknown): string[] | null {
 
 export function getFinding(db: Database, id: number): FindingRow | undefined {
   const row = resultToRow<Record<string, unknown>>(
-    db.exec("SELECT * FROM review_findings WHERE id = ?", [id]),
+    db.exec(
+      `SELECT f.*, rr.session_id AS session_id, rr.round_number AS round_number
+       FROM review_findings f
+       JOIN reviewer_outputs ro ON ro.id = f.reviewer_output_id
+       JOIN review_rounds rr ON rr.id = ro.round_id
+       WHERE f.id = ?`,
+      [id],
+    ),
   );
   if (!row) return undefined;
   const progress = resultToRow<Record<string, unknown>>(
@@ -175,28 +175,47 @@ export type ReviseFindingParams = {
 /** Change a finding's severity or category and log the revision, atomically. */
 export function reviseFinding(db: Database, p: ReviseFindingParams): FindingRow {
   const field = oneOf(["severity", "category"] as const, p.field, "field");
-  const value =
-    field === "severity"
-      ? oneOf(FINDING_SEVERITIES, p.value, "severity")
-      : oneOf(FINDING_CATEGORIES, p.value, "category");
+  const value = validRevisionValue(field, p.value);
   const reason = requireNonEmpty(p.reason, "reason");
   const source = oneOf(FINDING_REVISION_SOURCES, p.source, "source");
 
   return db.transaction(() => {
-    const current = requireFinding(db, p.findingId);
-    // `field` is whitelisted above, so interpolating the column name is safe.
-    db.run(`UPDATE review_findings SET ${field} = ? WHERE id = ?`, [value, p.findingId]);
-    insertRevision(db, {
-      findingId: p.findingId,
-      field,
-      oldValue: current[field],
-      newValue: value,
-      reason,
-      source,
-      conversationId: p.conversationId,
-    });
+    requireFinding(db, p.findingId);
+    reviseField(db, p.findingId, field, value, reason, source, p.conversationId);
     return requireFinding(db, p.findingId);
   });
+}
+
+function validRevisionValue(field: FindingRevisableField, value: unknown): string {
+  return field === "severity"
+    ? oneOf(FINDING_SEVERITIES, value, "severity")
+    : oneOf(FINDING_CATEGORIES, value, "category");
+}
+
+/** Write one severity/category change + revision; no-op when the value is unchanged. */
+function reviseField(
+  db: Database,
+  findingId: number,
+  field: FindingRevisableField,
+  value: string,
+  reason: string,
+  source: FindingRevisionSource,
+  conversationId?: string,
+): void {
+  const current = requireFinding(db, findingId);
+  if (current[field] === value) return;
+  // `field` is whitelisted by the callers, so interpolating the column name is safe.
+  // `is_blocker` mirrors category so every reader of the flag agrees with the revised category.
+  if (field === "category") {
+    db.run("UPDATE review_findings SET category = ?, is_blocker = ? WHERE id = ?", [
+      value,
+      value === "blocker" ? 1 : 0,
+      findingId,
+    ]);
+  } else {
+    db.run(`UPDATE review_findings SET ${field} = ? WHERE id = ?`, [value, findingId]);
+  }
+  insertRevision(db, { findingId, field, oldValue: current[field], newValue: value, reason, source, conversationId });
 }
 
 export type SetFindingDecisionParams = {
@@ -208,33 +227,54 @@ export type SetFindingDecisionParams = {
 /** Record a human decision (upsert into user_finding_progress) and log it, atomically. */
 export function setFindingDecision(db: Database, p: SetFindingDecisionParams): FindingRow {
   const status = oneOf(FINDING_DECISION_STATUSES, p.status, "status");
-  const reason = p.reason?.trim() ? p.reason.trim() : null;
-  if (REASON_REQUIRED.has(status) && !reason) {
-    throw new FindingError("reason-required", `A reason is required when status is "${status}"`);
-  }
+  const reason = validDecisionReason(status, p.reason);
 
   return db.transaction(() => {
-    const current = requireFinding(db, p.findingId);
-    db.run(
-      `INSERT INTO user_finding_progress (finding_id, status, reason, decided_at, updated_at)
-       VALUES (?, ?, ?, ${FINAL_DECISIONS.has(status) ? "datetime('now')" : "NULL"}, datetime('now'))
-       ON CONFLICT(finding_id) DO UPDATE SET
-         status = excluded.status,
-         reason = excluded.reason,
-         decided_at = excluded.decided_at,
-         updated_at = excluded.updated_at`,
-      [p.findingId, status, reason],
-    );
-    insertRevision(db, {
-      findingId: p.findingId,
-      field: "status",
-      oldValue: current.decision?.status ?? "unread",
-      newValue: status,
-      reason,
-      source: "user",
-    });
+    requireFinding(db, p.findingId);
+    decideField(db, p.findingId, status, reason, "user");
     return requireFinding(db, p.findingId);
   });
+}
+
+/** Trimmed reason (null when blank); throws when `status` demands a better one. */
+function validDecisionReason(status: FindingDecisionStatus, raw: string | undefined): string | null {
+  const reason = raw?.trim() ? raw.trim() : null;
+  const problem = reasonProblem(status, reason);
+  if (problem === "required") {
+    throw new FindingError("reason-required", `A reason is required when status is "${status}"`);
+  }
+  if (problem === "too-short") {
+    throw new FindingError(
+      "invalid-value",
+      `The reason for "${status}" must be at least ${MIN_DECISION_REASON_LENGTH} characters`,
+    );
+  }
+  return reason;
+}
+
+/** Upsert a decision + revision; no-op when the status is unchanged. */
+function decideField(
+  db: Database,
+  findingId: number,
+  status: FindingDecisionStatus,
+  reason: string | null,
+  source: FindingRevisionSource,
+  conversationId?: string,
+): void {
+  const current = requireFinding(db, findingId);
+  const oldStatus = current.decision?.status ?? "unread";
+  if (oldStatus === status) return;
+  db.run(
+    `INSERT INTO user_finding_progress (finding_id, status, reason, decided_at, updated_at)
+     VALUES (?, ?, ?, ${FINAL_DECISIONS.has(status) ? "datetime('now')" : "NULL"}, datetime('now'))
+     ON CONFLICT(finding_id) DO UPDATE SET
+       status = excluded.status,
+       reason = excluded.reason,
+       decided_at = excluded.decided_at,
+       updated_at = excluded.updated_at`,
+    [findingId, status, reason],
+  );
+  insertRevision(db, { findingId, field: "status", oldValue: oldStatus, newValue: status, reason, source, conversationId });
 }
 
 export type RecordVerificationParams = {
@@ -251,6 +291,13 @@ export function recordVerification(db: Database, p: RecordVerificationParams): F
 
   return db.transaction(() => {
     const current = requireFinding(db, p.findingId);
+    // A re-run with the same verdict still records a new note/file; only an
+    // identical (status, note, file) triple is a no-op.
+    if (
+      current.verification_status === status &&
+      current.verification_note === note &&
+      (current.verification_file ?? null) === (p.file ?? null)
+    ) return current;
     db.run(
       `UPDATE review_findings
        SET verification_status = ?, verification_note = ?, verification_file = ?, verified_at = datetime('now')
@@ -265,6 +312,40 @@ export function recordVerification(db: Database, p: RecordVerificationParams): F
       reason: note,
       source: "verifier",
     });
+    return requireFinding(db, p.findingId);
+  });
+}
+
+export type ApplyProposalParams = {
+  findingId: number;
+  severity?: string;
+  category?: string;
+  status?: string;
+  reason: string;
+  conversationId: string;
+};
+
+/**
+ * Apply a chat proposal: every present field in ONE transaction, each with a
+ * revision row (`source: chat`, `conversation_id`). Fields already at the
+ * proposed value write nothing. All input is validated before any write.
+ */
+export function applyProposal(db: Database, p: ApplyProposalParams): FindingRow {
+  const severity = p.severity === undefined ? undefined : validRevisionValue("severity", p.severity);
+  const category = p.category === undefined ? undefined : validRevisionValue("category", p.category);
+  const status = p.status === undefined ? undefined : oneOf(FINDING_DECISION_STATUSES, p.status, "status");
+  if (severity === undefined && category === undefined && status === undefined) {
+    throw new FindingError("invalid-value", "A proposal must change at least one of severity, category or status");
+  }
+  const reason = requireNonEmpty(p.reason, "reason");
+  const conversationId = requireNonEmpty(p.conversationId, "conversationId");
+  const decisionReason = status === undefined ? null : validDecisionReason(status, reason);
+
+  return db.transaction(() => {
+    requireFinding(db, p.findingId);
+    if (severity !== undefined) reviseField(db, p.findingId, "severity", severity, reason, "chat", conversationId);
+    if (category !== undefined) reviseField(db, p.findingId, "category", category, reason, "chat", conversationId);
+    if (status !== undefined) decideField(db, p.findingId, status, decisionReason, "chat", conversationId);
     return requireFinding(db, p.findingId);
   });
 }
