@@ -5,26 +5,29 @@ import { cn, buildIdeLink } from '../../../lib/utils'
 import { useIdeConfig } from '../../../hooks/use-ide-config'
 import { StatusBadge } from '../../../components/ui/status-badge'
 import { MarkdownRenderer } from '../../../components/markdown/markdown-renderer'
-import type { Finding, FindingTriage } from '../../../lib/api-types'
 import { useT } from '../../../lib/i18n'
 import type { MessageKey } from '../../../lib/i18n'
-
-const TRIAGE_OPTIONS: { value: FindingTriage; labelKey: MessageKey }[] = [
-  { value: 'unread', labelKey: 'status.unread' },
-  { value: 'read', labelKey: 'status.read' },
-  { value: 'acknowledged', labelKey: 'status.acknowledged' },
-  { value: 'fixed', labelKey: 'status.fixed' },
-  { value: 'wont_fix', labelKey: 'status.wont_fix' },
-]
+import { DECISION_STATUSES, type DecisionStatus, type RoundFinding } from '../types'
+import { isActionable, MIN_DECISION_REASON_LENGTH, requiresReason } from '@open-code-review/persistence/finding-rules'
+import { currentStatus, reasonMessageKey, synthesisNote } from '../decisions'
+import { CATEGORY_LABEL_KEY, DECISION_LABEL_KEY, SEVERITY_LABEL_KEY } from '../labels'
 
 type FindingRowProps = {
-  finding: Finding
-  onTriageChange: (findingId: number, status: FindingTriage) => void
+  finding: RoundFinding
+  onTriageChange: (findingId: number, status: DecisionStatus, reason?: string) => void
+}
+
+function labelOf(map: Record<string, MessageKey>, value: string, t: (k: MessageKey) => string): string {
+  const key = map[value]
+  return key ? t(key) : value
 }
 
 export function FindingRow({ finding, onTriageChange }: FindingRowProps) {
   const { t } = useT()
   const [expanded, setExpanded] = useState(false)
+  // A status that needs a reason waits here until the user types one.
+  const [pending, setPending] = useState<DecisionStatus | null>(null)
+  const [reason, setReason] = useState('')
   const { data: config } = useIdeConfig()
 
   const toggle = useCallback(() => setExpanded((v) => !v), [])
@@ -39,6 +42,27 @@ export function FindingRow({ finding, onTriageChange }: FindingRowProps) {
     [toggle],
   )
 
+  const handleStatusChange = (status: DecisionStatus) => {
+    if (requiresReason(status)) {
+      setPending(status)
+      setReason(finding.decision?.reason ?? '')
+    } else {
+      setPending(null)
+      onTriageChange(finding.id, status)
+    }
+  }
+
+  const submitPending = () => {
+    if (!pending || reasonMessageKey(pending, reason)) return
+    onTriageChange(finding.id, pending, reason)
+    setPending(null)
+    setReason('')
+  }
+
+  const reasonKey = pending ? reasonMessageKey(pending, reason) : null
+  const severityNote = synthesisNote(finding.severity, finding.synthesis_severity)
+  const categoryNote = synthesisNote(finding.category, finding.synthesis_category)
+
   const lineRange =
     finding.line_start != null
       ? finding.line_end != null && finding.line_end !== finding.line_start
@@ -52,7 +76,10 @@ export function FindingRow({ finding, onTriageChange }: FindingRowProps) {
         tabIndex={0}
         role="row"
         aria-expanded={expanded}
-        className="cursor-pointer transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+        className={cn(
+          'cursor-pointer transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50',
+          finding.retired_at && 'opacity-50',
+        )}
         onClick={toggle}
         onKeyDown={handleKeyDown}
       >
@@ -64,11 +91,37 @@ export function FindingRow({ finding, onTriageChange }: FindingRowProps) {
                 expanded && 'rotate-90',
               )}
             />
-            <StatusBadge variant={finding.severity} />
+            <div className="flex flex-col items-start gap-0.5">
+              <StatusBadge variant={finding.severity} />
+              {severityNote && (
+                <span
+                  className="text-[10px] text-zinc-500 dark:text-zinc-400"
+                  title={t('reviews.synthesis_title', { value: labelOf(SEVERITY_LABEL_KEY, severityNote, t) })}
+                >
+                  {t('reviews.synthesis_value', { value: labelOf(SEVERITY_LABEL_KEY, severityNote, t) })}
+                </span>
+              )}
+              {finding.category && (
+                <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                  {labelOf(CATEGORY_LABEL_KEY, finding.category, t)}
+                  {categoryNote && (
+                    <span title={t('reviews.synthesis_title', { value: labelOf(CATEGORY_LABEL_KEY, categoryNote, t) })}>
+                      {' '}
+                      ({t('reviews.synthesis_value', { value: labelOf(CATEGORY_LABEL_KEY, categoryNote, t) })})
+                    </span>
+                  )}
+                </span>
+              )}
+            </div>
           </div>
         </td>
         <td className="border-b border-zinc-200 px-4 py-2 text-zinc-900 dark:border-zinc-800 dark:text-zinc-100">
           {finding.title}
+          {finding.retired_at && (
+            <span className="ml-2 rounded bg-zinc-200 px-1.5 py-0.5 text-[10px] font-medium text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200">
+              {t('reviews.retired')}
+            </span>
+          )}
         </td>
         <td className="border-b border-zinc-200 px-4 py-2 font-mono text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
           {finding.file_path && config ? (
@@ -112,21 +165,69 @@ export function FindingRow({ finding, onTriageChange }: FindingRowProps) {
           onClick={(e) => e.stopPropagation()}
         >
           <select
-            value={finding.progress?.status ?? 'unread'}
-            onChange={(e) =>
-              onTriageChange(finding.id, e.target.value as FindingTriage)
-            }
+            value={pending ?? currentStatus(finding)}
+            onChange={(e) => handleStatusChange(e.target.value as DecisionStatus)}
+            // A retired finding takes no decision (the server would answer 409).
+            disabled={!isActionable({ retired_at: finding.retired_at ?? null })}
+            title={isActionable({ retired_at: finding.retired_at ?? null }) ? undefined : t('workbench.retired_no_actions')}
             aria-label={t('reviews.triage_aria', { title: finding.title })}
-            className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+            className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900"
           >
-            {TRIAGE_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {t(opt.labelKey)}
+            {DECISION_STATUSES.map((status) => (
+              <option key={status} value={status}>
+                {t(DECISION_LABEL_KEY[status])}
               </option>
             ))}
           </select>
         </td>
       </tr>
+      {pending && (
+        <tr>
+          <td
+            colSpan={6}
+            className="border-b border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/50"
+          >
+            <form
+              className="flex flex-wrap items-center gap-2"
+              onSubmit={(e) => {
+                e.preventDefault()
+                submitPending()
+              }}
+            >
+              <label className="text-xs text-zinc-600 dark:text-zinc-400" htmlFor={`reason-${finding.id}`}>
+                {t('reviews.decision_reason_label', { status: t(DECISION_LABEL_KEY[pending]) })}
+              </label>
+              <input
+                id={`reason-${finding.id}`}
+                autoFocus
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder={t('reviews.decision_reason_placeholder')}
+                className="min-w-64 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+              />
+              <button
+                type="submit"
+                disabled={!!reasonMessageKey(pending, reason)}
+                className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {t('reviews.decision_save')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPending(null)}
+                className="rounded-md border border-zinc-300 px-3 py-1 text-xs text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                {t('reviews.decision_cancel')}
+              </button>
+              {reasonKey && reason.trim() !== '' && (
+                <p className="basis-full text-xs text-amber-700 dark:text-amber-400">
+                  {t(reasonKey, { min: MIN_DECISION_REASON_LENGTH })}
+                </p>
+              )}
+            </form>
+          </td>
+        </tr>
+      )}
       {expanded && finding.summary && (
         <tr>
           <td

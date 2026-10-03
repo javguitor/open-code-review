@@ -5,7 +5,7 @@
  */
 
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs'
-import { join, basename, dirname, relative } from 'node:path'
+import { join, basename, dirname, relative, sep } from 'node:path'
 import { watch, type FSWatcher } from 'chokidar'
 import {
   commitReasonClose,
@@ -18,6 +18,8 @@ import type { Server as SocketIOServer } from 'socket.io'
 import { parseMapMd } from './parsers/map-parser.js'
 import { parseReviewerOutput } from './parsers/reviewer-parser.js'
 import { parseFinalMd } from './parsers/final-parser.js'
+import { reconcileFindings } from './finding-reconcile.js'
+import { emitRoundUpdated } from './round-events.js'
 
 // ── Types ──
 
@@ -32,6 +34,7 @@ type ArtifactType =
   | 'requirements-mapping'
   | 'context'
   | 'discovered-standards'
+  | 'diff'
 
 type ArtifactEvent = {
   sessionId: string
@@ -159,6 +162,20 @@ export class FilesystemSync {
         const discoursePath = join(roundDir, 'discourse.md')
         if (existsSync(discoursePath)) {
           this.processGenericArtifact(sessionId, 'discourse', discoursePath, roundNumber)
+        }
+
+        // diff.patch — the frozen diff that was reviewed (parsed on request by the dashboard)
+        const diffPath = join(roundDir, 'diff.patch')
+        if (existsSync(diffPath)) {
+          this.processGenericArtifact(sessionId, 'diff', diffPath, roundNumber)
+        }
+
+        // verifications/finding-<id>.md — after round-meta so the findings exist
+        const verificationsDir = join(roundDir, 'verifications')
+        if (existsSync(verificationsDir)) {
+          for (const f of readdirSync(verificationsDir)) {
+            this.processVerificationFile(sessionId, roundNumber, join(verificationsDir, f))
+          }
         }
       }
     }
@@ -728,8 +745,10 @@ export class FilesystemSync {
 
     // Upsert reviewer_output
     this.db.run(
-      `INSERT OR REPLACE INTO reviewer_outputs (round_id, reviewer_type, instance_number, file_path, finding_count, parsed_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO reviewer_outputs (round_id, reviewer_type, instance_number, file_path, finding_count, parsed_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(round_id, reviewer_type, instance_number) DO UPDATE SET
+         file_path = excluded.file_path, finding_count = excluded.finding_count, parsed_at = excluded.parsed_at`,
       [roundId, reviewerType, instanceNumber, filePath, parsed.findings.length, sqlNow()],
     )
 
@@ -741,64 +760,22 @@ export class FilesystemSync {
     const outputId = outputRow?.['id'] as number | undefined
     if (!outputId) return
 
-    // Stash user progress before delete (cascade will destroy it)
-    const stashedFindingProgress = new Map<string, { status: string; updatedAt: string | null }>()
-    const findingProgressResult = this.db.exec(
-      `SELECT rf.title, rf.severity, rf.file_path, ufp.status, ufp.updated_at
-       FROM user_finding_progress ufp
-       JOIN review_findings rf ON rf.id = ufp.finding_id
-       WHERE rf.reviewer_output_id = ?`,
-      [outputId],
+    // Update in place (ids, decisions, revisions and verification must survive re-parses).
+    reconcileFindings(
+      this.db,
+      outputId,
+      parsed.findings.map((finding) => ({
+        title: finding.title,
+        severity: finding.severity,
+        category: null,
+        filePath: finding.filePath ?? null,
+        lineStart: finding.lineStart ?? null,
+        lineEnd: finding.lineEnd ?? null,
+        summary: finding.summary ?? null,
+        isBlocker: finding.isBlocker,
+      })),
+      sqlNow(),
     )
-    if (findingProgressResult[0]) {
-      for (const row of findingProgressResult[0].values) {
-        const key = `${row[0] as string}|${row[1] as string}|${row[2] as string}`
-        stashedFindingProgress.set(key, {
-          status: row[3] as string,
-          updatedAt: row[4] as string | null,
-        })
-      }
-    }
-
-    // Delete existing findings for this output (they get replaced on re-parse)
-    this.db.run('DELETE FROM review_findings WHERE reviewer_output_id = ?', [outputId])
-
-    // Insert findings
-    for (const finding of parsed.findings) {
-      this.db.run(
-        `INSERT INTO review_findings (reviewer_output_id, title, severity, file_path, line_start, line_end, summary, is_blocker, parsed_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          outputId,
-          finding.title,
-          finding.severity,
-          finding.filePath,
-          finding.lineStart,
-          finding.lineEnd,
-          finding.summary,
-          finding.isBlocker ? 1 : 0,
-          sqlNow(),
-        ],
-      )
-
-      // Restore stashed user progress for this finding
-      const key = `${finding.title}|${finding.severity}|${finding.filePath ?? ''}`
-      const stashed = stashedFindingProgress.get(key)
-      if (stashed) {
-        const newFindingRow = queryFirst(
-          this.db,
-          'SELECT id FROM review_findings WHERE reviewer_output_id = ? AND title = ? AND severity = ? AND file_path IS ?',
-          [outputId, finding.title, finding.severity, finding.filePath ?? null],
-        )
-        if (newFindingRow) {
-          this.db.run(
-            `INSERT OR REPLACE INTO user_finding_progress (finding_id, status, updated_at)
-             VALUES (?, ?, ?)`,
-            [newFindingRow['id'] as number, stashed.status, stashed.updatedAt],
-          )
-        }
-      }
-    }
 
     // Store raw markdown
     const action = this.upsertMarkdownArtifact(sessionId, 'reviewer-output', filePath, content, roundNumber)
@@ -864,6 +841,7 @@ export class FilesystemSync {
           line_end?: number
           summary?: string
           flagged_by?: string[]
+          evidence?: string
         }>
       }>
     }
@@ -934,8 +912,10 @@ export class FilesystemSync {
 
         // Upsert reviewer_output
         this.db.run(
-          `INSERT OR REPLACE INTO reviewer_outputs (round_id, reviewer_type, instance_number, file_path, finding_count, parsed_at)
-           VALUES (?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO reviewer_outputs (round_id, reviewer_type, instance_number, file_path, finding_count, parsed_at)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(round_id, reviewer_type, instance_number) DO UPDATE SET
+             file_path = excluded.file_path, finding_count = excluded.finding_count, parsed_at = excluded.parsed_at`,
           [roundId, reviewerType, instanceNumber, reviewerMdPath, findings.length, sqlNow()],
         )
 
@@ -947,64 +927,24 @@ export class FilesystemSync {
         const outputId = outputRow?.['id'] as number | undefined
         if (!outputId) continue
 
-        // Stash user_finding_progress before delete (CASCADE will destroy it)
-        const stashedFindingProgress = new Map<string, { status: string; updatedAt: string | null }>()
-        const findingProgressResult = this.db.exec(
-          `SELECT rf.title, rf.severity, rf.file_path, ufp.status, ufp.updated_at
-           FROM user_finding_progress ufp
-           JOIN review_findings rf ON rf.id = ufp.finding_id
-           WHERE rf.reviewer_output_id = ?`,
-          [outputId],
+        // Update in place (ids, decisions, revisions and verification must survive re-parses).
+        reconcileFindings(
+          this.db,
+          outputId,
+          findings.map((finding) => ({
+            title: finding.title ?? '',
+            severity: finding.severity ?? 'info',
+            category: finding.category ?? null,
+            filePath: finding.file_path ?? null,
+            lineStart: finding.line_start ?? null,
+            lineEnd: finding.line_end ?? null,
+            summary: finding.summary ?? null,
+            isBlocker: finding.category === 'blocker',
+            flaggedBy: Array.isArray(finding.flagged_by) ? finding.flagged_by : undefined,
+            evidence: typeof finding.evidence === 'string' ? finding.evidence : undefined,
+          })),
+          sqlNow(),
         )
-        if (findingProgressResult[0]) {
-          for (const row of findingProgressResult[0].values) {
-            const key = `${row[0] as string}|${row[1] as string}|${row[2] as string}`
-            stashedFindingProgress.set(key, {
-              status: row[3] as string,
-              updatedAt: row[4] as string | null,
-            })
-          }
-        }
-
-        // Delete existing findings for this output (replacing with orchestrator data)
-        this.db.run('DELETE FROM review_findings WHERE reviewer_output_id = ?', [outputId])
-
-        // Insert findings from structured data
-        for (const finding of findings) {
-          this.db.run(
-            `INSERT INTO review_findings (reviewer_output_id, title, severity, file_path, line_start, line_end, summary, is_blocker, parsed_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              outputId,
-              finding.title ?? '',
-              finding.severity ?? 'info',
-              finding.file_path ?? null,
-              finding.line_start ?? null,
-              finding.line_end ?? null,
-              finding.summary ?? null,
-              finding.category === 'blocker' ? 1 : 0,
-              sqlNow(),
-            ],
-          )
-
-          // Restore stashed user progress for this finding
-          const key = `${finding.title ?? ''}|${finding.severity ?? 'info'}|${finding.file_path ?? ''}`
-          const stashed = stashedFindingProgress.get(key)
-          if (stashed) {
-            const newFindingRow = queryFirst(
-              this.db,
-              'SELECT id FROM review_findings WHERE reviewer_output_id = ? AND title = ? AND severity = ? AND file_path IS ?',
-              [outputId, finding.title ?? '', finding.severity ?? 'info', finding.file_path ?? null],
-            )
-            if (newFindingRow) {
-              this.db.run(
-                `INSERT OR REPLACE INTO user_finding_progress (finding_id, status, updated_at)
-                 VALUES (?, ?, ?)`,
-                [newFindingRow['id'] as number, stashed.status, stashed.updatedAt],
-              )
-            }
-          }
-        }
       }
 
       this.db.run('COMMIT')
@@ -1276,7 +1216,7 @@ export class FilesystemSync {
         `SELECT COUNT(*) FROM review_findings rf
          JOIN reviewer_outputs ro ON rf.reviewer_output_id = ro.id
          WHERE ro.round_id = (SELECT id FROM review_rounds WHERE session_id = ? AND round_number = ?)
-           AND rf.is_blocker = 1`,
+           AND rf.is_blocker = 1 AND rf.retired_at IS NULL`,
         [sessionId, roundNumber],
       ) as number | null
       if (actualBlockers !== null && actualBlockers !== parsed.blockerCount) {
@@ -1334,6 +1274,32 @@ export class FilesystemSync {
       roundNumber,
       filePath,
     })
+  }
+
+  // ── Verification report path ──
+
+  /**
+   * Link `verifications/finding-<id>.md` to its finding when the CLI has not
+   * already recorded a path (`ocr finding verify --file` is authoritative).
+   * The stored path is repo-relative (`.ocr/sessions/...`), like the CLI's.
+   */
+  private processVerificationFile(sessionId: string, roundNumber: number, filePath: string): void {
+    const m = basename(filePath).match(/^finding-(\d+)\.md$/)
+    if (!m) return
+    const findingId = parseInt(m[1] ?? '0', 10)
+    const stored = join(basename(dirname(this.sessionsDir)), 'sessions', relative(this.sessionsDir, filePath))
+    // Native statement: the engine's `run()` discards the change count.
+    const res = this.db
+      .prepare(
+        `UPDATE review_findings SET verification_file = ?
+         WHERE id = ? AND verification_file IS NULL
+           AND reviewer_output_id IN (
+             SELECT ro.id FROM reviewer_outputs ro
+             JOIN review_rounds rr ON rr.id = ro.round_id
+             WHERE rr.session_id = ? AND rr.round_number = ?)`,
+      )
+      .run(stored.split(sep).join('/'), findingId, sessionId, roundNumber)
+    if (Number(res.changes) > 0) emitRoundUpdated(this.io, sessionId, roundNumber)
   }
 
   // ── Generic artifact (discourse, topology, etc.) ──
@@ -1400,7 +1366,7 @@ export class FilesystemSync {
   }
 
   private handleFileChange(filePath: string): void {
-    if (!filePath.endsWith('.md') && !filePath.endsWith('.json')) return
+    if (!filePath.endsWith('.md') && !filePath.endsWith('.json') && !filePath.endsWith('.patch')) return
 
     // Debounce: wait 100ms after last change
     const existing = this.debounceTimers.get(filePath)
@@ -1464,6 +1430,22 @@ export class FilesystemSync {
     if (finalHumanMatch) {
       const roundNumber = parseInt(finalHumanMatch[1] ?? '0', 10)
       this.processGenericArtifact(sessionId, 'final-human', filePath, roundNumber)
+      return
+    }
+
+    // rounds/round-N/diff.patch
+    const diffMatch = relFromSessions.match(/rounds\/round-(\d+)\/diff\.patch$/)
+    if (diffMatch) {
+      const roundNumber = parseInt(diffMatch[1] ?? '0', 10)
+      this.processGenericArtifact(sessionId, 'diff', filePath, roundNumber)
+      return
+    }
+
+    // rounds/round-N/verifications/finding-<id>.md
+    const verificationMatch = relFromSessions.match(/rounds\/round-(\d+)\/verifications\/finding-\d+\.md$/)
+    if (verificationMatch) {
+      const roundNumber = parseInt(verificationMatch[1] ?? '0', 10)
+      this.processVerificationFile(sessionId, roundNumber, filePath)
       return
     }
 

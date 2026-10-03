@@ -29,9 +29,15 @@
       "types": "./src/runtime-checks.ts",
       "source": "./src/runtime-checks.ts",
       "default": "./src/runtime-checks.ts"
+    },
+    "./finding-rules": {
+      "types": "./src/finding-rules.ts",
+      "source": "./src/finding-rules.ts",
+      "default": "./src/finding-rules.ts"
     }
   },
   "dependencies": {
+    "@open-code-review/config": "workspace:*",
     "@open-code-review/platform": "workspace:*"
   }
 }

@@ -4,13 +4,18 @@ import { useT } from '../../../lib/i18n'
 import type { MessageKey } from '../../../lib/i18n'
 import { MarkdownRenderer } from '../../../components/markdown/markdown-renderer'
 import { AgentActivity } from './agent-activity'
-import type { ChatMessage as ChatMessageType, ChatToolStatus } from '../../../lib/api-types'
+import { ProposalCard } from './proposal-card'
+import type { ChatToolStatus } from '../../../lib/api-types'
+import type { ChatEntry, Proposal, ProposalFindingInfo } from '../types'
 
 type ChatMessageProps = {
-  message: ChatMessageType
+  message: ChatEntry
+  /** Round findings by id, to title the proposal cards. */
+  findings?: ReadonlyMap<number, ProposalFindingInfo>
+  onApplyProposal?: (proposal: Proposal) => Promise<void>
 }
 
-export function ChatMessage({ message }: ChatMessageProps) {
+export function ChatMessage({ message, findings, onApplyProposal }: ChatMessageProps) {
   const isUser = message.role === 'user'
   const time = parseUtcDate(message.created_at).toLocaleTimeString([], {
     hour: '2-digit',
@@ -33,6 +38,16 @@ export function ChatMessage({ message }: ChatMessageProps) {
           <MarkdownRenderer content={message.content} />
         )}
       </div>
+      {onApplyProposal &&
+        message.proposals.map((proposal, i) => (
+          <div key={`${message.id}-${i}`} className="mt-2 w-full">
+            <ProposalCard
+              proposal={proposal}
+              finding={findings?.get(proposal.finding_id)}
+              onApply={onApplyProposal}
+            />
+          </div>
+        ))}
       <span className="mt-1 text-[10px] text-zinc-400 dark:text-zinc-500">
         {time}
       </span>

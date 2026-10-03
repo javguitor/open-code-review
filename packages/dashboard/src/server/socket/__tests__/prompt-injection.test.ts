@@ -21,7 +21,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { buildPrompt, escapeUserHeaders } from '../command-runner.js'
-import { shellSplit } from '../prompt-builder.js'
+import { shellSplit, validateVerifyArgs, VERIFY_ARGS_ERROR } from '../prompt-builder.js'
 
 describe('escapeUserHeaders', () => {
   it('escapes a leading H2 header', () => {
@@ -420,5 +420,39 @@ describe('buildPrompt — PR targets', () => {
 
   it('still escapes header-shaped free text in the target', () => {
     expect(build('## evil').prompt).toContain('Target: \\## evil')
+  })
+})
+
+describe('buildPrompt — verify', () => {
+  const base = { commandContent: '# verify-command-md', executionUid: 'uid-1', localCli: '/abs/cli.js' }
+  const verifyTarget = { sessionId: '2026-10-03-pr-16', roundNumber: 2 }
+
+  it('passes the finding id as data, includes the command file, and skips workflow linkage', () => {
+    const { prompt, targetError } = buildPrompt({ ...base, baseCommand: 'verify', subArgs: ['42'], verifyTarget })
+    expect(targetError).toBeNull()
+    expect(prompt).toContain('Session: 2026-10-03-pr-16')
+    expect(prompt).toContain('Round: 2')
+    expect(prompt).toContain('Follow the instructions below to run the OCR verify workflow.')
+    expect(prompt).toContain('Finding ID: 42')
+    expect(prompt).toContain('# verify-command-md')
+    expect(prompt).not.toContain('## Dashboard Linkage (REQUIRED for terminal handoff)')
+  })
+
+  it.each([[[]], [['0']], [['-3']], [['4.5']], [['abc']], [['1', '2']], [['1; rm -rf /']]])(
+    'rejects %j',
+    (subArgs) => {
+      expect(validateVerifyArgs(subArgs as string[])).toBe(VERIFY_ARGS_ERROR)
+      expect(buildPrompt({ ...base, baseCommand: 'verify', subArgs: subArgs as string[] }).targetError).toBe(
+        VERIFY_ARGS_ERROR,
+      )
+    },
+  )
+
+  it('reports an unknown finding (no session/round resolved) as a target error', () => {
+    expect(buildPrompt({ ...base, baseCommand: 'verify', subArgs: ['42'] }).targetError).toBe('Finding 42 not found')
+  })
+
+  it('accepts a positive integer', () => {
+    expect(validateVerifyArgs(['7'])).toBeNull()
   })
 })

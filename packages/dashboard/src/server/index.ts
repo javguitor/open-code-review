@@ -19,9 +19,11 @@ import { openDb, closeDb, getAllRounds, getReviewerOutputsForRound, getRoundProg
 import { registerSocketHandlers } from './socket/handlers.js'
 import { createSessionsRouter } from './routes/sessions.js'
 import { createReviewsRouter } from './routes/reviews.js'
+import { createRoundDiffRouter } from './routes/round-diff.js'
 import { createMapsRouter } from './routes/maps.js'
 import { createArtifactsRouter } from './routes/artifacts.js'
 import { createProgressRouter } from './routes/progress.js'
+import { createFindingsRouter } from './routes/findings.js'
 import { createNotesRouter } from './routes/notes.js'
 import { createStatsRouter } from './routes/stats.js'
 import { createCommandsRouter } from './routes/commands.js'
@@ -536,9 +538,11 @@ export async function startServer(options: StartServerOptions): Promise<void> {
 
   app.use('/api/sessions', createSessionsRouter(db, { ocrDir }))
   app.use('/api/sessions', createReviewsRouter(db))
+  app.use('/api/sessions', createRoundDiffRouter(db, ocrDir))
   app.use('/api/sessions', createMapsRouter(db))
   app.use('/api/sessions', createArtifactsRouter(db))
   app.use('/api', createProgressRouter(db))
+  app.use('/api', createFindingsRouter(db, io))
   app.use('/api/notes', createNotesRouter(db))
   app.use('/api/stats', createStatsRouter(db))
   app.use('/api/commands', createCommandsRouter(db, ocrDir))

@@ -34,6 +34,7 @@ const reviews = {
   'reviews.reviewers': 'Reviewers',
   'reviews.findings': 'Findings',
   'reviews.findings_count': 'Findings ({count})',
+  'reviews.retired': 'retired (no longer in the synthesis)',
   'reviews.hide_discourse': 'Hide Discourse',
   'reviews.view_discourse': 'View Discourse',
   'reviews.final_review': 'Final Review',
@@ -144,6 +145,28 @@ const reviews = {
   'reviews.discourse_connect': 'Connect',
   'reviews.discourse_surface': 'Surface',
   'reviews.discourse_unknown': 'Discourse',
+
+  // Workbench / decisions
+  'reviews.open_workbench': 'Open workbench',
+  'reviews.synthesis_value': 'synthesis: {value}',
+  'reviews.synthesis_title': 'The synthesis said {value}; revised since',
+  'reviews.category_blocker': 'Blocker',
+  'reviews.category_should_fix': 'Should fix',
+  'reviews.category_suggestion': 'Suggestion',
+  'reviews.category_style': 'Style',
+  'reviews.status_confirmed': 'Confirmed',
+  'reviews.verdict_after_decisions': 'Verdict after your decisions',
+  'reviews.synthesis_verdict': 'Synthesis verdict',
+  'reviews.open_counts': 'Open, counted per reviewer row: {blockers} blockers, {should_fix} should fix, {suggestions} suggestions',
+  'reviews.counts_per_row': 'Counted per reviewer row: a problem reported by several reviewers counts once per reviewer.',
+  'reviews.synthesis_counts': 'synthesis: {blockers} blockers, {should_fix} should fix, {suggestions} suggestions',
+  'reviews.decision_reason_required': 'A reason is required.',
+  'reviews.decision_reason_too_short': 'The reason must be at least {min} characters.',
+  'reviews.decision_reason_label': 'Why {status}?',
+  'reviews.decision_reason_placeholder': 'Reason (required)',
+  'reviews.decision_save': 'Save',
+  'reviews.decision_cancel': 'Cancel',
+  'reviews.decision_failed': 'Could not save the decision: {error}',
 }
 
 export { reviews }

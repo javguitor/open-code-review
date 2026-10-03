@@ -87,6 +87,7 @@ agents/
 | `history.md` | `/ocr-history` | `/ocr:history` |
 | `show.md` | `/ocr-show` | `/ocr:show` |
 | `address.md` | `/ocr-address` | `/ocr:address` |
+| `verify.md` | `/ocr-verify` | `/ocr:verify` |
 | `create-reviewer.md` | `/ocr-create-reviewer` | `/ocr:create-reviewer` |
 | `sync-reviewers.md` | `/ocr-sync-reviewers` | `/ocr:sync-reviewers` |
 | `translate-review-to-single-human.md` | `/ocr-translate-review-to-single-human` | `/ocr:translate-review-to-single-human` |

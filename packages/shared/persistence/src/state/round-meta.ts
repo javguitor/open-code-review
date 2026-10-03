@@ -28,6 +28,10 @@ const VALID_SEVERITIES = new Set(["critical", "high", "medium", "low", "info"]);
  */
 const MIN_TITLE_LEN = 8;
 
+/** Caps for the optional provenance fields. */
+const MAX_FLAGGED_BY = 20;
+const MAX_EVIDENCE_LEN = 4000;
+
 export function validateRoundMeta(meta: unknown): RoundMeta {
   if (!meta || typeof meta !== "object") {
     throw new Error("round-meta.json must be a JSON object");
@@ -111,8 +115,29 @@ export function validateRoundMeta(meta: unknown): RoundMeta {
       if (f.line_end !== undefined && typeof f.line_end !== "number") {
         throw new Error(`Finding "${f.title}" has invalid line_end: expected number`);
       }
-      if (f.flagged_by !== undefined && !Array.isArray(f.flagged_by)) {
-        throw new Error(`Finding "${f.title}" has invalid flagged_by: expected array`);
+      if (f.flagged_by !== undefined) {
+        if (
+          !Array.isArray(f.flagged_by) ||
+          f.flagged_by.length > MAX_FLAGGED_BY ||
+          f.flagged_by.some((v) => typeof v !== "string" || v.trim() === "")
+        ) {
+          throw new Error(
+            `Finding "${f.title}" has invalid flagged_by: expected an array of at most ${MAX_FLAGGED_BY} non-empty strings`,
+          );
+        }
+        f.flagged_by = (f.flagged_by as string[]).map((v) => sanitizeMetadataString(v).trim());
+      }
+      if (f.evidence !== undefined) {
+        if (typeof f.evidence !== "string") {
+          throw new Error(`Finding "${f.title}" has invalid evidence: expected string`);
+        }
+        const evidence = f.evidence.trim();
+        if (evidence.length > MAX_EVIDENCE_LEN) {
+          throw new Error(
+            `Finding "${f.title}" has invalid evidence: exceeds ${MAX_EVIDENCE_LEN} characters`,
+          );
+        }
+        f.evidence = sanitizeMetadataString(evidence, { maxLen: MAX_EVIDENCE_LEN });
       }
     }
   }

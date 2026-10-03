@@ -3,12 +3,12 @@ import { useSocketEvent } from '../../../providers/socket-provider'
 import { fetchApi } from '../../../lib/utils'
 import type {
   ReviewRound,
-  Finding,
   ReviewerOutputDetail,
   Artifact,
-  FindingTriage,
   RoundTriage,
 } from '../../../lib/api-types'
+import type { DecisionStatus, RoundDetail, RoundFinding } from '../types'
+import { decisionBody } from '../decisions'
 
 export function useAllReviews() {
   const queryClient = useQueryClient()
@@ -30,10 +30,10 @@ export function useRound(sessionId: string, roundNumber: number) {
   const queryClient = useQueryClient()
   const queryKey = ['sessions', sessionId, 'rounds', roundNumber]
 
-  const query = useQuery<ReviewRound>({
+  const query = useQuery<RoundDetail>({
     queryKey,
     queryFn: () =>
-      fetchApi<ReviewRound>(`/api/sessions/${sessionId}/rounds/${roundNumber}`),
+      fetchApi<RoundDetail>(`/api/sessions/${sessionId}/rounds/${roundNumber}`),
     enabled: !!sessionId && roundNumber > 0,
   })
 
@@ -51,10 +51,10 @@ export function useRound(sessionId: string, roundNumber: number) {
 export function useRoundFindings(sessionId: string, roundNumber: number) {
   const queryKey = ['sessions', sessionId, 'rounds', roundNumber, 'findings']
 
-  return useQuery<Finding[]>({
+  return useQuery<RoundFinding[]>({
     queryKey,
     queryFn: () =>
-      fetchApi<Finding[]>(`/api/sessions/${sessionId}/rounds/${roundNumber}/findings`),
+      fetchApi<RoundFinding[]>(`/api/sessions/${sessionId}/rounds/${roundNumber}/findings`),
     enabled: !!sessionId && roundNumber > 0,
   })
 }
@@ -91,14 +91,18 @@ export function useUpdateFindingStatus() {
     mutationFn: ({
       findingId,
       status,
+      reason,
     }: {
       findingId: number
-      status: FindingTriage
+      status: DecisionStatus
+      reason?: string
     }) =>
-      fetchApi(`/api/findings/${findingId}/progress`, {
+      // /decision (not the legacy /progress) so every change lands in the
+      // revision log and emits `round:updated`; it accepts read/acknowledged too.
+      fetchApi(`/api/findings/${findingId}/decision`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(decisionBody(status, reason)),
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sessions'] })

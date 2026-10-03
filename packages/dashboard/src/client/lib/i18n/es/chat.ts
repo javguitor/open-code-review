@@ -17,6 +17,19 @@ const chat = {
   'chat.empty_review': 'Haz una pregunta sobre esta revisión para empezar.',
   'chat.worktree_missing': 'Worktree eliminado: se responde desde el checkout',
   'chat.worktree_unknown': 'No se ha podido comprobar el worktree: se responde desde el checkout',
+  'chat.proposal_title': 'Cambio propuesto para el hallazgo #{id}',
+  'chat.proposal_retired': 'Hallazgo retirado: no aplicable',
+  'chat.proposal_unknown_finding': 'Hallazgo no cargado',
+  'chat.proposal_field_severity': 'Severidad',
+  'chat.proposal_field_category': 'Categoría',
+  'chat.proposal_field_status': 'Estado',
+  'chat.proposal_no_changes': 'Ya coincide con los valores actuales',
+  'chat.proposal_apply': 'Aplicar',
+  'chat.proposal_discard': 'Descartar',
+  'chat.proposal_applying': 'Aplicando...',
+  'chat.proposal_applied': 'Aplicado',
+  'chat.proposal_failed': 'Falló: {error}',
+  'chat.proposal_retry': 'Reintentar',
 }
 
 export { chat }

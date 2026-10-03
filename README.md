@@ -543,6 +543,7 @@ variable from dashboard children: `env -u VAR ocr dashboard`.
 | `/ocr-history` | List past review sessions |
 | `/ocr-show [session]` | Display a specific past review |
 | `/ocr-address [final.md]` | Address review feedback with AI agent |
+| `/ocr-verify <finding-id>` | Verify one finding with evidence for and against |
 
 *For Claude Code / Cursor, use `/ocr:review`, `/ocr:map`, etc.*
 

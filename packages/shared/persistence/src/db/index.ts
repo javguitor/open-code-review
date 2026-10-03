@@ -19,6 +19,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { openEngine, type Database } from "./engine.js";
 import { runMigrations, getSchemaVersion } from "./migrations.js";
+import { dbPathFor } from "./main-checkout.js";
 import { reconcileLegacyState } from "./reconcile.js";
 import type { ReconcileResult } from "./reconcile.js";
 
@@ -165,6 +166,33 @@ export {
 
 export { runMigrations, MIGRATIONS } from "./migrations.js";
 
+export {
+  FINDING_SEVERITIES,
+  FINDING_CATEGORIES,
+  FINDING_DECISION_STATUSES,
+  FINDING_VERIFICATION_STATUSES,
+  FINDING_REVISION_SOURCES,
+  FindingError,
+  getFinding,
+  getFindingRevisions,
+  reviseFinding,
+  setFindingDecision,
+  recordVerification,
+  applyProposal,
+} from "./findings.js";
+export type {
+  FindingRow,
+  FindingRevisionRow,
+  FindingRevisableField,
+  FindingDecisionStatus,
+  FindingVerificationStatus,
+  FindingRevisionSource,
+  ReviseFindingParams,
+  SetFindingDecisionParams,
+  RecordVerificationParams,
+  ApplyProposalParams,
+} from "./findings.js";
+
 export { resultToRows, resultToRow } from "./result-mapper.js";
 
 // `Database` carries no `raw` handle (see engine.ts) — the published
@@ -203,6 +231,7 @@ export type {
   DbPruneBackupsResult,
 } from "./maintenance.js";
 export { getSchemaVersion } from "./migrations.js";
+export { dbPathFor, resolveMainCheckout } from "./main-checkout.js";
 
 export {
   cacheDir,
@@ -249,8 +278,7 @@ export async function openDatabase(dbPath: string): Promise<Database> {
  * within the given OCR directory.
  */
 export async function getDb(ocrDir: string): Promise<Database> {
-  const dbPath = join(ocrDir, "data", "ocr.db");
-  return openDatabase(dbPath);
+  return openDatabase(dbPathFor(ocrDir));
 }
 
 /**
@@ -258,12 +286,7 @@ export async function getDb(ocrDir: string): Promise<Database> {
  * and persists the result. Callable from both CLI and dashboard server.
  */
 export async function ensureDatabase(ocrDir: string): Promise<Database> {
-  const dataDir = join(ocrDir, "data");
-  if (!existsSync(dataDir)) {
-    mkdirSync(dataDir, { recursive: true });
-  }
-
-  const dbPath = join(dataDir, "ocr.db");
+  const dbPath = dbPathFor(ocrDir);
   const db = await openDatabase(dbPath);
   let before = 0;
   try {

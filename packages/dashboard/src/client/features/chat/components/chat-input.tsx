@@ -10,6 +10,8 @@ type ChatInputProps = {
   isStreaming: boolean
   disabled?: boolean
   targetType: ChatTargetType
+  /** Text the input starts with (e.g. a prompt handed over by the workbench). */
+  initialValue?: string
 }
 
 const placeholders: Record<ChatTargetType, MessageKey> = {
@@ -17,9 +19,9 @@ const placeholders: Record<ChatTargetType, MessageKey> = {
   review_round: 'chat.placeholder_review',
 }
 
-export function ChatInput({ onSend, isStreaming, disabled, targetType }: ChatInputProps) {
+export function ChatInput({ onSend, isStreaming, disabled, targetType, initialValue }: ChatInputProps) {
   const { t } = useT()
-  const [value, setValue] = useState('')
+  const [value, setValue] = useState(initialValue ?? '')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const adjustHeight = useCallback(() => {

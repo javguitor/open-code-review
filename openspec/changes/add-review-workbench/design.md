@@ -98,14 +98,14 @@ Verified on `main` (after PR #6):
   finding, c confirm, d dismiss, f fixed.
 - **Decision: decisions survive rounds.** Already true by construction (keyed by finding
   id). The workbench for round N+1 shows, for each finding, the latest decision on a
-  finding of round N with the same `file_path` + title similarity ≥ 0.8 as "previous
+  finding of round N with the same `file_path` + title similarity ≥ 0.5 (token Dice; models rephrase titles between rounds, a real pair scored 0.63) as "previous
   round: dismissed — reason" (read-only hint, no automatic carry-over).
 
 ## Risks / Trade-offs
 
 - `diff.patch` for huge changes: cap the parsed response (files > 200 or lines >
   20k → file list only, per-file diff on demand). Mitigation built into the endpoint.
-- Table rebuild of `user_finding_progress` in migration 16: run inside a transaction;
+- Table rebuild of `user_finding_progress` in migration 17: run inside a transaction;
   tested on a v15 fixture with rows.
 - Prompt injection through chat proposals: the block is data; validation rejects
   unknown ids/enums; the user applies. No auto-apply ever.
@@ -116,14 +116,30 @@ Verified on `main` (after PR #6):
 
 Additive except the `user_finding_progress` rebuild (values preserved). Old sessions:
 no `diff.patch` → workbench shows findings panel only with a notice "diff not saved for
-this round"; no `flagged_by` → hidden. Rollback: revert code; schema v16 stays (unused
+this round"; no `flagged_by` → hidden. Rollback: revert code; schema v17/v18 stay (unused
 columns/table).
 
-## Open Questions
+## Resolved Questions and Updates (2026-10-03, before implementation)
 
-- Should `dismissed` on a blocker change the round verdict shown in the UI (not on
-  GitHub)? Proposed: show "verdict after your decisions" next to the synthesis verdict.
-- Keep `acknowledged` or fold it into `read`? Proposed: keep for one release.
+- Dismissing a blocker does not touch GitHub; the round page and workbench show a
+  "verdict after your decisions" next to the synthesis verdict (blockers/should-fix
+  counted on current values, excluding `dismissed`/`wont_fix`/`fixed`).
+- `acknowledged` is kept for one release (old dropdown), not folded into `read`.
+- Retired findings (migration 18, `review_findings.retired_at`): a finding that leaves the
+  synthesis but has a final decision or a severity/category/verification revision is
+  kept as a retired row — never re-assigned to another finding — and is excluded from
+  counts and the verdict after decisions; it cannot be decided, revised, verified or
+  targeted by a chat proposal (`isActionable` in `finding-rules`). Re-ingestion matches by
+  title + file + line first, then title + file choosing the closest line among live rows
+  only; a tie inserts a new row.
+- Verdict after decisions: recomputed once a live row has a resolving decision or a
+  category different from the synthesis; then REQUEST CHANGES while a blocker is open,
+  else APPROVE (NEEDS DISCUSSION stays).
+- State after stages 3 and the follow-ups merged: the schema migration is **17** (16 is
+  `add-requirements-sources`); Ask the Team runs with `maxTurns: 10` in the session's
+  code root (`services/worktrees.ts` `codeRootForSession`), which the `file` endpoint
+  reuses; PR sessions diff `origin/<base>...refs/ocr/pr/<n>`; the dashboard never
+  imports `packages/cli` (it runs `ocr …` when it needs the CLI).
 
 ## How to execute this change (handoff)
 

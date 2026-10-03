@@ -258,6 +258,9 @@ importers:
 
   packages/shared/persistence:
     dependencies:
+      '@open-code-review/config':
+        specifier: workspace:*
+        version: link:../config
       '@open-code-review/platform':
         specifier: workspace:*
         version: link:../platform

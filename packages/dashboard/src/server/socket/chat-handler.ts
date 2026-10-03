@@ -10,9 +10,12 @@ import type { ChildProcess } from 'node:child_process'
 import { dirname } from 'node:path'
 import type { Server as SocketIOServer, Socket } from 'socket.io'
 import type { Database } from '@open-code-review/persistence'
+import { isActionable } from '@open-code-review/persistence/finding-rules'
 import {
   getConversation,
+  getFindingsForRound,
   getMessages,
+  getRound,
   getSession,
   insertMessage,
   upsertConversation,
@@ -21,6 +24,7 @@ import {
   type ChatConversationRow,
 } from '../db.js'
 import { buildChatContext, type ChatTarget } from '../services/chat-context.js'
+import { extractProposals, type Proposal } from '../services/proposals.js'
 import { codeRootForSession, contextRecordedWorktree, type RunCli } from '../services/worktrees.js'
 import { AiCliService, formatToolDetail } from '../services/ai-cli/index.js'
 import { startTrackedExecution, type TrackedExecution } from './execution-tracker.js'
@@ -86,6 +90,34 @@ function resetIdleTimer(
   }
 }
 
+/** Finding ids + titles of a review round (empty for map runs or unknown rounds). */
+function roundFindings(db: Database, sessionId: string, roundNumber: number): { id: number; title: string }[] {
+  const round = getRound(db, sessionId, roundNumber)
+  return round ? getFindingsForRound(db, round.id).filter(isActionable).map((f) => ({ id: f.id, title: f.title })) : []
+}
+
+/**
+ * Extracts valid proposals from the final assistant message and stores them on
+ * the message row. Invalid blocks are logged and dropped. Written here (not in
+ * db.ts) as a single column update on the already-inserted message.
+ */
+function persistProposals(
+  db: Database,
+  messageId: number,
+  content: string,
+  findings: { id: number }[],
+  conversationId: string,
+): Proposal[] {
+  const { valid, invalid } = extractProposals(content, new Set(findings.map((f) => f.id)))
+  for (const bad of invalid) {
+    console.warn(`[chat] ignored invalid ocr-proposal in ${conversationId}: ${bad.error}`)
+  }
+  if (valid.length > 0) {
+    db.run('UPDATE chat_messages SET proposals_json = ? WHERE id = ?', [JSON.stringify(valid), messageId])
+  }
+  return valid
+}
+
 /**
  * Registers chat socket handlers for a connected client.
  */
@@ -148,6 +180,8 @@ export function registerChatHandlers(
       }
 
       // Build context for first message (no session to resume)
+      // Proposals only apply to review rounds; validated against this round's findings.
+      const findings = targetType === 'review_round' ? roundFindings(db, sessionId, targetId) : []
       let prompt: string
       if (claudeSessionId) {
         // The model was told the old code root in the first message; say so when it moved.
@@ -158,7 +192,7 @@ export function registerChatHandlers(
         const target: ChatTarget = targetType === 'map_run'
           ? { type: 'map_run', sessionId, runNumber: targetId }
           : { type: 'review_round', sessionId, roundNumber: targetId }
-        const context = buildChatContext(ocrDir, target, codeRoot.path)
+        const context = buildChatContext(ocrDir, target, codeRoot.path, findings)
         prompt = `${context}\n\nUser: ${message}`
       }
 
@@ -309,14 +343,22 @@ export function registerChatHandlers(
         }
 
         // Store assistant response
+        let messageId: number | null = null
+        let proposals: Proposal[] = []
         if (assistantText.trim()) {
-          insertMessage(db, conversationId, 'assistant', assistantText.trim())
+          const content = assistantText.trim()
+          messageId = insertMessage(db, conversationId, 'assistant', content)
+          try {
+            proposals = persistProposals(db, messageId, content, findings, conversationId)
+          } catch (err) {
+            console.error('Failed to store chat proposals:', err)
+          }
         }
 
         if (code === 0) {
           tracker.appendOutput('\n✓ Response complete\n')
           tracker.finish(0)
-          socket.emit('chat:done', { conversationId })
+          socket.emit('chat:done', { conversationId, messageId, proposals })
         } else {
           const errMsg = stderrBuffer || `CLI process exited with code ${code}`
           tracker.appendOutput(`\n✗ ${errMsg}\n`)

@@ -346,16 +346,16 @@ See `references/context-discovery.md` for detailed algorithm.
 ### Steps
 
 1. Identify the review target:
-   - Staged changes: `git diff --cached`
-   - Unstaged changes: `git diff`
-   - Commit range: `git diff {range}`
-   - PR (`pr:<n>` or a PR URL): already resolved in Phase 0 (`references/pr-target.md`); `git diff origin/<base>...refs/ocr/pr/<n>` — run in the main checkout
+   **The patch command** (defined once, used for every `diff.patch`): `git -c core.quotePath=false diff --no-color --no-ext-diff --no-textconv --src-prefix=a/ --dst-prefix=b/ <target>`. Its flags neutralise the user's git config (`diff.mnemonicPrefix`, `diff.noprefix`, `color.diff`, `core.quotePath`, `diff.external`, textconv drivers), which would otherwise change the format (`c/`/`i/` prefixes, escape codes, octal-quoted paths, no `diff --git` header) so the dashboard could not match file paths with findings. Never drop a flag.
+
+   `<target>` per review target:
+   - Staged changes: `--cached`
+   - Unstaged changes: none
+   - Commit range: `{range}`
+   - PR (`pr:<n>` or a PR URL): already resolved in Phase 0 (`references/pr-target.md`); `origin/<base>...refs/ocr/pr/<n>`, run in the main checkout
 
 2. Gather supporting context:
    ```bash
-   # Get the diff
-   git diff --cached > /tmp/ocr-diff.txt
-
    # Get recent commit messages for intent
    git log --oneline -10
 
@@ -372,7 +372,15 @@ See `references/context-discovery.md` for detailed algorithm.
    mkdir -p .ocr/sessions/$SESSION_ID/rounds/round-1/reviews
    ```
 
-4. Save context to `context.md`:
+4. Save the diff to `.ocr/sessions/{id}/rounds/round-{n}/diff.patch` — the exact output of the command from step 1, written verbatim (no filtering, no trimming), so the dashboard can render it:
+   ```bash
+   mkdir -p ".ocr/sessions/$SESSION_ID/rounds/round-$CURRENT_ROUND"
+   <the patch command> --cached > ".ocr/sessions/$SESSION_ID/rounds/round-$CURRENT_ROUND/diff.patch"
+   # Other targets: swap `--cached` for the target listed in step 1
+   ```
+   Re-reviews write a new `diff.patch` in the new round directory; earlier rounds keep theirs. Do not write the diff to `/tmp`.
+
+5. Save context to `context.md`:
    ```markdown
    # Review Context
 
@@ -397,6 +405,7 @@ See `references/context-discovery.md` for detailed algorithm.
 - [ ] Session directory created: `.ocr/sessions/{id}/`
 - [ ] `rounds/round-1/reviews/` subdirectory created
 - [ ] `context.md` written with change summary
+- [ ] `rounds/round-{n}/diff.patch` written (exact output of the flagged `git diff` of the target)
 
 ---
 
@@ -865,7 +874,8 @@ Synthesis prose follows the configured `language`; headings, labels, verdicts an
              "line_start": 42,
              "line_end": 45,
              "summary": "User input passed directly to raw SQL...",
-             "flagged_by": ["@principal-1", "@security-1"]
+             "flagged_by": ["@principal-1", "@security-1"],
+             "evidence": "Ran the query with `' OR 1=1 --`; all rows returned."
            }
          ]
        }
@@ -883,6 +893,8 @@ Synthesis prose follows the configured `language`; headings, labels, verdicts an
    **`synthesis_counts`**: Count the actual numbered items (`### 1.`, `### 2.`, etc.) under each section of `final.md`. This is the **deduplicated** count after merging cross-reviewer duplicates.
 
    **`verdict`** — the **merge gate**, exactly one of three values (uppercase, verbatim): `"APPROVE"` | `"REQUEST CHANGES"` | `"NEEDS DISCUSSION"`. The verdict expresses **one** thing — can this land? — and nothing else. Do **not** invent composite verdicts like `accept_with_followups` or `approve_with_suggestions`: residual work is **not** a gate state. Follow-ups and suggestions are carried by finding `category` and surfaced as counts; an APPROVE with open `should_fix` items is normal and correct. The CLI **rejects** any off-vocabulary verdict (exit 7, writes nothing) so you must re-emit a canonical value.
+
+   **Optional per-finding fields**: `flagged_by` (array of reviewer handles) and `evidence` (string: what supports the finding, e.g. a command and its output). Both mirror the `**Flagged by**` / `**Evidence**` lines in `final.md`; omit them when there is nothing to say. `evidence` is prose and follows the output language.
 
    **Finding categories**: `"blocker"` | `"should_fix"` | `"suggestion"` | `"style"`
    **Finding severity**: `"critical"` | `"high"` | `"medium"` | `"low"` | `"info"`

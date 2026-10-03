@@ -33,12 +33,14 @@
 import {
   ensureDatabase,
   closeDatabase,
+  dbPathFor,
   resultToRows,
   resultToRow,
   type Database,
   type WorkflowType,
   type SessionStatus,
 } from '@open-code-review/persistence'
+import { RESOLVED_DECISIONS } from '@open-code-review/persistence/finding-rules'
 import { join } from 'node:path'
 
 // ── Types ──
@@ -107,12 +109,22 @@ export type FindingRow = {
   reviewer_output_id: number
   title: string
   severity: 'critical' | 'high' | 'medium' | 'low' | 'info'
+  category: string | null
   file_path: string | null
   line_start: number | null
   line_end: number | null
   summary: string | null
   is_blocker: number
   parsed_at: string | null
+  /** JSON array text of reviewer names, or null. */
+  flagged_by: string | null
+  evidence: string | null
+  verification_status: 'pending' | 'reproduced' | 'supported' | 'dismissed' | null
+  verification_note: string | null
+  verified_at: string | null
+  verification_file: string | null
+  /** Set when the finding left the source but kept human history; excluded from counts. */
+  retired_at: string | null
 }
 
 export type ArtifactRow = {
@@ -166,8 +178,10 @@ export type FileProgressRow = {
 export type FindingProgressRow = {
   id: number
   finding_id: number
-  status: 'unread' | 'read' | 'acknowledged' | 'fixed' | 'wont_fix'
+  status: 'unread' | 'read' | 'acknowledged' | 'confirmed' | 'dismissed' | 'fixed' | 'wont_fix'
   updated_at: string
+  reason: string | null
+  decided_at: string | null
 }
 
 export type RoundProgressRow = {
@@ -239,7 +253,7 @@ let cachedDbPath: string | null = null
  * first use. The shared module caches the connection per path.
  */
 export async function openDb(ocrDir: string): Promise<Database> {
-  const dbPath = join(ocrDir, 'data', 'ocr.db')
+  const dbPath = dbPathFor(ocrDir)
   const db = await ensureDatabase(ocrDir)
   cachedDb = db
   cachedDbPath = dbPath
@@ -366,10 +380,75 @@ export function getFindingsForReviewerOutput(
   )
 }
 
-export function getFinding(db: Database, findingId: number): FindingRow | undefined {
-  return resultToRow<FindingRow>(
-    db.exec('SELECT * FROM review_findings WHERE id = ?', [findingId])
+export type FindingRevisionStats = {
+  finding_id: number
+  revision_count: number
+  /** `old_value` of the first severity / category revision = what the synthesis said. */
+  synthesis_severity: string | null
+  synthesis_category: string | null
+}
+
+/** Revision counts and original (synthesis) severity/category for every revised finding of a round. */
+export function getRevisionStatsForRound(db: Database, roundId: number): Map<number, FindingRevisionStats> {
+  const rows = resultToRows<{ finding_id: number; field: string; old_value: string | null }>(
+    db.exec(
+      `SELECT fr.finding_id, fr.field, fr.old_value
+       FROM finding_revisions fr
+       JOIN review_findings rf ON rf.id = fr.finding_id
+       JOIN reviewer_outputs ro ON ro.id = rf.reviewer_output_id
+       WHERE ro.round_id = ?
+       ORDER BY fr.id ASC`,
+      [roundId]
+    )
   )
+  const stats = new Map<number, FindingRevisionStats>()
+  for (const r of rows) {
+    const s = stats.get(r.finding_id) ?? {
+      finding_id: r.finding_id, revision_count: 0, synthesis_severity: null, synthesis_category: null,
+    }
+    s.revision_count++
+    if (r.field === 'severity' && s.synthesis_severity === null) s.synthesis_severity = r.old_value
+    if (r.field === 'category' && s.synthesis_category === null) s.synthesis_category = r.old_value
+    stats.set(r.finding_id, s)
+  }
+  return stats
+}
+
+export type DecidedFindingRow = {
+  finding_id: number
+  title: string
+  file_path: string | null
+  status: FindingProgressRow['status']
+  reason: string | null
+  decided_at: string
+}
+
+/** Findings of a round carrying a final human decision, most recent first. */
+export function getDecidedFindingsForRound(db: Database, roundId: number): DecidedFindingRow[] {
+  return resultToRows<DecidedFindingRow>(
+    db.exec(
+      `SELECT rf.id AS finding_id, rf.title, rf.file_path, ufp.status, ufp.reason, ufp.decided_at
+       FROM user_finding_progress ufp
+       JOIN review_findings rf ON rf.id = ufp.finding_id
+       JOIN reviewer_outputs ro ON ro.id = rf.reviewer_output_id
+       WHERE ro.round_id = ? AND ufp.decided_at IS NOT NULL AND rf.retired_at IS NULL
+       ORDER BY ufp.decided_at DESC, ufp.id DESC`,
+      [roundId]
+    )
+  )
+}
+
+/** The `diff` artifact content of a round, or undefined. */
+export function getRoundDiff(db: Database, sessionId: string, roundNumber: number): string | undefined {
+  const row = resultToRow<{ content: string }>(
+    db.exec(
+      `SELECT content FROM markdown_artifacts
+       WHERE session_id = ? AND artifact_type = 'diff' AND round_number = ?
+       ORDER BY id DESC LIMIT 1`,
+      [sessionId, roundNumber]
+    )
+  )
+  return row?.content
 }
 
 // ── Artifacts queries ──
@@ -486,24 +565,6 @@ export function getFindingProgress(
   return resultToRow<FindingProgressRow>(
     db.exec('SELECT * FROM user_finding_progress WHERE finding_id = ?', [findingId])
   )
-}
-
-export function upsertFindingProgress(
-  db: Database,
-  findingId: number,
-  status: FindingProgressRow['status']
-): void {
-  db.run(
-    `INSERT INTO user_finding_progress (finding_id, status, updated_at)
-     VALUES (?, ?, datetime('now'))
-     ON CONFLICT(finding_id)
-     DO UPDATE SET status = ?, updated_at = datetime('now')`,
-    [findingId, status, status]
-  )
-}
-
-export function deleteFindingProgress(db: Database, findingId: number): void {
-  db.run('DELETE FROM user_finding_progress WHERE finding_id = ?', [findingId])
 }
 
 // ── User round progress queries ──
@@ -740,9 +801,10 @@ export function getStats(db: Database): StatsResult {
         (SELECT COUNT(*) FROM map_files) as total_files_tracked,
         (SELECT COUNT(*) FROM review_findings rf
          LEFT JOIN user_finding_progress ufp ON ufp.finding_id = rf.id
-         WHERE rf.is_blocker = 1
-           AND (ufp.status IS NULL OR ufp.status NOT IN ('fixed', 'wont_fix'))
-        ) as unresolved_blockers`
+         WHERE rf.is_blocker = 1 AND rf.retired_at IS NULL
+           AND (ufp.status IS NULL OR ufp.status NOT IN (${[...RESOLVED_DECISIONS].map(() => '?').join(', ')}))
+        ) as unresolved_blockers`,
+      [...RESOLVED_DECISIONS]
     )
   )
 

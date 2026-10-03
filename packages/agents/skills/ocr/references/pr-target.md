@@ -79,7 +79,7 @@ Otherwise use a worktree:
 | `pr_number`, `pr_url` | from `gh pr view` |
 | `code_root` | the worktree path, or the checkout when in place |
 
-Diff: `git diff origin/<baseRefName>...refs/ocr/pr/<n>`, run in the main checkout (no `cd` needed).
+Diff: the patch command (defined in `workflow.md` Phase 2) with target `origin/<baseRefName>...refs/ocr/pr/<n>`, run in the main checkout (no `cd` needed).
 
 ## Cleanup
 

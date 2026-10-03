@@ -540,6 +540,81 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 17,
+    description:
+      "Add finding provenance/verification columns, widen user_finding_progress (decisions + reason), add finding_revisions audit log and chat_messages.proposals_json",
+    run: (db) => {
+      // review_findings: nullable provenance + verification outcome. `category`
+      // (added in v5) has NO CHECK in the schema; `severity` has one (v1), and the
+      // revision API validates both vocabularies in code (see findings.ts).
+      const findingColumns: Array<[string, string]> = [
+        ["flagged_by", "TEXT"], // JSON array of reviewer ids
+        ["evidence", "TEXT"],
+        [
+          "verification_status",
+          "TEXT CHECK (verification_status IS NULL OR verification_status IN ('pending','reproduced','supported','dismissed'))",
+        ],
+        ["verification_note", "TEXT"],
+        ["verified_at", "TEXT"],
+        ["verification_file", "TEXT"],
+      ];
+      for (const [name, type] of findingColumns) {
+        if (!columnExists(db, "review_findings", name)) {
+          db.run(`ALTER TABLE review_findings ADD COLUMN ${name} ${type};`);
+        }
+      }
+
+      // user_finding_progress: SQLite cannot alter a CHECK, so rebuild. Nothing
+      // references this table (it only references review_findings) and it has no
+      // triggers or secondary indexes, so drop+rename is safe with FKs enforced.
+      db.run(`
+        CREATE TABLE user_finding_progress_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          finding_id INTEGER NOT NULL REFERENCES review_findings(id) ON DELETE CASCADE,
+          status TEXT NOT NULL DEFAULT 'unread' CHECK(status IN ('unread', 'read', 'acknowledged', 'confirmed', 'dismissed', 'fixed', 'wont_fix')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          reason TEXT,
+          decided_at TEXT,
+          UNIQUE(finding_id)
+        );
+        INSERT INTO user_finding_progress_new (id, finding_id, status, updated_at)
+          SELECT id, finding_id, status, updated_at FROM user_finding_progress;
+        DROP TABLE user_finding_progress;
+        ALTER TABLE user_finding_progress_new RENAME TO user_finding_progress;
+      `);
+
+      db.run(`
+        CREATE TABLE IF NOT EXISTS finding_revisions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          finding_id INTEGER NOT NULL REFERENCES review_findings(id) ON DELETE CASCADE,
+          field TEXT NOT NULL,
+          old_value TEXT,
+          new_value TEXT,
+          reason TEXT,
+          source TEXT NOT NULL CHECK(source IN ('user', 'chat', 'verifier')),
+          conversation_id TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_finding_revisions_finding ON finding_revisions(finding_id);
+      `);
+
+      if (!columnExists(db, "chat_messages", "proposals_json")) {
+        db.run("ALTER TABLE chat_messages ADD COLUMN proposals_json TEXT;");
+      }
+    },
+  },
+  {
+    version: 18,
+    description: "Add nullable review_findings.retired_at (finding left the synthesis but kept for history)",
+    // Nullable, no default: NULL = live finding. A retired row has a final
+    // decision or revisions, so it is kept but excluded from counts/verdict.
+    run: (db) => {
+      if (!columnExists(db, "review_findings", "retired_at")) {
+        db.run("ALTER TABLE review_findings ADD COLUMN retired_at TEXT;");
+      }
+    },
+  },
 ];
 
 /** Whether `table` currently has a column named `column` (for idempotent DDL). */

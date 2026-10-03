@@ -1,6 +1,10 @@
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, ListChecks, MessageSquare, Terminal } from 'lucide-react'
-import { useState } from 'react'
+import { ArrowLeft, FileSearch, ListChecks, MessageSquare, Terminal } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { normalizeVerdict } from '@open-code-review/platform/verdict'
+import { useSocketEvent } from '../../providers/socket-provider'
+import { useSessionRoom } from '../../hooks/use-session-room'
 import { useSession } from '../sessions/hooks/use-sessions'
 import { RequirementsPanel } from '../requirements/components/requirements-panel'
 import { useRound, useRoundFindings, useArtifact, useUpdateRoundStatus } from './hooks/use-reviews'
@@ -16,6 +20,10 @@ import {
 } from '../../components/markdown/discourse-block'
 import { MarkdownRenderer } from '../../components/markdown/markdown-renderer'
 import { ChatPanel } from '../chat/components/chat-panel'
+import { takeChatPrefill } from '../chat/prefill'
+import type { ProposalFindingInfo } from '../chat/types'
+import { currentStatus } from './decisions'
+import { isLive, liveCount } from '../../lib/live-findings'
 import { PostReviewDialog } from './components/post-review-dialog'
 import { AddressFeedbackPopover } from './components/address-feedback-popover'
 import { TerminalHandoffPanel } from '../sessions/components/terminal-handoff-panel'
@@ -55,6 +63,43 @@ export function RoundPage() {
   const [showDiscourse, setShowDiscourse] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
   const [handoffOpen, setHandoffOpen] = useState(false)
+  const [chatPrefill, setChatPrefill] = useState<string | undefined>()
+
+  // The workbench hands a prompt over through sessionStorage; open the chat with it once.
+  useEffect(() => {
+    if (!sessionId || roundNumber <= 0) return
+    const prefill = takeChatPrefill(
+      typeof sessionStorage === 'undefined' ? undefined : sessionStorage,
+      sessionId,
+      roundNumber,
+    )
+    if (prefill) {
+      setChatPrefill(prefill)
+      setChatOpen(true)
+    }
+  }, [sessionId, roundNumber])
+
+  // Decisions and revisions (from here, the workbench or a chat proposal) emit round:updated.
+  const queryClient = useQueryClient()
+  useSessionRoom(sessionId)
+  useSocketEvent<{ sessionId: string; roundNumber: number }>('round:updated', (data) => {
+    if (data.sessionId !== sessionId || data.roundNumber !== roundNumber) return
+    queryClient.invalidateQueries({ queryKey: ['sessions', sessionId, 'rounds', roundNumber] })
+    queryClient.invalidateQueries({ queryKey: ['reviews'] })
+  })
+
+  const proposalFindings = useMemo<ProposalFindingInfo[]>(
+    () =>
+      (findings ?? []).map((f) => ({
+        retired: !isLive(f),
+        id: f.id,
+        title: f.title,
+        severity: f.severity,
+        category: f.category ?? null,
+        status: currentStatus(f),
+      })),
+    [findings],
+  )
 
   if (isLoading) {
     return <p className="text-sm text-zinc-500 dark:text-zinc-400">{t('reviews.loading_round')}</p>
@@ -78,6 +123,19 @@ export function RoundPage() {
   const discourseSections = discourseArtifact
     ? parseDiscourseContent(discourseArtifact.content)
     : []
+
+  // Current (possibly revised) counts; the synthesis columns are the fallback
+  // for rounds the server could not recount.
+  const counts = round.current_counts ?? {
+    blockers: round.blocker_count,
+    should_fix: round.should_fix_count,
+    suggestions: round.suggestion_count,
+  }
+
+  const showAfterDecisions =
+    !!round.verdict_after_decisions &&
+    (normalizeVerdict(round.verdict_after_decisions) ?? round.verdict_after_decisions) !==
+      (round.verdict ? (normalizeVerdict(round.verdict) ?? round.verdict) : null)
 
   return (
     <div className="space-y-6">
@@ -127,6 +185,13 @@ export function RoundPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            to={`/sessions/${sessionId}/reviews/${roundNumber}/workbench`}
+            className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-700"
+          >
+            <FileSearch className="h-3.5 w-3.5" />
+            {t('reviews.open_workbench')}
+          </Link>
           {finalArtifact && (
             <PostReviewDialog
               sessionId={sessionId ?? ''}
@@ -193,10 +258,43 @@ export function RoundPage() {
       {round.verdict && (
         <VerdictBanner
           verdict={round.verdict}
-          blockerCount={round.blocker_count}
-          suggestionCount={round.suggestion_count}
-          shouldFixCount={round.should_fix_count}
+          blockerCount={counts.blockers}
+          suggestionCount={counts.suggestions}
+          shouldFixCount={counts.should_fix}
         />
+      )}
+      {round.verdict && (
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          {t('reviews.counts_per_row')}
+          {round.current_counts && (
+            <>
+              {' '}
+              {t('reviews.synthesis_counts', {
+                blockers: round.blocker_count,
+                should_fix: round.should_fix_count,
+                suggestions: round.suggestion_count,
+              })}
+            </>
+          )}
+        </p>
+      )}
+
+      {/* Same gate recomputed on the user's decisions; only shown when it differs. */}
+      {showAfterDecisions && round.verdict_after_decisions && (
+        <div className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-4 py-3 text-sm">
+          <p className="font-medium text-indigo-700 dark:text-indigo-300">
+            {t('reviews.verdict_after_decisions')}: {round.verdict_after_decisions}
+          </p>
+          {round.open_counts && (
+            <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">
+              {t('reviews.open_counts', {
+                blockers: round.open_counts.blockers,
+                should_fix: round.open_counts.should_fix,
+                suggestions: round.open_counts.suggestions,
+              })}
+            </p>
+          )}
+        </div>
       )}
 
       {/* Reviewer Cards */}
@@ -221,7 +319,7 @@ export function RoundPage() {
           a deliberate "clean" outcome rather than a missing section. */}
       <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
         <h2 className="mb-4 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          {findings ? t('reviews.findings_count', { count: findings.length }) : t('reviews.findings')}
+          {findings ? t('reviews.findings_count', { count: liveCount(findings) }) : t('reviews.findings')}
         </h2>
         <FindingsTable findings={findings ?? []} isLoading={findingsLoading} />
       </div>
@@ -270,6 +368,8 @@ export function RoundPage() {
           targetType="review_round"
           targetId={round.round_number}
           onClose={() => setChatOpen(false)}
+          initialInput={chatPrefill}
+          findings={proposalFindings}
         />
       )}
     </div>
