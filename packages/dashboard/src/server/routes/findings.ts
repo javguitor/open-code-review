@@ -35,7 +35,8 @@ function parseId(raw: unknown): number | null {
 /** Maps domain errors to HTTP (codes come from persistence); anything else is a 500. */
 function sendError(res: Response, err: unknown, what: string): void {
   if (err instanceof FindingError) {
-    res.status(err.code === 'not-found' ? 404 : 400).json({ error: err.message, code: err.code })
+    const status = err.code === 'not-found' ? 404 : err.code === 'retired' ? 409 : 400
+    res.status(status).json({ error: err.message, code: err.code })
     return
   }
   console.error(`Failed to ${what}:`, err)

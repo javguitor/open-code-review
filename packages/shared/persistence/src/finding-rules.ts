@@ -72,3 +72,11 @@ export function titleSimilarity(a: string, b: string): number {
   for (const t of ta) if (tb.has(t)) shared++;
   return (2 * shared) / (ta.size + tb.size);
 }
+
+/**
+ * The single rule for retired rows (they left the synthesis but kept history):
+ * a retired finding cannot be decided, revised, verified or targeted by a chat proposal.
+ */
+export function isActionable(finding: { retired_at: string | null }): boolean {
+  return finding.retired_at === null;
+}

@@ -184,6 +184,20 @@ describe("no-op writes", () => {
     expect(revs).toHaveLength(2);
     expect(revs[1]).toMatchObject({ field: "status", old_value: "confirmed", new_value: "confirmed", reason: "again, now with a reason" });
   });
+  it("same status without a reason keeps the stored reason and writes nothing", () => {
+    applyProposal(db, { findingId: 1, status: "confirmed", reason: "reproduced with the failing test in auth.spec", conversationId: "c-1" });
+    const f = setFindingDecision(db, { findingId: 1, status: "confirmed" });
+    expect(f.decision!.reason).toBe("reproduced with the failing test in auth.spec");
+    expect(getFindingRevisions(db, 1)).toHaveLength(1);
+    // also for a status that requires a reason: repeating it must not throw
+    setFindingDecision(db, { findingId: 1, status: "dismissed", reason: "not reproducible, verified twice" });
+    expect(setFindingDecision(db, { findingId: 1, status: "dismissed" }).decision!.reason).toBe("not reproducible, verified twice");
+    expect(getFindingRevisions(db, 1)).toHaveLength(2);
+  });
+  it("a different status without a reason still clears the reason", () => {
+    setFindingDecision(db, { findingId: 1, status: "dismissed", reason: "not reproducible, verified twice" });
+    expect(setFindingDecision(db, { findingId: 1, status: "acknowledged" }).decision!.reason).toBeNull();
+  });
   it("recordVerification with an identical status, note and file writes nothing", () => {
     recordVerification(db, { findingId: 1, status: "supported", note: "first" });
     const f = recordVerification(db, { findingId: 1, status: "supported", note: "first" });
@@ -241,5 +255,20 @@ describe("applyProposal", () => {
     expect(() => applyProposal(db, { findingId: 1, severity: "low", status: "confirmed", reason: "a reason that is long enough", conversationId: "c" })).toThrow();
     expect(db.exec("SELECT severity FROM review_findings WHERE id = 1")[0]!.values[0]![0]).toBe("high");
     expect(getFindingRevisions(db, 1)).toEqual([]);
+  });
+});
+
+describe("retired findings", () => {
+  beforeEach(() => {
+    db.run("UPDATE review_findings SET retired_at = datetime('now') WHERE id = 1");
+  });
+  const retired = { code: "retired" };
+  it("cannot be decided, revised, verified or targeted by a proposal", () => {
+    expect(() => setFindingDecision(db, { findingId: 1, status: "confirmed" })).toThrow(expect.objectContaining(retired));
+    expect(() => reviseFinding(db, { findingId: 1, field: "severity", value: "low", reason: "r", source: "user" })).toThrow(expect.objectContaining(retired));
+    expect(() => recordVerification(db, { findingId: 1, status: "supported", note: "n" })).toThrow(expect.objectContaining(retired));
+    expect(() => applyProposal(db, { findingId: 1, status: "confirmed", reason: "x".repeat(25), conversationId: "c" })).toThrow(expect.objectContaining(retired));
+    expect(getFindingRevisions(db, 1)).toEqual([]);
+    expect(getFinding(db, 1)!.decision).toBeNull();
   });
 });

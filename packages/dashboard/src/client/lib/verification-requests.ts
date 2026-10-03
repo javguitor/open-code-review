@@ -15,7 +15,45 @@ export type VerificationRequests = {
 
 export const NO_VERIFICATION_REQUESTS: VerificationRequests = { pending: [], errors: {} }
 
-const VERIFY_COMMAND = /^(?:ocr\s+)?verify\s+(\d+)\s*$/
+const VERIFY_COMMAND = /^(?:ocr\s+)?verify(?:\s+([1-9]\d*))?\s*$/
+
+/**
+ * Finding id of a `verify <id>` command, or null when it is anything else. The
+ * id may sit in the command string (live `command:started`, `verify 7`) or in
+ * `args` (the active-commands list).
+ */
+export function verifyFindingIdOf(command: string, args?: ReadonlyArray<string>): number | null {
+  const match = VERIFY_COMMAND.exec(command)
+  if (!match) return null
+  const raw = match[1] ?? (args?.length === 1 ? args[0] : undefined)
+  return raw !== undefined && /^[1-9]\d*$/.test(raw) ? Number(raw) : null
+}
+
+/** Findings with a `verify` run currently in progress, from the (hydrated + live) command tabs. */
+export function verifyingFindingIds(
+  commands: ReadonlyArray<{ command: string; args?: ReadonlyArray<string>; status: string }>,
+): Set<number> {
+  const ids = new Set<number>()
+  for (const c of commands) {
+    if (c.status !== 'running') continue
+    const id = verifyFindingIdOf(c.command, c.args)
+    if (id !== null) ids.add(id)
+  }
+  return ids
+}
+
+/**
+ * Drops the pending requests whose run is no longer running (a `command:finished`
+ * lost during a disconnect would otherwise block the button for good). Requests
+ * that have not started yet are kept.
+ */
+export function reconcileVerifications(
+  state: VerificationRequests,
+  runningExecutionIds: ReadonlySet<number>,
+): VerificationRequests {
+  const pending = state.pending.filter((p) => p.executionId === null || runningExecutionIds.has(p.executionId))
+  return pending.length === state.pending.length ? state : { ...state, pending }
+}
 
 export function requestVerification(state: VerificationRequests, findingId: number): VerificationRequests {
   if (state.pending.some((p) => p.findingId === findingId)) return state
@@ -24,10 +62,9 @@ export function requestVerification(state: VerificationRequests, findingId: numb
   return { pending: [...state.pending, { findingId, executionId: null }], errors }
 }
 
-export function verificationStarted(state: VerificationRequests, executionId: number, command: string): VerificationRequests {
-  const id = VERIFY_COMMAND.exec(command)?.[1]
-  if (id === undefined) return state
-  const findingId = Number(id)
+export function verificationStarted(state: VerificationRequests, executionId: number, command: string, args?: ReadonlyArray<string>): VerificationRequests {
+  const findingId = verifyFindingIdOf(command, args)
+  if (findingId === null) return state
   let claimed = false
   const pending = state.pending.map((p) => {
     if (claimed || p.findingId !== findingId || p.executionId !== null) return p

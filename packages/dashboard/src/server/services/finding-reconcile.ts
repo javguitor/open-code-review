@@ -33,6 +33,7 @@ type ExistingRow = {
   title: string
   filePath: string | null
   lineStart: number | null
+  retired: boolean
   revisedSeverity: boolean
   revisedCategory: boolean
   /**
@@ -56,7 +57,7 @@ const weakKey = (title: string, file: string | null): string => `${norm(title)}|
 
 function loadExisting(db: Database, outputId: number): ExistingRow[] {
   const res = db.exec(
-    `SELECT rf.id, rf.title, rf.file_path, rf.line_start,
+    `SELECT rf.id, rf.title, rf.file_path, rf.line_start, rf.retired_at IS NOT NULL,
             EXISTS (SELECT 1 FROM finding_revisions fr WHERE fr.finding_id = rf.id AND fr.field = 'severity'),
             EXISTS (SELECT 1 FROM finding_revisions fr WHERE fr.finding_id = rf.id AND fr.field = 'category'),
             EXISTS (SELECT 1 FROM finding_revisions fr WHERE fr.finding_id = rf.id AND fr.field != 'status')
@@ -70,36 +71,46 @@ function loadExisting(db: Database, outputId: number): ExistingRow[] {
     title: r[1] as string,
     filePath: r[2] as string | null,
     lineStart: r[3] as number | null,
-    revisedSeverity: r[4] === 1,
-    revisedCategory: r[5] === 1,
-    hasHistory: r[6] === 1,
+    retired: r[4] === 1,
+    revisedSeverity: r[5] === 1,
+    revisedCategory: r[6] === 1,
+    hasHistory: r[7] === 1,
   }))
 }
 
+const lineDistance = (a: number | null, b: number | null): number =>
+  a === null && b === null ? 0 : a === null || b === null ? Infinity : Math.abs(a - b)
+
 /**
- * Pair each incoming finding with an existing row: exact key first, then title+file.
+ * Pair each incoming finding with an existing row. Strong key (title+file+line)
+ * first, over live and retired rows alike. Then title+file over LIVE rows only
+ * (a retired row never comes back through the weak key), taking the candidate
+ * whose line is closest; a tie that cannot be resolved matches nothing, so a new
+ * row is inserted. When in doubt, human state does not move to another finding.
  * Deliberately no similarity pass: a rephrased finding is a new finding.
  */
 function matchRows(existing: ExistingRow[], incoming: IncomingFinding[]): Map<number, ExistingRow> {
   const matches = new Map<number, ExistingRow>()
   const used = new Set<number>()
-  const pass = (keyOf: (e: ExistingRow) => string, keyOfIncoming: (f: IncomingFinding) => string): void => {
-    const pool = new Map<string, ExistingRow[]>()
-    for (const e of existing) {
-      if (used.has(e.id)) continue
-      const k = keyOf(e)
-      pool.set(k, [...(pool.get(k) ?? []), e])
-    }
-    incoming.forEach((f, i) => {
-      if (matches.has(i)) return
-      const candidate = pool.get(keyOfIncoming(f))?.shift()
-      if (!candidate) return
-      matches.set(i, candidate)
-      used.add(candidate.id)
-    })
+  const claim = (i: number, row: ExistingRow): void => {
+    matches.set(i, row)
+    used.add(row.id)
   }
-  pass((e) => strongKey(e.title, e.filePath, e.lineStart), (f) => strongKey(f.title, f.filePath, f.lineStart))
-  pass((e) => weakKey(e.title, e.filePath), (f) => weakKey(f.title, f.filePath))
+  incoming.forEach((f, i) => {
+    const key = strongKey(f.title, f.filePath, f.lineStart)
+    const row = existing.find((e) => !used.has(e.id) && strongKey(e.title, e.filePath, e.lineStart) === key)
+    if (row) claim(i, row)
+  })
+  incoming.forEach((f, i) => {
+    if (matches.has(i)) return
+    const key = weakKey(f.title, f.filePath)
+    const candidates = existing.filter((e) => !e.retired && !used.has(e.id) && weakKey(e.title, e.filePath) === key)
+    if (candidates.length === 0) return
+    const dist = candidates.map((e) => lineDistance(e.lineStart, f.lineStart))
+    const best = Math.min(...dist)
+    const closest = candidates.filter((_, k) => dist[k] === best)
+    if (closest.length === 1) claim(i, closest[0]!)
+  })
   return matches
 }
 

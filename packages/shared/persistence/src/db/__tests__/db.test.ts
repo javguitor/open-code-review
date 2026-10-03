@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
@@ -297,6 +297,17 @@ describe("ensureDatabase", () => {
     const result = ensuredDb.exec("SELECT COUNT(*) FROM schema_version");
     expect(result[0]?.values[0]?.[0]).toBeGreaterThanOrEqual(1);
 
+    ensuredDb.close();
+  });
+
+  it("never creates a database inside a PR worktree: it opens the main checkout's", async () => {
+    closeAllDatabases();
+    const mainOcr = join(tmpDir, "proj", ".ocr");
+    const wtOcr = join(mainOcr, "worktrees", "pr-9", ".ocr");
+    mkdirSync(wtOcr, { recursive: true });
+    const ensuredDb = await ensureDatabase(wtOcr);
+    expect(existsSync(join(mainOcr, "data", "ocr.db"))).toBe(true);
+    expect(existsSync(join(wtOcr, "data"))).toBe(false);
     ensuredDb.close();
   });
 });

@@ -14,6 +14,7 @@ import { readFileSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { Server as SocketIOServer, Socket } from 'socket.io'
 import type { Database } from '@open-code-review/persistence'
+import { isActionable } from '@open-code-review/persistence/finding-rules'
 import type { SessionCaptureService } from '../services/capture/session-capture-service.js'
 import {
   AiCliService,
@@ -151,9 +152,28 @@ export function registerCommandHandlers(
       }
 
       // Unknown finding id: refuse before an execution row exists.
-      if (baseCommand === 'verify' && !getFinding(db, Number(subArgs[0]))) {
-        emitError({ error: `Finding ${subArgs[0]} not found` })
-        return
+      if (baseCommand === 'verify') {
+        const target = getFinding(db, Number(subArgs[0]))
+        if (!target) {
+          emitError({ error: `Finding ${subArgs[0]} not found` })
+          return
+        }
+        if (!isActionable(target)) {
+          emitError({ error: `Finding ${subArgs[0]} is retired and cannot be verified` })
+          return
+        }
+      }
+
+      // One verification per finding at a time: a second agent would write the same verification file.
+      if (baseCommand === 'verify') {
+        const running = [...activeCommands.values()].some((e) => {
+          const [cmd, ...args] = shellSplit(e.commandStr.replace(/^ocr\s+/, ''))
+          return cmd === 'verify' && args[0] === subArgs[0]
+        })
+        if (running) {
+          emitError({ error: `A verification of finding ${subArgs[0]} is already running` })
+          return
+        }
       }
 
       // Guard AI commands — require an available AI CLI

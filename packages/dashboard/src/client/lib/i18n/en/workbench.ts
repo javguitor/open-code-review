@@ -15,6 +15,7 @@ const workbench = {
   'workbench.file_findings_one': '{count} finding',
   'workbench.file_findings_other': '{count} findings',
   'workbench.file_retired': '{count} retired',
+  'workbench.retired_no_actions': 'This finding is retired: no decision, verification or question applies to it',
   'workbench.retired': 'retired (no longer in the synthesis)',
   'workbench.verification_failed': 'Verification failed: {error}',
   'workbench.worst_state': 'Worst open state: {state}',

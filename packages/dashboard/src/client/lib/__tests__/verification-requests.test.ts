@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   NO_VERIFICATION_REQUESTS,
+  reconcileVerifications,
   requestVerification,
+  verifyFindingIdOf,
+  verifyingFindingIds,
   verificationFinished,
   verificationRefused,
   verificationStarted,
@@ -40,5 +43,39 @@ describe('verification requests', () => {
     s = verificationRefused(s, 'Finding 2 not found', 2)
     expect(s.pending.map((p) => p.findingId)).toEqual([1])
     expect(s.errors[2]).toBe('Finding 2 not found')
+  })
+})
+
+describe('verify in progress from the command tabs', () => {
+  it('reads the finding id from the command or from args, and rejects anything else', () => {
+    expect(verifyFindingIdOf('verify 7')).toBe(7)
+    expect(verifyFindingIdOf('ocr verify 7')).toBe(7)
+    expect(verifyFindingIdOf('verify', ['7'])).toBe(7)
+    expect(verifyFindingIdOf('verify 0')).toBeNull()
+    expect(verifyFindingIdOf('verify', [])).toBeNull()
+    expect(verifyFindingIdOf('verify', ['7', '8'])).toBeNull()
+    expect(verifyFindingIdOf('verify 7 8')).toBeNull()
+    expect(verifyFindingIdOf('review')).toBeNull()
+  })
+
+  it('lists only the findings of running verify tabs', () => {
+    const ids = verifyingFindingIds([
+      { command: 'verify 7', status: 'running' },
+      { command: 'verify', args: ['9'], status: 'running' },
+      { command: 'verify 3', status: 'complete' },
+      { command: 'review', status: 'running' },
+    ])
+    expect([...ids].sort()).toEqual([7, 9])
+  })
+
+  it('reconcile drops started requests whose run is gone and keeps unstarted ones', () => {
+    let s = requestVerification(NO_VERIFICATION_REQUESTS, 1)
+    s = requestVerification(s, 2)
+    s = requestVerification(s, 3)
+    s = verificationStarted(s, 10, 'verify 1')
+    s = verificationStarted(s, 11, 'verify', ['2'])
+    const next = reconcileVerifications(s, new Set([11]))
+    expect(next.pending.map((p) => p.findingId)).toEqual([2, 3])
+    expect(reconcileVerifications(next, new Set([11]))).toBe(next)
   })
 })

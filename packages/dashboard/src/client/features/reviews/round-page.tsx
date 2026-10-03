@@ -23,6 +23,7 @@ import { ChatPanel } from '../chat/components/chat-panel'
 import { takeChatPrefill } from '../chat/prefill'
 import type { ProposalFindingInfo } from '../chat/types'
 import { currentStatus } from './decisions'
+import { isLive, liveCount } from '../../lib/live-findings'
 import { PostReviewDialog } from './components/post-review-dialog'
 import { AddressFeedbackPopover } from './components/address-feedback-popover'
 import { TerminalHandoffPanel } from '../sessions/components/terminal-handoff-panel'
@@ -89,7 +90,8 @@ export function RoundPage() {
 
   const proposalFindings = useMemo<ProposalFindingInfo[]>(
     () =>
-      (findings ?? []).filter((f) => !f.retired_at).map((f) => ({
+      (findings ?? []).map((f) => ({
+        retired: !isLive(f),
         id: f.id,
         title: f.title,
         severity: f.severity,
@@ -317,7 +319,7 @@ export function RoundPage() {
           a deliberate "clean" outcome rather than a missing section. */}
       <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
         <h2 className="mb-4 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          {findings ? t('reviews.findings_count', { count: findings.filter((f) => !f.retired_at).length }) : t('reviews.findings')}
+          {findings ? t('reviews.findings_count', { count: liveCount(findings) }) : t('reviews.findings')}
         </h2>
         <FindingsTable findings={findings ?? []} isLoading={findingsLoading} />
       </div>

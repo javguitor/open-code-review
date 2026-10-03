@@ -15,6 +15,7 @@ import {
   MIN_DECISION_REASON_LENGTH,
   PROPOSAL_MIN_REASON_LENGTH,
   PROPOSAL_STATUSES,
+  isActionable,
   reasonProblem,
 } from "../finding-rules.js";
 
@@ -81,7 +82,7 @@ export type FindingRevisionRow = {
 
 export class FindingError extends Error {
   constructor(
-    readonly code: "not-found" | "invalid-value" | "reason-required" | "reason-too-short",
+    readonly code: "not-found" | "invalid-value" | "reason-required" | "reason-too-short" | "retired",
     message: string,
   ) {
     super(message);
@@ -153,6 +154,15 @@ function requireFinding(db: Database, id: number): FindingRow {
   return finding;
 }
 
+/** A retired finding left the synthesis: it cannot be decided, revised, verified or targeted by a proposal. */
+function requireActionable(db: Database, id: number): FindingRow {
+  const finding = requireFinding(db, id);
+  if (!isActionable(finding)) {
+    throw new FindingError("retired", `Finding ${id} is retired (it left the synthesis) and can no longer be changed`);
+  }
+  return finding;
+}
+
 function insertRevision(
   db: Database,
   r: {
@@ -189,7 +199,7 @@ export function reviseFinding(db: Database, p: ReviseFindingParams): FindingRow 
   const source = oneOf(FINDING_REVISION_SOURCES, p.source, "source");
 
   return db.transaction(() => {
-    requireFinding(db, p.findingId);
+    requireActionable(db, p.findingId);
     reviseField(db, p.findingId, field, value, reason, source, p.conversationId);
     return requireFinding(db, p.findingId);
   });
@@ -236,11 +246,13 @@ export type SetFindingDecisionParams = {
 /** Record a human decision (upsert into user_finding_progress) and log it, atomically. */
 export function setFindingDecision(db: Database, p: SetFindingDecisionParams): FindingRow {
   const status = oneOf(FINDING_DECISION_STATUSES, p.status, "status");
-  const reason = validDecisionReason(status, p.reason);
 
   return db.transaction(() => {
-    requireFinding(db, p.findingId);
-    decideField(db, p.findingId, status, reason, "user");
+    const current = requireActionable(db, p.findingId);
+    // An absent reason means "keep": repeating a status must not erase the stored justification.
+    const blank = !p.reason?.trim();
+    if (blank && (current.decision?.status ?? "unread") === status) return current;
+    decideField(db, p.findingId, status, validDecisionReason(status, p.reason), "user");
     return requireFinding(db, p.findingId);
   });
 }
@@ -299,7 +311,7 @@ export function recordVerification(db: Database, p: RecordVerificationParams): F
   const note = requireNonEmpty(p.note, "note");
 
   return db.transaction(() => {
-    const current = requireFinding(db, p.findingId);
+    const current = requireActionable(db, p.findingId);
     // A re-run with the same verdict still records a new note/file; only an
     // identical (status, note, file) triple is a no-op.
     if (
@@ -354,7 +366,7 @@ export function applyProposal(db: Database, p: ApplyProposalParams): FindingRow 
   const decisionReason = status === undefined ? null : validDecisionReason(status, reason);
 
   return db.transaction(() => {
-    requireFinding(db, p.findingId);
+    requireActionable(db, p.findingId);
     if (severity !== undefined) reviseField(db, p.findingId, "severity", severity, reason, "chat", conversationId);
     if (category !== undefined) reviseField(db, p.findingId, "category", category, reason, "chat", conversationId);
     if (status !== undefined) decideField(db, p.findingId, status, decisionReason, "chat", conversationId);

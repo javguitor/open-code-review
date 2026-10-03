@@ -79,6 +79,19 @@ The dashboard SHALL record human decisions per finding with a reason, and SHALL 
 - **WHEN** the workbench renders a finding
 - **THEN** no action applies code changes; the primary actions are Confirm, Dismiss with reason, Mark fixed and Request verification
 
+#### Scenario: Verdict after decisions
+
+- **GIVEN** a round with a synthesis verdict
+- **WHEN** no live finding has a resolving decision (dismissed, wont_fix, fixed) or a category revised away from the synthesis
+- **THEN** the verdict after decisions equals the synthesis verdict
+- **AND** otherwise it is REQUEST CHANGES while any live blocker stays open, else APPROVE, except that NEEDS DISCUSSION is never turned into APPROVE
+
+#### Scenario: Retired findings in the workbench
+
+- **GIVEN** a finding that left the synthesis and was kept as retired
+- **WHEN** the workbench or round page renders
+- **THEN** it is shown greyed with a "retired" badge, excluded from every count and from keyboard navigation, and offers no decision, verification, "Ask about this finding" or chat proposal Apply
+
 ### Requirement: Chat Proposals
 
 Ask the Team answers MAY propose a change to a finding; the dashboard SHALL render proposals as cards that the user applies or discards, and SHALL never apply them automatically.
@@ -109,11 +122,3 @@ The dashboard SHALL let the user request verification of a finding and show the 
 - **WHEN** the user clicks "Request verification"
 - **THEN** the `verify <finding-id>` command runs as a tracked execution visible in Commands
 - **AND** when it completes, the finding shows `reproduced`, `supported`, `pending` or `dismissed` with the verifier's note and a link to the verification file
-
-#### Scenario: Verdict after decisions
-
-- **GIVEN** a round with a synthesis verdict
-- **WHEN** no finding has a final decision
-- **THEN** the verdict after decisions equals the synthesis verdict
-- **AND** once a final decision exists it is REQUEST CHANGES while any non-retired blocker stays open, otherwise APPROVE, except that NEEDS DISCUSSION is never turned into APPROVE
-

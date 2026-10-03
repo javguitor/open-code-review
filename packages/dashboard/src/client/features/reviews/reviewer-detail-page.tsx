@@ -8,6 +8,7 @@ import type { Artifact } from '../../lib/api-types'
 import { fetchApi } from '../../lib/utils'
 import { REVIEWER_ICONS } from './constants'
 import { useT } from '../../lib/i18n'
+import { liveCount } from '../../lib/live-findings'
 
 export function ReviewerDetailPage() {
   const { t } = useT()
@@ -114,7 +115,7 @@ export function ReviewerDetailPage() {
       {reviewer.findings.length > 0 && (
         <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-4 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            {t('reviews.findings_count', { count: reviewer.findings.length })}
+            {t('reviews.findings_count', { count: liveCount(reviewer.findings) })}
           </h2>
           <FindingsTable findings={reviewer.findings} />
         </div>

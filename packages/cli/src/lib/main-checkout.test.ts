@@ -19,42 +19,53 @@ describe("resolveMainCheckout", () => {
     expect(resolveMainCheckout(root)).toBe(root);
   });
 
-  it("maps a linked worktree (and its subdirectories) to the main checkout", () => {
+  function mainWithWorktree(rel = join(".ocr", "worktrees", "pr-1")): { main: string; wt: string } {
     root = realpathSync(makeTempWorkspace("ocr-main-checkout-"));
     const main = join(root, "main");
     mkdirSync(main);
     git(main, "init", "-q");
     git(main, "commit", "-q", "--allow-empty", "-m", "init");
-    const wt = join(root, "wt");
+    const wt = join(main, rel);
     git(main, "worktree", "add", "-q", wt, "-b", "pr");
+    return { main, wt };
+  }
+
+  it("maps a PR worktree (and its subdirectories) to the main checkout", () => {
+    const { main, wt } = mainWithWorktree();
     mkdirSync(join(wt, "sub"));
     expect(resolveMainCheckout(wt)).toBe(main);
     expect(resolveMainCheckout(join(wt, "sub"))).toBe(main);
     expect(resolveMainCheckout(main)).toBe(main);
   });
 
-  function mainWithWorktree(): { main: string; wt: string } {
+  it("keeps remapping after a command created .ocr/data/ocr.db inside the PR worktree", () => {
+    const { main, wt } = mainWithWorktree();
+    mkdirSync(join(wt, ".ocr", "data"), { recursive: true });
+    writeFileSync(join(wt, ".ocr", "data", "ocr.db"), "");
+    expect(resolveMainCheckout(wt)).toBe(main);
+  });
+
+  it("honours a custom worktrees.dir from the main checkout's config", () => {
+    root = realpathSync(makeTempWorkspace("ocr-main-checkout-"));
+    const main = join(root, "main");
+    mkdirSync(join(main, ".ocr"), { recursive: true });
+    writeFileSync(join(main, ".ocr", "config.yaml"), "worktrees:\n  dir: ../prs\n");
+    git(main, "init", "-q");
+    git(main, "commit", "-q", "--allow-empty", "-m", "init");
+    const wt = join(root, "prs", "pr-2");
+    git(main, "worktree", "add", "-q", wt, "-b", "pr");
+    expect(resolveMainCheckout(wt)).toBe(main);
+  });
+
+  it("keeps cwd for a linked worktree that is not an OCR PR worktree", () => {
     root = realpathSync(makeTempWorkspace("ocr-main-checkout-"));
     const main = join(root, "main");
     mkdirSync(main);
     git(main, "init", "-q");
     git(main, "commit", "-q", "--allow-empty", "-m", "init");
     const wt = join(root, "wt");
-    git(main, "worktree", "add", "-q", wt, "-b", "pr");
-    return { main, wt };
-  }
-
-  it("keeps a linked worktree that has its own .ocr/data/ocr.db", () => {
-    const { wt } = mainWithWorktree();
-    mkdirSync(join(wt, ".ocr", "data"), { recursive: true });
-    writeFileSync(join(wt, ".ocr", "data", "ocr.db"), "");
+    git(main, "worktree", "add", "-q", wt, "-b", "feature");
     expect(resolveMainCheckout(wt)).toBe(wt);
-  });
-
-  it("remaps a worktree with a versioned .ocr/ but no data/ to the main checkout", () => {
-    const { main, wt } = mainWithWorktree();
-    mkdirSync(join(wt, ".ocr"), { recursive: true });
-    expect(resolveMainCheckout(wt)).toBe(main);
   });
 
   it("falls back to cwd when the main git dir is separate (--separate-git-dir): the checkout is not locatable", () => {

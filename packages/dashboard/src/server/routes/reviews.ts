@@ -101,6 +101,7 @@ export type RoundVerdictSummary = {
 function summarizeRound(round: ReviewRoundRow, views: FindingView[]): RoundVerdictSummary {
   const input = views.filter((v) => v.retired_at === null).map((v) => ({
     category: v.category,
+    synthesis_category: v.synthesis_category,
     severity: v.severity,
     is_blocker: v.is_blocker,
     decision_status: v.decision?.status ?? null,

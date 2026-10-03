@@ -48,6 +48,8 @@ export type ProposalFindingInfo = {
   severity: string
   category: string | null
   status: string
+  /** Left the synthesis: nothing can be applied to it. */
+  retired?: boolean
 }
 
 export type ProposalChange = { field: 'severity' | 'category' | 'status'; from: string | null; to: string }

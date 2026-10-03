@@ -116,4 +116,12 @@ describe('chat proposals', () => {
     expect(done.proposals).toEqual([ok])
     expect(JSON.parse(storedJson())).toEqual([ok])
   })
+
+  it('does not list retired findings and rejects proposals that target them', async () => {
+    db.run("INSERT INTO review_findings (reviewer_output_id, title, severity, category, retired_at) VALUES (1, 'Old gone', 'low', 'suggestion', datetime('now'))")
+    const done = await chat(block({ finding_id: 2, status: 'fixed', reason: REASON }))
+    expect(prompts[0]).toContain('- 1: Null deref')
+    expect(prompts[0]).not.toContain('Old gone')
+    expect(done.proposals).toEqual([])
+  })
 })

@@ -1,4 +1,5 @@
 import { HINT_MIN_SIMILARITY, titleSimilarity } from '@open-code-review/persistence/finding-rules'
+import { isLive } from './live-findings'
 import type {
   DecisionStatus,
   DiffFile,
@@ -107,7 +108,7 @@ export function buildFileEntries(
     extra: Pick<FileEntry, 'status' | 'additions' | 'deletions' | 'inDiff'>,
   ): FileEntry => {
     const sorted = [...list].sort(byLine)
-    const active = sorted.filter((f) => !f.retired_at)
+    const active = sorted.filter(isLive)
     return { key: path ?? GENERAL_KEY, path, findings: sorted, activeCount: active.length, worst: worstDecisionState(active), ...extra }
   }
 
@@ -133,7 +134,7 @@ export function buildFileEntries(
 
 /** Finding ids in the order the file list shows them (the order j/k walks); retired findings are skipped. */
 export function orderedFindingIds(entries: ReadonlyArray<FileEntry>): number[] {
-  return entries.flatMap((e) => e.findings.filter((f) => !f.retired_at).map((f) => f.id))
+  return entries.flatMap((e) => e.findings.filter(isLive).map((f) => f.id))
 }
 
 export function rowKey(hunkIndex: number, lineIndex: number): string {
@@ -271,7 +272,7 @@ export function alsoReportedBy(
   return all.filter(
     (o) =>
       o.id !== finding.id &&
-      !o.retired_at &&
+      isLive(o) &&
       !!o.file_path &&
       normalizePath(o.file_path) === path &&
       (titleSimilarity(o.title, finding.title) >= ALSO_REPORTED_MIN_SIMILARITY || linesOverlap(o, finding)),

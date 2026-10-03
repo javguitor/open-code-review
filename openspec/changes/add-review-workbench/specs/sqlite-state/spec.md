@@ -2,12 +2,12 @@
 
 ### Requirement: Finding Provenance, Verification and Revisions
 
-The database SHALL store who flagged each finding, its evidence, its verification outcome, human decisions with reasons, and an audit log of every change to a finding (migration 16).
+The database SHALL store who flagged each finding, its evidence, its verification outcome, human decisions with reasons, and an audit log of every change to a finding (migrations 17 and 18).
 
 #### Scenario: Migration preserves decisions
 
-- **GIVEN** a v15 database with `user_finding_progress` rows
-- **WHEN** migration 16 rebuilds the table with the widened status set and the `reason`/`decided_at` columns
+- **GIVEN** a v16 database with `user_finding_progress` rows
+- **WHEN** migration 17 rebuilds the table with the widened status set and the `reason`/`decided_at` columns
 - **THEN** every existing row keeps its `finding_id` and `status`, and `UNIQUE(finding_id)` still holds
 
 #### Scenario: Revision log

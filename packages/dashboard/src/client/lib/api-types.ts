@@ -300,7 +300,8 @@ export type ModelListResponse = {
 }
 
 export type ReviewerOutputDetail = ReviewerOutput & {
-  findings: Finding[]
+  /** Rows carry `retired_at` (server `buildFindingViews`); retired ones are not counted. */
+  findings: Array<Finding & { retired_at?: string | null }>
 }
 
 export type Artifact = {

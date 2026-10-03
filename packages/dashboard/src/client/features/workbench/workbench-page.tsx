@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react'
 import { useT } from '../../lib/i18n'
 import { cn } from '../../lib/utils'
 import { useSocket, useSocketEvent } from '../../providers/socket-provider'
+import { useCommandState } from '../../providers/command-state-provider'
 import { useSessionRoom } from '../../hooks/use-session-room'
 import {
   NO_VERIFICATION_REQUESTS,
@@ -12,8 +13,11 @@ import {
   verificationFinished,
   verificationRefused,
   verificationStarted,
+  reconcileVerifications,
+  verifyingFindingIds,
 } from '../../lib/verification-requests'
 import { useRound } from '../reviews/hooks/use-reviews'
+import { isLive } from '../../lib/live-findings'
 import type { DecisionStatus, DiffFile, FindingView } from '../../lib/api-types'
 import {
   GENERAL_KEY,
@@ -47,7 +51,7 @@ function Chip({ children }: { children: React.ReactNode }) {
 
 /** First finding still in the synthesis, else the first one (a file whose findings all retired). */
 function firstActive(list: FindingView[] | undefined): FindingView | undefined {
-  return list?.find((f) => !f.retired_at) ?? list?.[0]
+  return list?.find(isLive) ?? list?.[0]
 }
 
 function locationOf(f: FindingView): string {
@@ -75,6 +79,15 @@ export function WorkbenchPage() {
   const [verifications, setVerifications] = useState(NO_VERIFICATION_REQUESTS)
   useSessionRoom(sessionId)
 
+  // Verify runs in progress, hydrated from the server and kept live by the socket,
+  // so reloading or navigating away and back does not re-enable the button.
+  const { tabs } = useCommandState()
+  const verifying = useMemo(() => verifyingFindingIds(tabs), [tabs])
+  useEffect(() => {
+    const running = new Set(tabs.filter((t) => t.status === 'running').map((t) => t.executionId))
+    setVerifications((s) => reconcileVerifications(s, running))
+  }, [tabs])
+
   const refresh = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['sessions', sessionId, 'rounds', roundNumber] })
     queryClient.invalidateQueries({ queryKey: ['findings'] })
@@ -87,8 +100,8 @@ export function WorkbenchPage() {
 
   // `verify <id>` runs are matched to their finding by execution id: these events
   // are global, so another command ending must not release a pending request.
-  useSocketEvent<{ execution_id: number; command: string }>('command:started', (evt) => {
-    setVerifications((s) => verificationStarted(s, evt.execution_id, evt.command))
+  useSocketEvent<{ execution_id: number; command: string; args?: string[] }>('command:started', (evt) => {
+    setVerifications((s) => verificationStarted(s, evt.execution_id, evt.command, evt.args))
   })
   useSocketEvent<{ execution_id: number }>('command:finished', (evt) => {
     setVerifications((s) => verificationFinished(s, evt.execution_id))
@@ -141,7 +154,7 @@ export function WorkbenchPage() {
 
   const changeDecision = useCallback(
     (status: DecisionStatus, reason?: string) => {
-      if (!selected) return
+      if (!selected || !isLive(selected)) return
       decide.mutate({ findingId: selected.id, status, reason }, { onSuccess: () => setDialog(null) })
     },
     [decide, selected],
@@ -172,7 +185,7 @@ export function WorkbenchPage() {
       if (action === 'next' || action === 'prev') {
         const next = stepFinding(orderedIds, selected?.id ?? null, action === 'next' ? 1 : -1)
         if (next !== null) selectFinding(next)
-      } else if (selected) {
+      } else if (selected && isLive(selected)) {
         if (action === 'dismiss') openDialog('dismissed')
         else changeDecision(action === 'confirm' ? 'confirmed' : 'fixed')
       }
@@ -183,7 +196,7 @@ export function WorkbenchPage() {
   }, [dialog, orderedIds, selected, selectFinding, changeDecision, openDialog])
 
   const requestVerification = () => {
-    if (!selected) return
+    if (!selected || !isLive(selected) || verifying.has(selected.id)) return
     socket?.emit('command:run', { command: `verify ${selected.id}` })
     setVerifications((s) => addRequest(s, selected.id))
   }
@@ -328,7 +341,7 @@ export function WorkbenchPage() {
                 alsoReportedBy={alsoReported}
                 onSelectFinding={selectFinding}
                 isDeciding={decide.isPending}
-                verificationRequested={verifications.pending.some((p) => p.findingId === selected.id)}
+                verificationRequested={verifying.has(selected.id) || verifications.pending.some((p) => p.findingId === selected.id)}
                 verificationError={verifications.errors[selected.id] ?? null}
                 onConfirm={() => changeDecision('confirmed')}
                 onDismiss={() => openDialog('dismissed')}

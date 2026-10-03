@@ -10,6 +10,7 @@ import type { ChildProcess } from 'node:child_process'
 import { dirname } from 'node:path'
 import type { Server as SocketIOServer, Socket } from 'socket.io'
 import type { Database } from '@open-code-review/persistence'
+import { isActionable } from '@open-code-review/persistence/finding-rules'
 import {
   getConversation,
   getFindingsForRound,
@@ -92,7 +93,7 @@ function resetIdleTimer(
 /** Finding ids + titles of a review round (empty for map runs or unknown rounds). */
 function roundFindings(db: Database, sessionId: string, roundNumber: number): { id: number; title: string }[] {
   const round = getRound(db, sessionId, roundNumber)
-  return round ? getFindingsForRound(db, round.id).map((f) => ({ id: f.id, title: f.title })) : []
+  return round ? getFindingsForRound(db, round.id).filter(isActionable).map((f) => ({ id: f.id, title: f.title })) : []
 }
 
 /**

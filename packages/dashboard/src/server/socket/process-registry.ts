@@ -76,6 +76,7 @@ export function getRunningCount(): number {
 export type ActiveCommandInfo = {
   execution_id: number
   command: string
+  args: string[]
   started_at: string
   output: string
 }
@@ -87,6 +88,7 @@ export function getActiveCommands(): ActiveCommandInfo[] {
   return Array.from(activeCommands.values()).map((entry) => ({
     execution_id: entry.executionId,
     command: entry.commandStr,
+    args: JSON.parse(entry.argsJson) as string[],
     started_at: entry.startedAt,
     output: entry.outputBuffer,
   }))

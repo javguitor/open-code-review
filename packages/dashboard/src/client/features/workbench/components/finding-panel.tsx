@@ -5,6 +5,7 @@ import { formatDateTime } from '../../../lib/date-utils'
 import { StatusBadge } from '../../../components/ui/status-badge'
 import type { FindingRevision, FindingView } from '../../../lib/api-types'
 import { decisionStatusOf } from '../../../lib/workbench'
+import { isLive } from '../../../lib/live-findings'
 import { decisionLabelKey, verificationLabelKey } from '../labels'
 import { NotesPanel } from '../../notes/components/notes-panel'
 import { useFindingDetail } from '../hooks/use-workbench'
@@ -78,6 +79,7 @@ export function FindingPanel(props: FindingPanelProps) {
   const { finding, isDeciding, verificationRequested } = props
   const { t } = useT()
   const { data: detail } = useFindingDetail(finding.id)
+  const live = isLive(finding)
   const decision = decisionStatusOf(finding)
   const previous = finding.previous_round_decision
   const severityRevised = finding.synthesis_severity !== finding.severity
@@ -181,10 +183,12 @@ export function FindingPanel(props: FindingPanelProps) {
         ) : (
           <p className="text-xs text-zinc-500 dark:text-zinc-400">{t('workbench.verification_none')}</p>
         )}
-        <button type="button" onClick={props.onRequestVerification} disabled={verificationRequested} className={BUTTON}>
-          <ShieldCheck className="h-3.5 w-3.5" />
-          {t('workbench.request_verification')}
-        </button>
+        {live && (
+          <button type="button" onClick={props.onRequestVerification} disabled={verificationRequested} className={BUTTON}>
+            <ShieldCheck className="h-3.5 w-3.5" />
+            {t('workbench.request_verification')}
+          </button>
+        )}
         {props.verificationError && (
           <p role="alert" className="text-xs text-red-600 dark:text-red-400">
             {t('workbench.verification_failed', { error: props.verificationError })}
@@ -211,23 +215,27 @@ export function FindingPanel(props: FindingPanelProps) {
               : t('workbench.previous_round', { round: previous.round_number, status: t(decisionLabelKey(previous.status)) })}
           </p>
         )}
-        <div className="flex flex-wrap gap-2">
-          <button type="button" disabled={isDeciding} onClick={props.onConfirm} className={BUTTON}>
-            <Check className="h-3.5 w-3.5" />
-            {t('workbench.confirm')}
-          </button>
-          <button type="button" disabled={isDeciding} onClick={props.onDismiss} className={BUTTON}>
-            <Ban className="h-3.5 w-3.5" />
-            {t('workbench.dismiss')}
-          </button>
-          <button type="button" disabled={isDeciding} onClick={props.onFixed} className={BUTTON}>
-            <Wrench className="h-3.5 w-3.5" />
-            {t('workbench.mark_fixed')}
-          </button>
-          <button type="button" disabled={isDeciding} onClick={props.onWontFix} className={BUTTON}>
-            {t('workbench.wont_fix')}
-          </button>
-        </div>
+        {live ? (
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={isDeciding} onClick={props.onConfirm} className={BUTTON}>
+              <Check className="h-3.5 w-3.5" />
+              {t('workbench.confirm')}
+            </button>
+            <button type="button" disabled={isDeciding} onClick={props.onDismiss} className={BUTTON}>
+              <Ban className="h-3.5 w-3.5" />
+              {t('workbench.dismiss')}
+            </button>
+            <button type="button" disabled={isDeciding} onClick={props.onFixed} className={BUTTON}>
+              <Wrench className="h-3.5 w-3.5" />
+              {t('workbench.mark_fixed')}
+            </button>
+            <button type="button" disabled={isDeciding} onClick={props.onWontFix} className={BUTTON}>
+              {t('workbench.wont_fix')}
+            </button>
+          </div>
+        ) : (
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">{t('workbench.retired_no_actions')}</p>
+        )}
       </Section>
 
       <Section title={t('workbench.revisions')}>
@@ -244,10 +252,12 @@ export function FindingPanel(props: FindingPanelProps) {
 
       <NotesPanel targetType="finding" targetId={String(finding.id)} />
 
-      <button type="button" onClick={props.onAsk} className={BUTTON}>
-        <MessageSquare className="h-3.5 w-3.5" />
-        {t('workbench.ask')}
-      </button>
+      {live && (
+        <button type="button" onClick={props.onAsk} className={BUTTON}>
+          <MessageSquare className="h-3.5 w-3.5" />
+          {t('workbench.ask')}
+        </button>
+      )}
     </div>
   )
 }

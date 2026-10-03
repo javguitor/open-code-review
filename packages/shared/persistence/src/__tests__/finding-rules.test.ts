@@ -4,6 +4,7 @@ import {
   MIN_DECISION_REASON_LENGTH,
   REASON_REQUIRED_STATUSES,
   RESOLVED_DECISIONS,
+  isActionable,
   reasonProblem,
   requiresReason,
 } from "../finding-rules.js";
@@ -25,5 +26,12 @@ describe("finding-rules", () => {
     expect(reasonProblem("dismissed", "  0123456789  ")).toBeNull();
     expect(reasonProblem("confirmed", undefined)).toBeNull();
     expect(reasonProblem("confirmed", "x")).toBeNull();
+  });
+});
+
+describe("isActionable", () => {
+  it("is false only for a retired row", () => {
+    expect(isActionable({ retired_at: null })).toBe(true);
+    expect(isActionable({ retired_at: "2026-10-03 10:00:00" })).toBe(false);
   });
 });

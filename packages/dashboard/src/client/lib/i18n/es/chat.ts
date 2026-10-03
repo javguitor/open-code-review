@@ -18,6 +18,7 @@ const chat = {
   'chat.worktree_missing': 'Worktree eliminado: se responde desde el checkout',
   'chat.worktree_unknown': 'No se ha podido comprobar el worktree: se responde desde el checkout',
   'chat.proposal_title': 'Cambio propuesto para el hallazgo #{id}',
+  'chat.proposal_retired': 'Hallazgo retirado: no aplicable',
   'chat.proposal_unknown_finding': 'Hallazgo no cargado',
   'chat.proposal_field_severity': 'Severidad',
   'chat.proposal_field_category': 'Categoría',

@@ -72,8 +72,24 @@ describe('countCurrent / verdictAfterDecisions', () => {
     expect(verdictAfterDecisions([f(null, null, 'low'), f('blocker', 'acknowledged')], 'REQUEST CHANGES')).toBe('REQUEST CHANGES')
   })
 
-  it('a confirmed decision counts as final', () => {
-    expect(verdictAfterDecisions([f('suggestion', 'confirmed')], 'REQUEST CHANGES')).toBe('APPROVE')
+  it('a confirmed decision alone does not recompute the verdict', () => {
+    expect(verdictAfterDecisions([f('blocker', 'confirmed')], 'REQUEST CHANGES')).toBe('REQUEST CHANGES')
+  })
+
+  const revised = (category: string, synthesis: string, decision: string | null = null) => ({
+    ...f(category, decision), synthesis_category: synthesis,
+  })
+
+  it('A: the only blocker revised to should_fix recomputes to APPROVE with no decision', () => {
+    expect(verdictAfterDecisions([revised('should_fix', 'blocker')], 'REQUEST CHANGES')).toBe('APPROVE')
+  })
+
+  it('B: confirming an unrelated finding does not change the verdict computed after a revision', () => {
+    const rows = [revised('should_fix', 'blocker'), revised('suggestion', 'suggestion')]
+    const before = verdictAfterDecisions(rows, 'REQUEST CHANGES')
+    const after = verdictAfterDecisions([rows[0]!, revised('suggestion', 'suggestion', 'confirmed')], 'REQUEST CHANGES')
+    expect(before).toBe('APPROVE')
+    expect(after).toBe(before)
   })
 
   it('never turns NEEDS DISCUSSION into APPROVE; blockers still force REQUEST CHANGES', () => {

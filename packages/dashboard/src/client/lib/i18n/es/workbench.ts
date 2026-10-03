@@ -15,6 +15,7 @@ const workbench = {
   'workbench.file_findings_one': '{count} hallazgo',
   'workbench.file_findings_other': '{count} hallazgos',
   'workbench.file_retired': '{count} retirados',
+  'workbench.retired_no_actions': 'Este hallazgo está retirado: no admite decisión, verificación ni preguntas',
   'workbench.retired': 'retirado (ya no está en la síntesis)',
   'workbench.verification_failed': 'La verificación falló: {error}',
   'workbench.worst_state': 'Peor estado abierto: {state}',

@@ -3,7 +3,7 @@
  *
  * Lives above the router so running-command state (output, tabs, etc.)
  * survives page navigation. Hydrates from GET /api/commands/active on mount
- * to handle page refreshes mid-command. Supports multiple concurrent
+ * and on every socket connect to handle page refreshes and dropped connections mid-command. Supports multiple concurrent
  * commands, each tracked as a separate tab.
  */
 
@@ -37,6 +37,8 @@ function outcomeToTabStatus(
 export type CommandTab = {
   executionId: number
   command: string
+  /** Arguments as the server parsed them (absent on tabs created before they were sent). */
+  args?: string[]
   /**
    * Legacy human-readable summary stream — populated from the
    * `command:output` socket channel and used by the existing
@@ -60,6 +62,7 @@ type ActiveCommandsResponse = {
   commands: Array<{
     execution_id: number
     command: string
+    args?: string[]
     started_at: string
     output: string
   }>
@@ -80,8 +83,7 @@ const CommandStateContext = createContext<CommandStateContextValue | null>(null)
 export function CommandStateProvider({ children }: { children: ReactNode }) {
   const [tabMap, setTabMap] = useState<Map<number, CommandTab>>(new Map())
   const [activeTabId, setActiveTabId] = useState<number | null>(null)
-  const hydratedRef = useRef(false)
-  const { socket } = useSocket()
+  const { socket, isConnected } = useSocket()
 
   // Derived values
   const tabs = useMemo(() => Array.from(tabMap.values()), [tabMap])
@@ -91,78 +93,93 @@ export function CommandStateProvider({ children }: { children: ReactNode }) {
   )
   const isRunning = useMemo(() => runningCount > 0, [runningCount])
 
-  // Hydrate from server on mount (page refresh mid-command)
+  // Hydrate from the server on mount and again on every socket (re)connect:
+  // events emitted while disconnected (a start, a finish) never arrive, so the
+  // server's list of running commands is the truth to merge with.
+  const tabMapRef = useRef(tabMap)
+  tabMapRef.current = tabMap
+
   useEffect(() => {
-    if (hydratedRef.current) return
-    hydratedRef.current = true
+    // Tabs known before the request: one that starts while it is in flight is not "missing" from the snapshot.
+    const knownBefore = new Set(tabMapRef.current.keys())
+    let cancelled = false
 
     fetchApi<ActiveCommandsResponse>('/api/commands/active')
       .then((data) => {
-        if (data.commands.length > 0) {
-          const nextMap = new Map<number, CommandTab>()
-          let lastId: number | null = null
-
+        if (cancelled) return
+        const serverIds = new Set(data.commands.map((c) => c.execution_id))
+        setTabMap((prev) => {
+          const next = new Map(prev)
+          // A run that ended while we were not listening: outcome unknown.
+          for (const [id, tab] of prev) {
+            if (tab.status === 'running' && knownBefore.has(id) && !serverIds.has(id)) {
+              next.set(id, { ...tab, status: 'incomplete' })
+            }
+          }
           for (const cmd of data.commands) {
-            nextMap.set(cmd.execution_id, {
+            const existing = next.get(cmd.execution_id)
+            next.set(cmd.execution_id, {
               executionId: cmd.execution_id,
               command: cmd.command,
-              output: cmd.output ?? '',
-              events: [],
+              args: cmd.args,
+              output: existing?.output ?? cmd.output ?? '',
+              events: existing?.events ?? [],
               status: 'running',
               exitCode: null,
               startedAt: cmd.started_at,
             })
-            lastId = cmd.execution_id
           }
+          return next
+        })
+        const lastCmd = data.commands[data.commands.length - 1]
+        if (lastCmd) setActiveTabId((current) => current ?? lastCmd.execution_id)
 
-          setTabMap(nextMap)
-          setActiveTabId(lastId)
-
-          // Rehydrate the typed event stream for each running execution —
-          // the live socket subscription only sees events from now forward,
-          // and a page reload mid-run would otherwise show a partial
-          // timeline. Errors are non-fatal: empty `events` falls back to
-          // the legacy line-parser rendering.
-          for (const cmd of data.commands) {
-            fetchApi<CommandEventsResponse>(
-              `/api/commands/${cmd.execution_id}/events`,
-            )
-              .then((eventsResp) => {
-                if (!eventsResp.events || eventsResp.events.length === 0) return
-                setTabMap((prev) => {
-                  const existing = prev.get(cmd.execution_id)
-                  if (!existing) return prev
-                  // Don't clobber events received via the live socket while
-                  // we were fetching — append-with-dedup by seq.
-                  const seenSeqs = new Set(existing.events.map((e) => e.seq))
-                  const merged = [...existing.events]
-                  for (const evt of eventsResp.events) {
-                    if (!seenSeqs.has(evt.seq)) merged.push(evt)
-                  }
-                  merged.sort((a, b) => a.seq - b.seq)
-                  const next = new Map(prev)
-                  next.set(cmd.execution_id, { ...existing, events: merged })
-                  return next
-                })
+        // Rehydrate the typed event stream for each running execution —
+        // the live socket subscription only sees events from now forward,
+        // and a page reload mid-run would otherwise show a partial
+        // timeline. Errors are non-fatal: empty `events` falls back to
+        // the legacy line-parser rendering.
+        for (const cmd of data.commands) {
+          fetchApi<CommandEventsResponse>(`/api/commands/${cmd.execution_id}/events`)
+            .then((eventsResp) => {
+              if (cancelled || !eventsResp.events || eventsResp.events.length === 0) return
+              setTabMap((prev) => {
+                const existing = prev.get(cmd.execution_id)
+                if (!existing) return prev
+                // Don't clobber events received via the live socket while
+                // we were fetching — append-with-dedup by seq.
+                const seenSeqs = new Set(existing.events.map((e) => e.seq))
+                const merged = [...existing.events]
+                for (const evt of eventsResp.events) {
+                  if (!seenSeqs.has(evt.seq)) merged.push(evt)
+                }
+                merged.sort((a, b) => a.seq - b.seq)
+                const next = new Map(prev)
+                next.set(cmd.execution_id, { ...existing, events: merged })
+                return next
               })
-              .catch(() => {
-                /* non-fatal — falls back to legacy rendering */
-              })
-          }
+            })
+            .catch(() => {
+              /* non-fatal — falls back to legacy rendering */
+            })
         }
       })
       .catch(() => {
-        // Non-fatal -- if hydration fails we start with empty state
+        // Non-fatal -- if hydration fails we keep whatever state we have
       })
-  }, [])
+    return () => {
+      cancelled = true
+    }
+  }, [isConnected])
 
   // Socket listeners -- always active regardless of which page is mounted
-  useSocketEvent<{ execution_id: number; command: string; started_at: string }>(
+  useSocketEvent<{ execution_id: number; command: string; args?: string[]; started_at: string }>(
     'command:started',
     (data) => {
       const tab: CommandTab = {
         executionId: data.execution_id,
         command: data.command,
+        args: data.args,
         output: '',
         events: [],
         status: 'running',

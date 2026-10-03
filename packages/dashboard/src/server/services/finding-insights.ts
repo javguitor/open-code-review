@@ -5,7 +5,6 @@
 
 import { normalizeVerdict } from '@open-code-review/platform'
 import {
-  FINAL_DECISIONS,
   HINT_MIN_SIMILARITY,
   RESOLVED_DECISIONS,
   titleSimilarity,
@@ -54,21 +53,24 @@ export function countCurrent(
 }
 
 /**
- * Recomputes the verdict only once the user has taken a final decision on some
- * finding; with none, the synthesis verdict stands. After that, the project's
+ * Recomputes the verdict only once the user has closed a finding (a
+ * RESOLVED_DECISIONS decision) or revised a category; with neither, the
+ * synthesis verdict stands (a mere `confirmed` changes no count). After that, the project's
  * rule: REQUEST CHANGES needs at least one open blocker; otherwise APPROVE
  * (open should-fix is the normal outcome of an approval), except that a
  * `NEEDS DISCUSSION` synthesis is kept (it is not derived from counts).
  * Callers pass only live (non-retired) rows.
  */
 export function verdictAfterDecisions(
-  findings: Array<FindingClassInput & { decision_status: string | null }>,
+  findings: Array<FindingClassInput & { decision_status: string | null; synthesis_category?: string | null }>,
   synthesisVerdict: string | null,
 ): string | null {
-  const decided = findings.some(
-    (f) => f.decision_status !== null && (FINAL_DECISIONS as readonly string[]).includes(f.decision_status),
+  const changed = findings.some(
+    (f) =>
+      (f.decision_status !== null && isResolved(f.decision_status)) ||
+      (f.synthesis_category !== undefined && f.synthesis_category !== f.category),
   )
-  if (!decided) return synthesisVerdict
+  if (!changed) return synthesisVerdict
   if (countCurrent(findings, true).blockers > 0) return 'REQUEST CHANGES'
   const synthesis = synthesisVerdict === null ? null : (normalizeVerdict(synthesisVerdict) ?? synthesisVerdict)
   return synthesis === 'NEEDS DISCUSSION' ? synthesis : 'APPROVE'

@@ -36,6 +36,7 @@ export function ProposalCard({ proposal, finding, onApply }: ProposalCardProps) 
 
   const busy = state.phase === 'applying'
   const done = state.phase === 'applied'
+  const retired = finding?.retired === true
   const changes = proposalChanges(proposal, finding)
   const label = (field: ProposalChange['field'], value: string | null) => {
     if (value === null) return '-'
@@ -62,7 +63,9 @@ export function ProposalCard({ proposal, finding, onApply }: ProposalCardProps) 
         {finding?.title ?? t('chat.proposal_unknown_finding')}
       </p>
 
-      {done ? null : changes.length === 0 ? (
+      {done ? null : retired ? (
+        <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{t('chat.proposal_retired')}</p>
+      ) : changes.length === 0 ? (
         <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{t('chat.proposal_no_changes')}</p>
       ) : (
         <ul className="mt-2 space-y-1">
@@ -89,18 +92,20 @@ export function ProposalCard({ proposal, finding, onApply }: ProposalCardProps) 
           </span>
         ) : (
           <>
-            <button
-              type="button"
-              onClick={apply}
-              disabled={busy}
-              className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {busy
-                ? t('chat.proposal_applying')
-                : state.phase === 'failed'
-                  ? t('chat.proposal_retry')
-                  : t('chat.proposal_apply')}
-            </button>
+            {!retired && (
+              <button
+                type="button"
+                onClick={apply}
+                disabled={busy}
+                className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {busy
+                  ? t('chat.proposal_applying')
+                  : state.phase === 'failed'
+                    ? t('chat.proposal_retry')
+                    : t('chat.proposal_apply')}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setState({ phase: 'discarded' })}

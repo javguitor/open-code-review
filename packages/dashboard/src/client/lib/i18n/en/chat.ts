@@ -18,6 +18,7 @@ const chat = {
   'chat.worktree_missing': 'Worktree removed — answering from the checkout',
   'chat.worktree_unknown': 'Could not check the worktree — answering from the checkout',
   'chat.proposal_title': 'Proposed change to finding #{id}',
+  'chat.proposal_retired': 'Finding retired — not applicable',
   'chat.proposal_unknown_finding': 'Finding not loaded',
   'chat.proposal_field_severity': 'Severity',
   'chat.proposal_field_category': 'Category',

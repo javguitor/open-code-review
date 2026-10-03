@@ -281,10 +281,24 @@ export async function getDb(ocrDir: string): Promise<Database> {
 }
 
 /**
+ * A PR worktree (`<main>/.ocr/worktrees/pr-N/`) carries a versioned `.ocr/` but
+ * no `data/`; the database is the main checkout's. Running a command there must
+ * not create a second, empty database that later shadows the real one, so an
+ * `.ocr/` under `<main>/.ocr/worktrees/<name>/` without its own `data/` resolves
+ * to `<main>/.ocr/`. Custom `worktrees.dir` locations are handled by the CLI's
+ * `resolveMainCheckout`.
+ */
+export function sharedOcrDir(ocrDir: string): string {
+  const m = /^(.*)[\\/]\.ocr[\\/]worktrees[\\/][^\\/]+[\\/]\.ocr$/.exec(ocrDir);
+  return m && !existsSync(join(ocrDir, "data")) ? join(m[1]!, ".ocr") : ocrDir;
+}
+
+/**
  * Creates the data directory if needed, opens the database, runs migrations,
  * and persists the result. Callable from both CLI and dashboard server.
  */
 export async function ensureDatabase(ocrDir: string): Promise<Database> {
+  ocrDir = sharedOcrDir(ocrDir);
   const dataDir = join(ocrDir, "data");
   if (!existsSync(dataDir)) {
     mkdirSync(dataDir, { recursive: true });

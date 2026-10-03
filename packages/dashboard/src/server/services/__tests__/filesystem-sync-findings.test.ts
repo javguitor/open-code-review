@@ -188,6 +188,42 @@ describe('id-preserving finding ingestion', () => {
       .toEqual([true, false])
   })
 
+  it('weak pass never resurrects a retired row nor picks the oldest of several live candidates', async () => {
+    const A = { ...F_SQL, flagged_by: undefined }
+    writeMeta([{ ...A, line_start: 10 }, { ...A, line_start: 30 }])
+    await scan()
+    const [first, second] = rows('SELECT id FROM review_findings ORDER BY id').map((r) => r['id'] as number) as [number, number]
+    setFindingDecision(db, { findingId: first, status: 'dismissed', reason: 'false positive here, checked' })
+
+    writeMeta([{ ...A, line_start: 30 }])
+    await scan()
+    writeMeta([{ ...A, line_start: 50 }])
+    await scan()
+
+    const state = rows('SELECT id, line_start, retired_at FROM review_findings ORDER BY id')
+      .map((r) => [r['id'], r['line_start'], r['retired_at'] !== null])
+    expect(state).toEqual([[first, 10, true], [second, 50, false]])
+    expect(getFinding(db, first)?.decision?.status).toBe('dismissed')
+    expect(getFinding(db, second)?.decision).toBeNull()
+  })
+
+  it('weak pass picks the closest live line and inserts new on an unresolvable tie', async () => {
+    const A = { ...F_SQL, flagged_by: undefined }
+    writeMeta([{ ...A, line_start: 10 }, { ...A, line_start: 30 }])
+    await scan()
+    const ids = rows('SELECT id FROM review_findings ORDER BY id').map((r) => r['id'] as number)
+    writeMeta([{ ...A, line_start: 28 }])
+    await scan()
+    expect(rows('SELECT id, line_start FROM review_findings ORDER BY id')).toEqual([{ id: ids[1], line_start: 28 }])
+
+    writeMeta([{ ...A, line_start: 28 }, { ...A, line_start: 60 }])
+    await scan()
+    writeMeta([{ ...A, line_start: 44 }])
+    await scan()
+    // 28 and 60 are 16 away from 44: tie -> no match, a new row is inserted
+    expect(rows('SELECT line_start FROM review_findings ORDER BY id').map((r) => r['line_start'])).toEqual([44])
+  })
+
   it('read/acknowledged alone do not protect a row; a row that matches again is un-retired', async () => {
     writeMeta([F_SQL, F_VAL])
     await scan()

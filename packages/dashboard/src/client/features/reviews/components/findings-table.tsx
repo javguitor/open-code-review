@@ -8,6 +8,7 @@ import { useUpdateFindingStatus } from '../hooks/use-reviews'
 import { FindingRow } from './finding-row'
 import { SortableHeader } from '../../../components/ui/sortable-header'
 import { useT } from '../../../lib/i18n'
+import { liveCount, liveFirst } from '../../../lib/live-findings'
 import type { MessageKey } from '../../../lib/i18n'
 
 type SortField = 'severity' | 'title' | 'file_path'
@@ -84,7 +85,8 @@ export function FindingsTable({ findings, isLoading = false }: FindingsTableProp
 
   const sorted = useMemo(() => {
     const multiplier = sortDir === 'asc' ? 1 : -1
-    return [...filtered].sort((a, b) => {
+    // Retired rows always sit after the live ones, whatever the sort.
+    return liveFirst([...filtered].sort((a, b) => {
       if (sortField === 'severity') {
         return (severityRank(a.severity) - severityRank(b.severity)) * multiplier
       }
@@ -95,7 +97,7 @@ export function FindingsTable({ findings, isLoading = false }: FindingsTableProp
         return (a.file_path ?? '').localeCompare(b.file_path ?? '') * multiplier
       }
       return 0
-    })
+    }))
   }, [filtered, sortField, sortDir])
 
   // A finding whose severity isn't in the known vocabulary is a degraded row —
@@ -166,7 +168,7 @@ export function FindingsTable({ findings, isLoading = false }: FindingsTableProp
           </select>
         </div>
         <span className="text-xs text-zinc-400 dark:text-zinc-500">
-          {t('reviews.findings_of', { shown: sorted.length, total: findings.length })}
+          {t('reviews.findings_of', { shown: liveCount(sorted), total: liveCount(findings) })}
         </span>
       </div>
 

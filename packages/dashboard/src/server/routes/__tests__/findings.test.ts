@@ -149,4 +149,14 @@ describe('findings routes', () => {
     expect(r.status).toBe(400)
     expect(r.body.code).toBe('reason-too-short')
   })
+
+  it('a retired finding answers 409 { code: retired } to decisions and revisions', async () => {
+    db.run("UPDATE review_findings SET retired_at = datetime('now') WHERE id = 1")
+    const d = await api('PATCH', '/findings/1/decision', { status: 'confirmed' })
+    expect(d.status).toBe(409)
+    expect(d.body.code).toBe('retired')
+    const r = await api('POST', '/findings/1/revise', { field: 'severity', value: 'low', reason: 'r', source: 'user' })
+    expect(r.status).toBe(409)
+    expect(emitted).toEqual([])
+  })
 })
