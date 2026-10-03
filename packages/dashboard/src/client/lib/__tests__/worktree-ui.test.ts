@@ -11,10 +11,11 @@ import type { ConfigSettings, PostWorktreeOutcome, WorktreeRemoveStatus } from '
 const current: ConfigSettings = {
   worktrees: { dir: '/repo/.wt', dir_raw: '.wt', exists: true, cleanup: 'keep' },
   language: 'en',
+  posting_language: null,
   ide: 'vscode',
   integrations: { clickup_token: 'missing' },
 }
-const same = { dir: '.wt', cleanup: 'keep', language: 'en' }
+const same = { dir: '.wt', cleanup: 'keep', language: 'en', postingLanguage: '' }
 
 describe('buildSettingsPatch', () => {
   it('returns an empty patch when nothing changed', () => {
@@ -22,7 +23,7 @@ describe('buildSettingsPatch', () => {
   })
 
   it('sends only the changed fields, trimming the directory', () => {
-    const { patch, errors } = buildSettingsPatch(current, { dir: '  /tmp/wt  ', cleanup: 'after-post', language: 'en' })
+    const { patch, errors } = buildSettingsPatch(current, { dir: '  /tmp/wt  ', cleanup: 'after-post', language: 'en', postingLanguage: '' })
     expect(errors).toEqual({})
     expect(patch).toEqual({ worktrees: { dir: '/tmp/wt', cleanup: 'after-post' } })
   })
@@ -101,5 +102,12 @@ describe('removeAction', () => {
     expect(removeAction('kept_running', null)).toBeNull()
     expect(removeAction('kept_config', 'removed')).toBeNull()
     expect(removeAction(null, 'not-found')).toBeNull()
+  })
+
+  it('patches the posting language only when it differs from the configured one', () => {
+    expect(buildSettingsPatch(current, { ...same, postingLanguage: 'en' }).patch).toEqual({ posting: { language: 'en' } })
+    const set = { ...current, posting_language: 'en' }
+    expect(buildSettingsPatch(set, { ...same, postingLanguage: 'en' }).patch).toEqual({})
+    expect(buildSettingsPatch(set, { ...same, postingLanguage: '' }).patch).toEqual({ posting: { language: '' } })
   })
 })

@@ -1,6 +1,6 @@
 /**
  * Comment-preserving writer for an allow-listed set of `.ocr/config.yaml`
- * keys (`worktrees.dir`, `worktrees.cleanup`, `language`).
+ * keys (`worktrees.dir`, `worktrees.cleanup`, `language`, `posting.language`).
  *
  * The edit is a text splice, not `doc.toString()`: the YAML parser only
  * locates the value (or the end of the parent block) and everything else in
@@ -22,6 +22,7 @@ export type ConfigPatch = {
   "worktrees.dir"?: string;
   "worktrees.cleanup"?: WorktreeCleanup;
   language?: string;
+  "posting.language"?: string;
 };
 
 /** Thrown for a rejected key/value or an unparseable file; `key` names the offender. */
@@ -39,6 +40,7 @@ const KEY_PATHS: Record<keyof ConfigPatch, string[]> = {
   "worktrees.dir": ["worktrees", "dir"],
   "worktrees.cleanup": ["worktrees", "cleanup"],
   language: ["language"],
+  "posting.language": ["posting", "language"],
 };
 
 function validate(key: keyof ConfigPatch, value: unknown): string {
@@ -49,6 +51,10 @@ function validate(key: keyof ConfigPatch, value: unknown): string {
   const v = value.trim();
   if (key === "worktrees.dir" && !v) throw new ConfigWriteError(key, "must not be empty");
   if (key === "language" && !LANGUAGE_TAG.test(v)) {
+    throw new ConfigWriteError(key, `"${value}" is not a valid language tag`);
+  }
+  // Empty is valid here: it means "same as language" and is written as `language: ""`.
+  if (key === "posting.language" && v !== "" && !LANGUAGE_TAG.test(v)) {
     throw new ConfigWriteError(key, `"${value}" is not a valid language tag`);
   }
   if (key === "worktrees.cleanup" && !WORKTREE_CLEANUP_MODES.some((m) => m === v)) {

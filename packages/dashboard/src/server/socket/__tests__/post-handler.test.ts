@@ -660,6 +660,16 @@ describe('post:preview and inline submit', () => {
     expect(res.body).toContain('`src/b.ts:3` — Importante: fuera del diff.')
   })
 
+  it('posts the moved heading in posting.language, independent of language', async () => {
+    writeFileSync(join(ocrDir, 'config.yaml'), 'language: es\nposting:\n  language: en\n')
+    writeRound({ 'final-human.md': 'Resumen', 'diff.patch': PATCH, 'final-human-comments.json': JSON.stringify(COMMENTS) })
+    const h = setup([])
+    await h.fire('post:preview', { sessionId: 'sess-1', roundNumber: 1 })
+    const res = h.last('post:preview-result') as any
+    expect(res.body).toContain('## Other comments')
+    expect(res.body).not.toContain('Otros comentarios')
+  })
+
   it('preview falls back to final.md when there is no human review', async () => {
     writeRound({ 'final.md': 'TEAM' })
     const h = setup([])

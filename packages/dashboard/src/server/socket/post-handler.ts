@@ -15,7 +15,7 @@ import type { Server as SocketIOServer, Socket } from 'socket.io'
 import type { Database } from '@open-code-review/persistence'
 import { execBinaryAsync, isGitHubReviewState, type GitHubReviewState } from '@open-code-review/platform'
 import { getWorktreeConfig } from '@open-code-review/config/worktree-config'
-import { getOutputLanguage } from '@open-code-review/config/language-config'
+import { getPostingLanguage } from '@open-code-review/config/language-config'
 import { getSession } from '../db.js'
 import { childEnv } from '../child-env.js'
 import { resolveLocalCli } from './cli-resolver.js'
@@ -236,7 +236,7 @@ export function registerPostHandlers(
     const session = getSession(db, p.sessionId)
     if (!session) return null
     const files = readRoundPost(roundDirFor(session, p.sessionId, p.roundNumber as number, ocrDir))
-    const preview = buildPreview(files, getOutputLanguage(ocrDir), { inline: p.inline !== false })
+    const preview = buildPreview(files, getPostingLanguage(ocrDir), { inline: p.inline !== false })
     return preview.hasHuman ? preview : null
   }
 
@@ -404,6 +404,7 @@ export function registerPostHandlers(
         '',
         `Target: ${sessionId} --round ${roundNumber}`,
         'Options: none',
+        `Posting language: ${getPostingLanguage(ocrDir)}`,
       ]
 
       // CLI resolution so the AI uses the correct `ocr` binary
@@ -666,7 +667,7 @@ export function registerPostHandlers(
         return
       }
       const files = readRoundPost(roundDirFor(session, sessionId, roundNumber, ocrDir))
-      const preview: PostPreview = buildPreview(files, getOutputLanguage(ocrDir))
+      const preview: PostPreview = buildPreview(files, getPostingLanguage(ocrDir))
       socket.emit('post:preview-result', preview)
     } catch (err) {
       console.error('Error in post:preview handler:', err)
@@ -737,7 +738,7 @@ export function registerPostHandlers(
         // comments); the server always appends the comments that cannot go inline for
         // the chosen `inline` mode, so edits are kept and nothing is duplicated or lost.
         const body = plan
-          ? composeBody(content.trim() !== '' ? content : plan.summary, plan.moved, getOutputLanguage(ocrDir))
+          ? composeBody(content.trim() !== '' ? content : plan.summary, plan.moved, getPostingLanguage(ocrDir))
           : content
         const inlineComments = plan?.inline ?? []
 

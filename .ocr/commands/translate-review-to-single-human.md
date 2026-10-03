@@ -53,7 +53,7 @@ You are rewriting a multi-reviewer review into ONE pull-request review that read
 
 ### Language
 
-- Write everything in the `language` set in `.ocr/config.yaml` (default `en`), following `references/language-policy.md`. Use that language's natural register for a teammate review. Do not carry over English fillers ("tbh", "fwiw", "So...", "Oh and") into other languages, and do not use gimmicks that only work in English.
+- The posted text goes to the PR author, so its language is the **posting language**: `posting.language` in `.ocr/config.yaml` when it is set to a non-empty tag, otherwise the top-level `language` (default `en`). The source review (`final.md`) may be in another language; translate it. Write everything in the posting language, following `references/language-policy.md` with `{language}` = the posting language (when it is `en`, plain English, no policy). Use that language's natural register for a teammate review. Do not carry over English fillers ("tbh", "fwiw", "So...", "Oh and") into other languages, and do not use gimmicks that only work in English.
 - Exception to the language policy: here the severity labels ARE localized (see below). Code, paths, identifiers and JSON keys stay as they are.
 
 ### Voice (PR review guide)

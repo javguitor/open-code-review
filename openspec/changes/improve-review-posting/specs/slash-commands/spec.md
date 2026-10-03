@@ -29,3 +29,13 @@ Each comment body SHALL start with a localized severity label (es: `Bloqueante:`
 
 - **WHEN** a finding has no file or line
 - **THEN** it SHALL appear in `final-human.md` only, not in `final-human-comments.json`
+
+### Requirement: Posting Language for the Human-Voice Review
+
+The human-voice translation SHALL write the summary, the inline comment labels and the "Other comments" heading in the posting language (`posting.language`, else `language`), read from the `Posting language:` line of its prompt or from `.ocr/config.yaml`. The internal review SHALL keep using `language`.
+
+#### Scenario: Different posting language
+
+- **GIVEN** `language: es` and `posting.language: en`
+- **WHEN** the human-voice review is generated
+- **THEN** its text and labels SHALL be in English

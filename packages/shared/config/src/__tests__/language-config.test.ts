@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { getOutputLanguage, languagePolicy } from "../language-config.js";
+import { getOutputLanguage, getPostingLanguage, getPostingLanguageRaw, languagePolicy } from "../language-config.js";
 
 /**
  * Pins the config spec's output-language requirement: a validated BCP 47 tag
@@ -108,5 +108,40 @@ describe("language-policy.md drift", () => {
     const block = lines.slice(start, end).join("\n").trimEnd();
     // `{language}` fails tag validation, so compare with a real tag on both sides.
     expect(languagePolicy("es")?.trimEnd()).toBe(block.replaceAll("{language}", "es"));
+  });
+});
+
+describe("getPostingLanguage / getPostingLanguageRaw", () => {
+  it("reads posting.language independently of language", () => {
+    writeConfig("language: es\nposting:\n  language: EN\n");
+    expect(getPostingLanguage(ocrDir)).toBe("en");
+    expect(getPostingLanguageRaw(ocrDir)).toBe("en");
+    expect(getOutputLanguage(ocrDir)).toBe("es");
+  });
+
+  it("falls back to language when posting.language is unset", () => {
+    writeConfig("language: es\n");
+    expect(getPostingLanguage(ocrDir)).toBe("es");
+    expect(getPostingLanguageRaw(ocrDir)).toBeNull();
+  });
+
+  it("falls back to language when posting.language is empty", () => {
+    writeConfig('language: es\nposting:\n  language: ""\n');
+    expect(getPostingLanguage(ocrDir)).toBe("es");
+    expect(getPostingLanguageRaw(ocrDir)).toBeNull();
+  });
+
+  it("falls back to language when posting.language is an invalid tag", () => {
+    writeConfig("language: es\nposting:\n  language: not a tag!\n");
+    expect(getPostingLanguage(ocrDir)).toBe("es");
+    expect(getPostingLanguageRaw(ocrDir)).toBeNull();
+  });
+
+  it("falls back to en for malformed YAML and a missing file", () => {
+    writeConfig("posting: [unclosed\n  : :\n");
+    expect(getPostingLanguage(ocrDir)).toBe("en");
+    expect(getPostingLanguageRaw(ocrDir)).toBeNull();
+    rmSync(join(ocrDir, "config.yaml"));
+    expect(getPostingLanguage(ocrDir)).toBe("en");
   });
 });

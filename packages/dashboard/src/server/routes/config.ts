@@ -5,7 +5,7 @@
 import { Router } from 'express'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { execBinary } from '@open-code-review/platform'
-import { getOutputLanguage } from '@open-code-review/config/language-config'
+import { getOutputLanguage, getPostingLanguageRaw } from '@open-code-review/config/language-config'
 import { getWorktreeConfig } from '@open-code-review/config/worktree-config'
 import { ConfigWriteError, setConfigValues, type ConfigPatch } from '@open-code-review/config/config-writer'
 import { childEnv } from '../child-env.js'
@@ -83,6 +83,7 @@ function detectGitBranch(cwd: string): string | null {
 type ConfigSettings = {
   worktrees: { dir: string; dir_raw: string | null; exists: boolean; cleanup: WorktreeCleanup }
   language: string
+  posting_language: string | null
 }
 
 /** The allow-listed settings, resolved (absolute dir, existence, effective cleanup). */
@@ -91,6 +92,7 @@ function resolvedSettings(ocrDir: string): ConfigSettings {
   return {
     worktrees: { dir, dir_raw: dirRaw, exists: existsSync(dir), cleanup },
     language: getOutputLanguage(ocrDir),
+    posting_language: getPostingLanguageRaw(ocrDir),
   }
 }
 
@@ -104,6 +106,8 @@ function toConfigPatch(body: unknown): ConfigPatch {
     if (key === 'language') patch.language = value
     else if (key === 'worktrees' && isObject(value)) {
       for (const [sub, v] of Object.entries(value)) patch[`worktrees.${sub}`] = v
+    } else if (key === 'posting' && isObject(value)) {
+      for (const [sub, v] of Object.entries(value)) patch[`posting.${sub}`] = v
     } else throw new ConfigWriteError(key, 'unknown or invalid config key')
   }
   return patch as ConfigPatch

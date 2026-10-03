@@ -24,14 +24,14 @@ export function SettingsPage() {
   const { data, isLoading } = useConfigSettings()
   const patchConfig = usePatchConfig()
   const patchIde = usePatchIde()
-  const [form, setForm] = useState<SettingsForm>({ dir: '', cleanup: 'keep', language: 'en' })
+  const [form, setForm] = useState<SettingsForm>({ dir: '', cleanup: 'keep', language: 'en', postingLanguage: '' })
   const [errors, setErrors] = useState<SettingsErrors>({})
   const [serverError, setServerError] = useState<{ key?: string; message: string } | null>(null)
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     if (data) {
-      setForm({ dir: data.worktrees.dir_raw ?? '', cleanup: data.worktrees.cleanup, language: data.language })
+      setForm({ dir: data.worktrees.dir_raw ?? '', cleanup: data.worktrees.cleanup, language: data.language, postingLanguage: data.posting_language ?? '' })
     }
   }, [data])
 
@@ -65,6 +65,9 @@ export function SettingsPage() {
   const languages: string[] = (LANGUAGES as readonly string[]).includes(form.language)
     ? [...LANGUAGES]
     : [...LANGUAGES, form.language]
+  const postingLanguages: string[] = form.postingLanguage === '' || (LANGUAGES as readonly string[]).includes(form.postingLanguage)
+    ? [...LANGUAGES]
+    : [...LANGUAGES, form.postingLanguage]
 
   return (
     <div className="space-y-6">
@@ -145,6 +148,28 @@ export function SettingsPage() {
           ))}
         </select>
         <FieldError message={errorFor('language')} />
+
+        <label
+          htmlFor="settings-posting-language"
+          className="mt-4 block text-sm font-medium text-zinc-900 dark:text-zinc-100"
+        >
+          {t('settings.posting_language')}
+        </label>
+        <select
+          id="settings-posting-language"
+          value={form.postingLanguage}
+          onChange={(e) => update({ postingLanguage: e.target.value })}
+          className={cn(INPUT_CLASS, 'w-auto')}
+        >
+          <option value="">{t('settings.posting_language_same')}</option>
+          {postingLanguages.map((code) => (
+            <option key={code} value={code}>
+              {code === 'en' || code === 'es' ? t(`settings.language_${code}` as MessageKey) : code}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">{t('settings.posting_language_hint')}</p>
+        <FieldError message={errorFor('posting.language')} />
       </section>
 
       <section className={SECTION_CLASS}>

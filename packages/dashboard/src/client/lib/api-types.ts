@@ -482,6 +482,8 @@ export type ConfigSettings = {
     cleanup: WorktreeCleanup
   }
   language: string
+  /** `posting.language` as written in config.yaml; null when unset (same as `language`). */
+  posting_language: string | null
   /** Editor that finding links open (`dashboard.ide`, else detected). */
   ide: IdeType
   integrations: { clickup_token: 'configured' | 'missing' }
@@ -491,6 +493,7 @@ export type ConfigSettings = {
 export type ConfigPatchBody = {
   worktrees?: { dir?: string; cleanup?: WorktreeCleanup }
   language?: string
+  posting?: { language: string }
 }
 
 /** `GET /api/sessions/:id/worktree` (404 for non-PR sessions). */

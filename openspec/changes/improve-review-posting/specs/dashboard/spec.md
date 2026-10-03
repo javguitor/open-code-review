@@ -26,3 +26,20 @@ The dashboard SHALL offer a preview of the review to post (`post:preview`) retur
 - **GIVEN** a PR session with mappable comments and `inline` enabled
 - **WHEN** the user publishes
 - **THEN** a single review request SHALL be sent containing the body and all inline comments
+
+### Requirement: Posting Language Setting
+
+The dashboard SHALL expose `posting.language` (the language of the review text posted to GitHub) in settings, next to the interface language, with an option "same as the interface language" that stores an empty value. `GET /api/config` SHALL report `posting_language` (the configured tag, or `null` when unset), and `PATCH /api/config` SHALL accept `posting: { language }`. `post:preview`, `post:submit` and the human-review generation prompt SHALL use the posting language, falling back to `language`; the internal review and the dashboard interface SHALL keep using `language`.
+
+#### Scenario: Posting language differs from the interface language
+
+- **GIVEN** `language: es` and `posting.language: en`
+- **WHEN** a review with comments outside the diff is previewed
+- **THEN** the moved comments SHALL be appended under "Other comments"
+- **AND** the dashboard interface SHALL remain in Spanish
+
+#### Scenario: Posting language unset
+
+- **GIVEN** `language: es` and no `posting.language`
+- **WHEN** a review is previewed
+- **THEN** the posting language SHALL be `es`
