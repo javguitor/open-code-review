@@ -2,7 +2,7 @@
 
 ### Requirement: PR Target in the Command Palette
 
-The dashboard command palette SHALL accept `pr:<number>` and GitHub PR URLs as review and map targets and forward them to the workflow unchanged.
+The dashboard command palette SHALL accept `pr:<number>` and GitHub PR URLs as review and map targets and forward them to the workflow in canonical form.
 
 #### Scenario: Target hint
 
@@ -14,7 +14,19 @@ The dashboard command palette SHALL accept `pr:<number>` and GitHub PR URLs as r
 - **GIVEN** the user enters `pr:abc`
 - **WHEN** the command is submitted
 - **THEN** the dashboard rejects it with a message describing the accepted forms and runs nothing
-- **AND** `pr:123` and `https://github.com/o/r/pull/123` are forwarded verbatim
+- **AND** `pr:123` and `https://github.com/o/r/pull/123` are forwarded as they are
+
+#### Scenario: Browser URLs are normalized
+
+- **GIVEN** the user pastes `https://github.com/o/r/pull/123/files?w=1#diff-abc` (or `/commits`, `/checks`)
+- **WHEN** the command is submitted
+- **THEN** the target is forwarded as `https://github.com/o/r/pull/123`
+
+#### Scenario: Owner and repo charset
+
+- **GIVEN** a PR URL whose owner does not match `[A-Za-z0-9-]+` or whose repo does not match `[A-Za-z0-9._-]+` (for example containing `$(…)`, backticks or quotes)
+- **WHEN** the command is submitted
+- **THEN** the dashboard rejects it with the accepted-forms message and runs nothing
 
 ### Requirement: Stale Review Detection
 
@@ -33,10 +45,24 @@ The dashboard SHALL show when a PR-targeted session no longer matches the PR's c
 - **WHEN** the session renders
 - **THEN** no stale indicator is shown and no `gh` call is made
 
+#### Scenario: Sessions list spawns `gh` only for active sessions
+
+- **GIVEN** a mix of active and closed PR sessions
+- **WHEN** the sessions list is requested
+- **THEN** the server looks up the PR head only for active sessions and serves the cached head, without spawning `gh`, for closed ones
+- **AND** the session detail looks the PR up for any session
+
+#### Scenario: Passive lookup failure
+
+- **GIVEN** `gh` fails or times out during a list or detail request
+- **WHEN** a head was previously known for that PR
+- **THEN** the last known head is served and no error is shown
+
 #### Scenario: Check for updates and re-review
 
 - **WHEN** the user clicks "Check for updates"
 - **THEN** the server refreshes the PR head (bypassing its cache) and updates the badge
+- **AND** if the lookup fails the endpoint answers 502 and the UI shows an error
 - **AND** "Re-review" runs the review command with the session's stored `pr_url` (never a bare number), which creates the next round in the same worktree
 
 #### Scenario: Decisions survive a re-review

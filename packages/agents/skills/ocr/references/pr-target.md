@@ -5,18 +5,25 @@ How the Tech Lead resolves a pull-request target (`pr:<n>` or a PR URL) into a c
 ## 1. Parse the target
 
 - `pr:<n>` — `<n>` is a positive integer.
-- `https://github.com/<owner>/<repo>/pull/<n>` — take `<n>` from the URL.
+- `https://github.com/<owner>/<repo>/pull/<n>` — `<owner>` matches `[A-Za-z0-9-]+`, `<repo>` matches `[A-Za-z0-9._-]+`; take `<n>` from the URL.
 
-Anything else is not a PR target; fall back to the normal target handling.
+Anything else (other hosts, `http://`, extra path segments, shell metacharacters in owner/repo) is not a PR target; fall back to the normal target handling. Never interpolate an unvalidated target into a shell command.
 
 ## 2. Read the PR
 
 Only PRs of the repository behind the `origin` remote are supported. Always pass `--repo` or the PR **URL** to `gh`, never a bare number: a bare number resolves against `gh`'s default repo, which in a fork checkout is the parent repo unless `gh repo set-default` was run (a different PR can share the number).
 
 ```bash
-# <owner>/<repo> of origin; handles git@github.com:o/r(.git) and https://github.com/o/r(.git)
-ORIGIN_REPO="$(git remote get-url origin | sed -E 's#^(git@github\.com:|https://github\.com/)##; s#\.git$##')"
+# <owner>/<repo> of origin, whatever the remote form (ssh://, git@alias:, https://token@, trailing slash)
+# (not `gh repo view <url>`: it fails on SSH host aliases such as git@github-work:o/r.git)
+ORIGIN_REPO="$(git remote get-url origin | sed -E 's#/$##; s#\.git$##; s#^.*[:/]([^/:]+/[^/]+)$#\1#')"
+```
 
+Compare `<owner>/<repo>` case-insensitively (`gh` returns canonical casing, the remote or the URL may differ).
+
+**Check origin before the first PR call.** If the target was a PR URL whose `<owner>/<repo>` differs from `$ORIGIN_REPO`, **stop** with an error: only PRs of `<origin owner/repo>` are supported. Only then call `gh pr view`. If `gh` is missing or unauthenticated, stop and tell the user (`ocr doctor` reports it).
+
+```bash
 # Only when given pr:<n>: resolve number -> URL once, against origin
 PR_URL="$(gh pr view <n> --repo "$ORIGIN_REPO" --json url --jq .url)"
 
@@ -24,8 +31,6 @@ gh pr view "$PR_URL" --json number,url,headRefName,headRefOid,baseRefName,author
 ```
 
 Request only those fields: `baseRepository` is not a valid `gh pr view --json` field (the base repository is `<owner>/<repo>` of the PR URL).
-
-If the target was a PR URL whose `<owner>/<repo>` is not `$ORIGIN_REPO`, **stop** with an error: only PRs of `<origin owner/repo>` are supported. If `gh` is missing or unauthenticated, stop and tell the user (`ocr doctor` reports it).
 
 ## 3. Fetch
 
@@ -54,13 +59,13 @@ Otherwise use a worktree:
 
 | State of `<path>` | Action |
 |---|---|
-| Missing | `git worktree add --detach <path> refs/ocr/pr/<n>` |
-| Registered worktree (listed in `git worktree list --porcelain`) | If `git -C <path> status --porcelain` is not empty: **stop** and suggest `ocr worktree remove <n> --force` (a checkout would carry the local changes over into the review). Otherwise `git -C <path> checkout --detach refs/ocr/pr/<n>` (re-review) |
+| Missing | `git worktree prune` (drops a registration whose directory was deleted by hand), then `git worktree add --detach <path> refs/ocr/pr/<n>` |
+| Registered worktree (listed in `git worktree list --porcelain`) | If `git -C <path> status --porcelain` is not empty: **stop** and suggest `ocr worktree remove <n> --force` (a checkout would carry the local changes over into the review; `--force` discards those changes, and it is also what overrides the refusal to remove a PR that has an active session). Otherwise `git -C <path> checkout --detach refs/ocr/pr/<n>` (re-review) |
 | Exists but is **not** a registered worktree | **Stop** with an error naming `<path>`. Delete nothing. |
 
 3. Set `code_root` to `<path>` and print `Code under review: <path>`.
 
-> **Untrusted code**: running the PR's tests or scripts executes code written by someone else, exactly as checking the branch out would. Tell the user this once, before any reviewer runs tests.
+> **Untrusted code**: running the PR's tests or scripts executes code written by someone else, exactly as checking the branch out would. This includes installing dependencies: install scripts of the PR run too. Tell the user this once, before any reviewer runs tests.
 
 ## 5. Outputs for the later phases
 
