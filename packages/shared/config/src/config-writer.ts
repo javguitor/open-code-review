@@ -13,6 +13,7 @@
 
 import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { isMap, isScalar, parseDocument, stringify, type Pair } from "yaml";
 import { LANGUAGE_TAG } from "./language-config.js";
 import { WORKTREE_CLEANUP_MODES, type WorktreeCleanup } from "./worktree-config.js";
@@ -115,7 +116,7 @@ function applyKey(text: string, [head, child]: KeyPath, key: string, value: stri
   const last = block.items.at(-1)!;
   const lastValue = last.value as { range?: [number, number, number] } | null;
   // A nested block's range already ends after its newline: insert at the start of the next line.
-  if (!isScalar(lastValue) && lastValue?.range && text[lastValue.range[1] - 1] === "\n") {
+  if (lastValue?.range && text[lastValue.range[1] - 1] === "\n") {
     return insertAt(text, lastValue.range[1], `${indent}${child}: ${literal}${nl}`);
   }
   const lastEnd = Math.max(
@@ -123,6 +124,17 @@ function applyKey(text: string, [head, child]: KeyPath, key: string, value: stri
     (last.value as { range?: [number, number, number] } | null)?.range?.[1] ?? 0,
   );
   return insertAt(text, endOfLine(text, lastEnd), `${nl}${indent}${child}: ${literal}`);
+}
+
+function setPath(root: Record<string, unknown>, [head, child]: KeyPath, value: string): void {
+  if (!child) {
+    root[head!] = value;
+    return;
+  }
+  const slot = root[head!];
+  const obj = slot !== null && typeof slot === "object" ? (slot as Record<string, unknown>) : {};
+  obj[child] = value;
+  root[head!] = obj;
 }
 
 /**
@@ -137,15 +149,17 @@ export function setConfigValues(ocrDir: string, patch: ConfigPatch): string {
   });
 
   const configPath = join(ocrDir, "config.yaml");
-  let text = existsSync(configPath) ? readFileSync(configPath, "utf-8") : "";
+  const original = existsSync(configPath) ? readFileSync(configPath, "utf-8") : "";
+  let text = original;
   for (const [key, value] of entries) text = applyKey(text, KEY_PATHS[key], key, value);
 
-  // Safety net: the spliced text must parse and read back exactly what was asked for.
+  // Safety net: the spliced text must parse cleanly and the whole tree must equal
+  // the original with only the patched paths changed (catches sibling-key drift).
+  const expected = parseDocument(original).toJS() ?? {};
+  for (const [key, value] of entries) setPath(expected, KEY_PATHS[key], value);
   const check = parseDocument(text);
-  for (const [key, value] of entries) {
-    if (check.errors.length > 0 || check.getIn(KEY_PATHS[key]) !== value) {
-      throw new ConfigWriteError(key, "could not be written safely; edit .ocr/config.yaml by hand");
-    }
+  if (check.errors.length > 0 || !isDeepStrictEqual(check.toJS(), expected)) {
+    throw new ConfigWriteError(entries[0]![0], "could not be written safely; edit .ocr/config.yaml by hand");
   }
 
   const tmpPath = `${configPath}.${process.pid}.tmp`;

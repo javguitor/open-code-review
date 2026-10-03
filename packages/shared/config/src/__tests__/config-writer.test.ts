@@ -153,6 +153,32 @@ describe("setConfigValues safety", () => {
     expect(doc.getIn(["x"])).toBe(1);
   });
 
+  it("inserts after a block-scalar last child without touching siblings", () => {
+    writeFileSync(configPath, "worktrees:\n  dir: a\n  note: |\n    hi\nx: 1\n");
+    setConfigValues(ocrDir, { "worktrees.cleanup": "keep" });
+    expect(read()).toBe("worktrees:\n  dir: a\n  note: |\n    hi\n  cleanup: keep\nx: 1\n");
+    const doc = parseDocument(read());
+    expect(doc.errors).toEqual([]);
+    expect(doc.getIn(["worktrees", "cleanup"])).toBe("keep");
+    expect(doc.getIn(["worktrees", "note"])).toBe("hi\n");
+    expect(doc.getIn(["x"])).toBe(1);
+  });
+
+  it("keeps a keep-chomped block scalar at EOF byte-identical", () => {
+    writeFileSync(configPath, "worktrees:\n  dir: a\n  note: |+\n    hi\n");
+    setConfigValues(ocrDir, { "worktrees.cleanup": "keep" });
+    expect(read()).toBe("worktrees:\n  dir: a\n  note: |+\n    hi\n  cleanup: keep\n");
+    const doc = parseDocument(read());
+    expect(doc.errors).toEqual([]);
+    expect(doc.getIn(["worktrees", "note"])).toBe("hi\n");
+  });
+
+  it("fails closed through the whole-tree safety net and leaves the file unchanged", () => {
+    // The `...` document terminator ends the document right after `language`,
+    // so the appended block would land outside it.
+    writeAndExpectThrow("language: en\n...\n", { "worktrees.cleanup": "keep" }, "worktrees.cleanup");
+  });
+
   it("rejects control characters in a value, naming the key", () => {
     writeAndExpectThrow("x: 1\n", { "worktrees.dir": "/a\nb" }, "worktrees.dir");
   });
