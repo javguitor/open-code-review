@@ -2,7 +2,9 @@
 
 ## Purpose
 Review orchestration defines the 8-phase multi-agent code review workflow — from context discovery through reviewer spawning, discourse, and synthesis — that produces a prioritized, confidence-weighted final review.
+
 ## Requirements
+
 ### Requirement: Tech Lead Orchestration
 
 The system SHALL provide a Tech Lead agent that orchestrates the complete code review process, coordinating context discovery, requirements analysis, reviewer assignment, discourse facilitation, and final synthesis.
@@ -535,3 +537,26 @@ On resume, the orchestrator SHALL drive the pipeline **forward** from `current_p
 - **THEN** both SHALL make the same forward progress through the remaining phases driven by the same `ocr state` surface (the `next_action` progression is identical)
 - **AND** neither SHALL depend on a background process or cross-process wait that outlives the agent turn
 
+### Requirement: Output Language Policy
+
+Every model task the Tech Lead runs (reviewers, ephemeral reviewers, discourse, synthesis, map) SHALL receive the configured output language and SHALL write its prose in that language while keeping the structural tokens the CLI and dashboard parse in English.
+
+#### Scenario: Language propagated to sub-agents
+
+- **GIVEN** `language: es` in `.ocr/config.yaml`
+- **WHEN** Phase 1 builds `discovered-standards.md` and Phase 4 spawns reviewers
+- **THEN** `discovered-standards.md` records `## Output Language: es`
+- **AND** each reviewer task carries the language policy with `es`
+
+#### Scenario: Structural tokens stay English
+
+- **GIVEN** a reviewer, discourse or synthesis task with a non-English language
+- **WHEN** the model writes its output
+- **THEN** section headings (`## Summary`, `## Findings`, `### Finding N:`, `## Verdict`, `## Blockers`, `## Should Fix`, `## Suggestions`, …), field labels (`Severity`, `Location`, `Issue`, `Why It Matters`, `Suggestion`), verdict values, category and severity vocabularies, discourse verbs, code, file paths, identifiers, commands and quoted error messages are written exactly as the templates define them in English
+- **AND** the existing reviewer and final parsers extract the same findings and counts as for an English review
+
+#### Scenario: English is byte-identical to today
+
+- **GIVEN** the language resolves to `en`
+- **WHEN** any task prompt is assembled
+- **THEN** no language policy text is added
