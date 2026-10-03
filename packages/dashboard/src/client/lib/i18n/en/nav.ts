@@ -4,6 +4,7 @@ const nav = {
   'nav.team': 'Team',
   'nav.sessions': 'Sessions',
   'nav.reviews': 'Reviews',
+  'nav.settings': 'Settings',
 }
 
 export { nav }

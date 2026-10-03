@@ -13,6 +13,8 @@ import { map } from './map'
 import { chat } from './chat'
 import { notes } from './notes'
 import { home } from './home'
+import { settings } from './settings'
+import { post } from './post'
 
 const en = {
   ...common,
@@ -27,6 +29,8 @@ const en = {
   ...chat,
   ...notes,
   ...home,
+  ...settings,
+  ...post,
 }
 
 export type MessageKey = keyof typeof en

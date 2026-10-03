@@ -11,6 +11,7 @@ import { MapRunPage } from './features/map/map-run-page'
 import { RoundPage } from './features/reviews/round-page'
 import { ReviewerDetailPage } from './features/reviews/reviewer-detail-page'
 import { ReviewsPage } from './features/reviews/reviews-page'
+import { SettingsPage } from './features/settings/settings-page'
 
 function NotFoundPage() {
   const { t } = useT()
@@ -46,6 +47,7 @@ export const router = createBrowserRouter([
       { path: 'reviews', element: withErrorBoundary(<ReviewsPage />), errorElement: <RouteErrorFallback /> },
       { path: 'commands', element: withErrorBoundary(<CommandsPage />), errorElement: <RouteErrorFallback /> },
       { path: 'reviewers', element: withErrorBoundary(<ReviewersPage />), errorElement: <RouteErrorFallback /> },
+      { path: 'settings', element: withErrorBoundary(<SettingsPage />), errorElement: <RouteErrorFallback /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

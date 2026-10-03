@@ -10,6 +10,7 @@ import { SessionTabs } from './components/session-tabs'
 import { LivenessHeader } from './components/liveness-header'
 import { ResumeCard } from './components/resume-card'
 import { StaleBadge } from './components/stale-badge'
+import { WorktreePanel } from './components/worktree-panel'
 import { fetchApi, parseUtcDate } from '../../lib/utils'
 import { formatDate } from '../../lib/date-utils'
 import { useT } from '../../lib/i18n'
@@ -189,8 +190,8 @@ export function SessionDetailPage() {
               {session.base_ref && (<><dt className="text-zinc-500 dark:text-zinc-400">{t('sessions.pr_base')}</dt><dd>{session.base_ref}</dd></>)}
               {session.head_ref && (<><dt className="text-zinc-500 dark:text-zinc-400">{t('sessions.pr_head')}</dt><dd>{session.head_ref}</dd></>)}
               {session.head_sha && (<><dt className="text-zinc-500 dark:text-zinc-400">{t('sessions.pr_reviewed_commit')}</dt><dd className="font-mono">{session.head_sha.slice(0, 7)}</dd></>)}
-              {session.worktree_path && (<><dt className="text-zinc-500 dark:text-zinc-400">{t('sessions.pr_worktree')}</dt><dd className="break-all font-mono">{session.worktree_path}</dd></>)}
             </dl>
+            {id && <WorktreePanel sessionId={id} />}
           </div>
         )}
 

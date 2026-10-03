@@ -32,6 +32,8 @@ import {
 } from "../../../lib/review-state";
 import { usePostReview, type ActivityLogEntry } from "../hooks/use-post-review";
 import { useT, type MessageKey } from "../../../lib/i18n";
+import { canRemoveAfterPost, removeStatusKey, worktreeOutcomeKey } from "../../../lib/worktree-ui";
+import { useRemoveWorktree } from "../../sessions/hooks/use-session-worktree";
 
 const REVIEW_STATE_LABEL_KEYS: Record<GitHubReviewState, MessageKey> = {
   approve: "reviews.state_approve",
@@ -115,6 +117,8 @@ export function PostReviewDialog({
     reset,
     setStep,
   } = usePostReview(verdict);
+  const removeWorktree = useRemoveWorktree(sessionId);
+  const resetRemoveWorktree = removeWorktree.reset;
   const [activityExpanded, setActivityExpanded] = useState(true);
   const hasAutoCollapsed = useRef(false);
   const [draftSaved, setDraftSaved] = useState(false);
@@ -124,7 +128,8 @@ export function PostReviewDialog({
     setEditMode(false);
     setEditContent("");
     reset();
-  }, [reset]);
+    resetRemoveWorktree();
+  }, [reset, resetRemoveWorktree]);
 
   // Open and trigger gh check
   const handleOpen = useCallback(() => {
@@ -523,6 +528,38 @@ export function PostReviewDialog({
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">
                       {t("reviews.posted_as_comment")}
                     </p>
+                  )}
+                  {posted && (
+                    <div className="flex flex-col items-center gap-2">
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {removeWorktree.data?.status === "removed"
+                          ? t(removeStatusKey("removed"))
+                          : t(worktreeOutcomeKey(posted.worktree))}
+                      </p>
+                      {canRemoveAfterPost(posted.worktree) &&
+                        removeWorktree.data?.status !== "removed" && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              removeWorktree.mutate({
+                                force: posted.worktree === "kept_dirty" || removeWorktree.data?.status === "dirty",
+                              })
+                            }
+                            disabled={removeWorktree.isPending}
+                            className="rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                          >
+                            {t(posted.worktree === "kept_dirty" ? "sessions.worktree_force" : "sessions.worktree_remove")}
+                          </button>
+                        )}
+                      {(removeWorktree.error ||
+                        (removeWorktree.data && removeWorktree.data.status !== "removed")) && (
+                        <p className="text-xs text-red-600 dark:text-red-400">
+                          {removeWorktree.error
+                            ? removeWorktree.error.message
+                            : t(removeStatusKey(removeWorktree.data!.status))}
+                        </p>
+                      )}
+                    </div>
                   )}
                   {(posted?.commentUrl ?? checkResult?.prUrl) && (
                     <a
