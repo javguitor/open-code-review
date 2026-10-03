@@ -786,3 +786,44 @@ The database SHALL store who flagged each finding, its evidence, its verificatio
 - **WHEN** a re-ingestion of its round no longer contains it
 - **THEN** the row is kept with `retired_at` set, never re-assigned to another finding, and excluded from counts and the verdict after decisions
 - **AND** a finding without such state is deleted, and a retired finding that reappears gets `retired_at` cleared
+
+### Requirement: PR Author Is Persisted
+
+The `sessions` table SHALL have a nullable `pr_author` column (schema migration 19) holding the GitHub login of the reviewed pull request's author. `ocr state begin` SHALL accept `--pr-author <login>`, SHALL update it on an existing session only when passed, and `ocr state show` SHALL report it. It SHALL be NULL for non-PR sessions and for sessions begun before the column existed.
+
+#### Scenario: Author recorded at begin
+
+- **WHEN** `ocr state begin` is run with `--pr-author octocat`
+- **THEN** `ocr state show --json` SHALL report `pr_author: "octocat"`
+
+#### Scenario: Migration keeps existing sessions
+
+- **GIVEN** a database at schema version 18 with sessions
+- **WHEN** migrations run
+- **THEN** every session SHALL remain and its `pr_author` SHALL be NULL
+
+### Requirement: Closing a Session Spares Its Driver Execution
+
+`ocr state close` SHALL cascade-terminate in-flight `session-instance:*` executions of the closing workflow, and SHALL NOT terminate the execution that drives the workflow (the dashboard's review or map run). That execution SHALL finish with its real exit code when its process exits. The liveness sweep that orphans a workflow whose process died SHALL continue to terminate all of its executions.
+
+#### Scenario: Normal finish keeps exit code
+
+- **GIVEN** a workflow with a running driver execution and a running `session-instance:principal-1` child
+- **WHEN** `ocr state close` runs
+- **THEN** the child SHALL be finished with the cascade exit code
+- **AND** the driver execution SHALL remain unfinished
+
+### Requirement: Posted Round Is Recorded
+
+The `review_rounds` table SHALL have nullable columns `posted_at`, `posted_url` and `posted_state` (schema migration 20). `posted_state` SHALL be one of `approve`, `request-changes`, `comment` and hold the state actually sent to GitHub, after any own-PR downgrade. A state function SHALL record a post for a given session and round. Rounds never posted, and rounds created before the migration, SHALL have all three columns NULL.
+
+#### Scenario: Post recorded
+
+- **WHEN** a round is marked posted with a URL and state `comment`
+- **THEN** its row SHALL hold a non-null `posted_at`, that URL and `posted_state = "comment"`
+
+#### Scenario: Migration keeps existing rounds
+
+- **GIVEN** a database at schema version 19 with review rounds
+- **WHEN** migrations run
+- **THEN** every round SHALL remain with `posted_at`, `posted_url` and `posted_state` NULL

@@ -9,7 +9,7 @@
 - [x] 2.2 Rewrite `translate-review-to-single-human.md` (language policy, no AI/tooling references, localized severity labels, two output files)
 
 ## 3. Dashboard
-- [ ] 3.1 Expose `pr_author` in session and reviews APIs and UI
-- [ ] 3.2 `post:preview` and `post:submit` with inline comments in one review
-- [ ] 3.3 Post dialog: human review as the primary path
+- [x] 3.1 Expose `pr_author` in session and reviews APIs and UI
+- [x] 3.2 `post:preview` and `post:submit` with inline comments in one review
+- [x] 3.3 Post dialog: human review as the primary path
 - [x] 3.4 `posting.language` (separate posting language): config reader/writer, settings UI, `post-handler` preview/compose/prompt
