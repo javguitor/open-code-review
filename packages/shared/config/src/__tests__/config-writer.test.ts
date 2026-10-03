@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { parseDocument } from "yaml";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ConfigWriteError, setConfigValues } from "../config-writer.js";
 import { getOutputLanguage } from "../language-config.js";
@@ -126,6 +127,56 @@ describe("setConfigValues", () => {
     expect(() => setConfigValues(ocrDir, { language: "es" })).toThrow(ConfigWriteError);
     expect(read()).toBe(bad);
     expect(readdirSync(ocrDir)).toEqual(["config.yaml"]);
+  });
+});
+
+describe("setConfigValues safety", () => {
+  const writeAndExpectThrow = (content: string, patch: object, key: string) => {
+    writeFileSync(configPath, content);
+    expect(() => setConfigValues(ocrDir, patch as never)).toThrow(
+      expect.objectContaining({ name: "ConfigWriteError", key }),
+    );
+    expect(read()).toBe(content);
+  };
+
+  it("refuses to splice over an existing block scalar and leaves the file unchanged", () => {
+    writeAndExpectThrow("language: |\n  en\nx: 1\n", { language: "es" }, "language");
+  });
+
+  it("inserts a missing child after a nested block at the start of the next line", () => {
+    writeFileSync(configPath, "worktrees:\n  dir: a\n  extra:\n    k: v\nx: 1\n");
+    setConfigValues(ocrDir, { "worktrees.cleanup": "keep" });
+    expect(read()).toBe("worktrees:\n  dir: a\n  extra:\n    k: v\n  cleanup: keep\nx: 1\n");
+    const doc = parseDocument(read());
+    expect(doc.errors).toEqual([]);
+    expect(doc.getIn(["worktrees", "cleanup"])).toBe("keep");
+    expect(doc.getIn(["x"])).toBe(1);
+  });
+
+  it("rejects control characters in a value, naming the key", () => {
+    writeAndExpectThrow("x: 1\n", { "worktrees.dir": "/a\nb" }, "worktrees.dir");
+  });
+
+  it("preserves CRLF line endings", () => {
+    const crlf = "language: en\r\nworktrees:\r\n  dir: a\r\nx: 1\r\n";
+    writeFileSync(configPath, crlf);
+    setConfigValues(ocrDir, { "worktrees.cleanup": "keep", language: "es" });
+    expect(read()).toBe("language: es\r\nworktrees:\r\n  dir: a\r\n  cleanup: keep\r\nx: 1\r\n");
+  });
+
+  it("replaces a quoted existing value", () => {
+    writeFileSync(configPath, 'language: "en"  # c\n');
+    setConfigValues(ocrDir, { language: "es" });
+    expect(read()).toBe("language: es  # c\n");
+  });
+
+  it("handles a file without a trailing newline", () => {
+    writeFileSync(configPath, "language: en\nworktrees:\n  dir: a");
+    setConfigValues(ocrDir, { "worktrees.cleanup": "keep" });
+    const doc = parseDocument(read());
+    expect(doc.errors).toEqual([]);
+    expect(doc.getIn(["worktrees", "cleanup"])).toBe("keep");
+    expect(doc.getIn(["worktrees", "dir"])).toBe("a");
   });
 });
 

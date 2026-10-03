@@ -42,6 +42,9 @@ const KEY_PATHS: Record<keyof ConfigPatch, string[]> = {
 
 function validate(key: keyof ConfigPatch, value: unknown): string {
   if (typeof value !== "string") throw new ConfigWriteError(key, "must be a string");
+  if (/[\u0000-\u001f\u007f]/.test(value)) {
+    throw new ConfigWriteError(key, "must not contain control characters");
+  }
   const v = value.trim();
   if (key === "worktrees.dir" && !v) throw new ConfigWriteError(key, "must not be empty");
   if (key === "language" && !LANGUAGE_TAG.test(v)) {
@@ -68,13 +71,18 @@ function insertAt(text: string, pos: number, insert: string): string {
   return text.slice(0, pos) + insert + text.slice(pos);
 }
 
+/** Single-line scalar styles whose `range` can be replaced in place. */
+const LINE_SCALAR_TYPES = new Set(["PLAIN", "QUOTE_DOUBLE", "QUOTE_SINGLE"]);
+
 function setScalar(text: string, pair: Pair, key: string, literal: string): string {
   const value = pair.value;
   const keyEnd = (pair.key as { range: [number, number, number] }).range[1];
   if (value == null || (isScalar(value) && value.value === null && value.range![0] === value.range![1])) {
     return insertAt(text, text.indexOf(":", keyEnd) + 1, ` ${literal}`);
   }
-  if (!isScalar(value) || !value.range) throw new ConfigWriteError(key, "existing value is not a scalar");
+  if (!isScalar(value) || !value.range || !LINE_SCALAR_TYPES.has(value.type ?? "")) {
+    throw new ConfigWriteError(key, "existing value is not a plain scalar");
+  }
   return text.slice(0, value.range[0]) + literal + text.slice(value.range[1]);
 }
 
@@ -105,6 +113,11 @@ function applyKey(text: string, [head, child]: KeyPath, key: string, value: stri
   const first = block.items[0]!.key as { range: [number, number, number] };
   const indent = text.slice(text.lastIndexOf("\n", first.range[0] - 1) + 1, first.range[0]);
   const last = block.items.at(-1)!;
+  const lastValue = last.value as { range?: [number, number, number] } | null;
+  // A nested block's range already ends after its newline: insert at the start of the next line.
+  if (!isScalar(lastValue) && lastValue?.range && text[lastValue.range[1] - 1] === "\n") {
+    return insertAt(text, lastValue.range[1], `${indent}${child}: ${literal}${nl}`);
+  }
   const lastEnd = Math.max(
     (last.key as { range: [number, number, number] }).range[1],
     (last.value as { range?: [number, number, number] } | null)?.range?.[1] ?? 0,
@@ -126,6 +139,14 @@ export function setConfigValues(ocrDir: string, patch: ConfigPatch): string {
   const configPath = join(ocrDir, "config.yaml");
   let text = existsSync(configPath) ? readFileSync(configPath, "utf-8") : "";
   for (const [key, value] of entries) text = applyKey(text, KEY_PATHS[key], key, value);
+
+  // Safety net: the spliced text must parse and read back exactly what was asked for.
+  const check = parseDocument(text);
+  for (const [key, value] of entries) {
+    if (check.errors.length > 0 || check.getIn(KEY_PATHS[key]) !== value) {
+      throw new ConfigWriteError(key, "could not be written safely; edit .ocr/config.yaml by hand");
+    }
+  }
 
   const tmpPath = `${configPath}.${process.pid}.tmp`;
   try {
