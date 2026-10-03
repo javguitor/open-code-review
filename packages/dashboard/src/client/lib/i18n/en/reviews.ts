@@ -13,6 +13,7 @@ const reviews = {
   'reviews.count_of': '{shown} of {total} reviews',
   'reviews.no_match': 'No reviews match your filters.',
   'reviews.col_branch': 'Branch',
+  'reviews.col_author': 'Author',
   'reviews.col_round': 'Round',
   'reviews.col_verdict': 'Verdict',
   'reviews.col_blockers': 'Blockers',
@@ -64,6 +65,7 @@ const reviews = {
   'reviews.yes': 'Yes',
   'reviews.no': 'No',
   'reviews.open_in_ide': 'Open in {ide}',
+  'reviews.worktree_removed_hint': 'Worktree removed — links open your checkout.',
   'reviews.triage_aria': 'Triage status for {title}',
 
   // Address feedback
@@ -105,9 +107,9 @@ const reviews = {
   'reviews.recheck': 'Re-check',
   'reviews.post_team_review': 'Post Team Review',
   'reviews.post_team_review_desc':
-    'Post the original multi-reviewer synthesis as-is, with the selected review state.',
+    'Post the original multi-reviewer synthesis as-is (reviewer names and tables included), with the selected review state.',
   'reviews.generate_human': 'Generate Human Review',
-  'reviews.generate_human_desc': 'Rewrite as a single human voice — sounds like you wrote it.',
+  'reviews.generate_human_desc': 'A single respectful review in your voice: what is good, what blocks the merge, and inline comments on the code.',
   'reviews.use_saved_human': 'Use previously saved human review',
   'reviews.phase_rewriting': 'Rewriting as your voice',
   'reviews.phase_writing': 'Writing review',

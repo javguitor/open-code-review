@@ -6,6 +6,7 @@ import { cn } from '../../../lib/utils'
 import { useT } from '../../../lib/i18n'
 import { phaseLabel } from '../lib/phase-label'
 import { StaleBadge } from './stale-badge'
+import { PrAuthor } from './pr-author'
 import type { SessionSummary } from '../../../lib/api-types'
 
 type SessionCardProps = {
@@ -129,6 +130,9 @@ export function SessionCard({ session }: SessionCardProps) {
 
       <div className="mt-2 flex items-center gap-3 text-xs text-zinc-400 dark:text-zinc-500">
         <span>{formatShortDate(session.started_at)}</span>
+        {session.pr_author && (
+          <PrAuthor login={session.pr_author} link={false} className="truncate" />
+        )}
         <span className="flex items-center gap-1">
           <Clock className="h-3 w-3" />
           {formatElapsed(session.updated_at)}

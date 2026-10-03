@@ -1,7 +1,7 @@
 import { FileText, Plus, Minus, ExternalLink } from 'lucide-react'
 import { cn, buildIdeLink } from '../../../lib/utils'
 import { useT } from '../../../lib/i18n'
-import { useIdeConfig } from '../../../hooks/use-ide-config'
+import { useCodeRoot } from '../../../hooks/use-code-root'
 import type { MapFile } from '../../../lib/api-types'
 
 type FileRowProps = {
@@ -12,7 +12,7 @@ type FileRowProps = {
 
 export function FileRow({ file, onToggle, highlighted }: FileRowProps) {
   const { t } = useT()
-  const { data: config } = useIdeConfig()
+  const { config, codeRoot } = useCodeRoot()
 
   return (
     <label
@@ -35,7 +35,7 @@ export function FileRow({ file, onToggle, highlighted }: FileRowProps) {
         <span className="flex items-center gap-1.5">
           {config ? (
             <a
-              href={buildIdeLink(config.ide, config.projectRoot, file.file_path)}
+              href={buildIdeLink(config.ide, codeRoot, file.file_path)}
               onClick={(e) => e.stopPropagation()}
               className={cn(
                 'truncate text-sm font-mono hover:underline',

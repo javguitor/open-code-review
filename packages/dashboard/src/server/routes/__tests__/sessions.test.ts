@@ -22,6 +22,9 @@ let heads: Map<string, string | null>
 let headCalls: Array<{ url: string; force: boolean }>
 let reqHeads: Map<string, string>
 let reqFail: boolean
+let authors: Map<string, string | null>
+let authorCalls: Array<{ url: string; cacheOnly: boolean }>
+let worktreeRows: unknown[]
 let reqCalls: Array<{ url: string; force: boolean; cacheOnly: boolean }>
 const CARD = 'https://app.clickup.com/t/abc'
 /** When set, the route uses the real `getPrHead` (cache + failure semantics) over this runner. */
@@ -67,6 +70,9 @@ beforeEach(async () => {
   headCalls = []
   reqHeads = new Map()
   reqFail = false
+  authors = new Map()
+  authorCalls = []
+  worktreeRows = []
   reqCalls = []
   realGh = undefined as never
   clearPrHeadCacheForTests()
@@ -82,6 +88,11 @@ beforeEach(async () => {
         if (reqFail && opts.force) throw new RequirementsHeadLookupError(url, 'no token')
         return reqHeads.get(url) ?? null
       },
+      getPrAuthor: async (url, opts) => {
+        authorCalls.push({ url, cacheOnly: opts?.cacheOnly ?? false })
+        return authors.get(url) ?? null
+      },
+      runCli: async () => ({ stdout: JSON.stringify(worktreeRows), stderr: '' }),
       getPrHead: async (url, opts) => {
         if (realGh) return getPrHead(url, { ...opts, runGh: realGh })
         headCalls.push({ url, force: opts?.force ?? false })
@@ -296,5 +307,50 @@ describe('requirements staleness', () => {
     expect(status).toBe(200)
     expect(body).toMatchObject({ requirements_stale: null, requirements_current_updated_at: null })
     expect(body.requirements_error).toMatch(/no token/)
+  })
+})
+
+describe('pr_author', () => {
+  it('serves the stored author on list and detail without any gh lookup', async () => {
+    insert('pr', { pr_url: PR_URL, pr_number: 7 })
+    db.run("UPDATE sessions SET pr_author = 'octocat' WHERE id = 'pr'")
+    expect((await api('GET', '')).body[0]).toMatchObject({ pr_author: 'octocat' })
+    expect((await api('GET', '/pr')).body).toMatchObject({ pr_author: 'octocat' })
+    expect(authorCalls).toEqual([])
+  })
+
+  it('falls back to a lookup on detail only; the list is cache-only', async () => {
+    insert('old', { pr_url: PR_URL, pr_number: 7 })
+    authors.set(PR_URL, 'hubot')
+    expect((await api('GET', '/old')).body).toMatchObject({ pr_author: 'hubot' })
+    expect(authorCalls).toEqual([{ url: PR_URL, cacheOnly: false }])
+    authorCalls.length = 0
+    await api('GET', '')
+    expect(authorCalls).toEqual([{ url: PR_URL, cacheOnly: true }])
+  })
+
+  it('is null for non-PR sessions', async () => {
+    insert('plain')
+    expect((await api('GET', '/plain')).body).toMatchObject({ pr_author: null })
+  })
+})
+
+describe('GET /api/sessions/:id — code_root', () => {
+  it('is the repo root (not a worktree) for a non-PR session', async () => {
+    insert('plain')
+    expect((await api('GET', '/plain')).body).toMatchObject({ code_root: workspace, code_root_is_worktree: false })
+  })
+
+  it('is the PR worktree when it is registered and present', async () => {
+    insert('pr', { pr_url: PR_URL, pr_number: 7 })
+    const wt = join(workspace, 'wt', 'pr-7')
+    mkdirSync(wt, { recursive: true })
+    worktreeRows = [{ pr_number: 7, path: wt }]
+    expect((await api('GET', '/pr')).body).toMatchObject({ code_root: wt, code_root_is_worktree: true })
+  })
+
+  it('falls back to the repo root when the PR worktree is gone', async () => {
+    insert('pr', { pr_url: PR_URL, pr_number: 7 })
+    expect((await api('GET', '/pr')).body).toMatchObject({ code_root: workspace, code_root_is_worktree: false })
   })
 })

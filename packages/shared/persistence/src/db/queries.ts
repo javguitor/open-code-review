@@ -29,14 +29,15 @@ export function insertSession(db: Database, params: InsertSessionParams): void {
     head_sha = null,
     pr_number = null,
     pr_url = null,
+    pr_author = null,
     requirements_source_url = null,
     requirements_updated_at = null,
   } = params;
 
   db.run(
-    `INSERT INTO sessions (id, branch, workflow_type, current_phase, phase_number, current_round, current_map_run, session_dir, base_ref, head_ref, head_sha, pr_number, pr_url, requirements_source_url, requirements_updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, branch, workflow_type, current_phase, phase_number, current_round, current_map_run, session_dir, base_ref, head_ref, head_sha, pr_number, pr_url, requirements_source_url, requirements_updated_at],
+    `INSERT INTO sessions (id, branch, workflow_type, current_phase, phase_number, current_round, current_map_run, session_dir, base_ref, head_ref, head_sha, pr_number, pr_url, pr_author, requirements_source_url, requirements_updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, branch, workflow_type, current_phase, phase_number, current_round, current_map_run, session_dir, base_ref, head_ref, head_sha, pr_number, pr_url, pr_author, requirements_source_url, requirements_updated_at],
   );
 }
 
@@ -75,6 +76,7 @@ export function updateSession(
     "head_sha",
     "pr_number",
     "pr_url",
+    "pr_author",
     "requirements_source_url",
     "requirements_updated_at",
   ] as const) {

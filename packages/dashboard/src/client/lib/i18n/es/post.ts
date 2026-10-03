@@ -6,6 +6,21 @@ const post = {
   'post.worktree_kept_active': 'Worktree conservado: sigue abierta una revisión de esta PR; termínala primero.',
   'post.worktree_kept_running': 'Worktree conservado: hay un comando de esta PR en ejecución.',
   'post.worktree_none': 'No hay worktree para esta revisión.',
+  'post.severity_blocking': 'Bloqueante',
+  'post.severity_should_fix': 'Importante',
+  'post.severity_optional': 'Opcional',
+  'post.severity_nit': 'Nit',
+  'post.recommended': 'Recomendado',
+  'post.view_human': 'Ver revisión humana',
+  'post.team_secondary': 'O publicar la versión del equipo',
+  'post.summary_heading': 'Resumen',
+  'post.preview_loading': 'Cargando la vista previa…',
+  'post.inline_toggle': 'Comentarios en línea',
+  'post.inline_heading': 'Comentarios en línea ({count})',
+  'post.inline_hint': 'Se publican en una sola revisión, con un comentario en cada línea.',
+  'post.inline_off_hint': 'Los comentarios en línea están desactivados: solo se publica el resumen.',
+  'post.moved_heading': 'Fuera del diff ({count})',
+  'post.moved_hint': 'Estas líneas no forman parte del diff, así que van en el resumen.',
 }
 
 export { post }

@@ -115,6 +115,7 @@ describe("reviewed refs", () => {
     headSha: "a".repeat(40),
     prNumber: 123,
     prUrl: "https://github.com/o/r/pull/123",
+    prAuthor: "octocat",
   };
 
   it("begin persists the refs and show reports them", async () => {
@@ -128,13 +129,14 @@ describe("reviewed refs", () => {
       head_sha: "a".repeat(40),
       pr_number: 123,
       pr_url: "https://github.com/o/r/pull/123",
+      pr_author: "octocat",
     });
   });
 
   it("leaves the refs NULL when not passed", async () => {
     await begin("norefs");
     const s = (await stateShow(ocrDir, "norefs"))!.session;
-    expect([s.base_ref, s.head_ref, s.head_sha, s.pr_number, s.pr_url]).toEqual([null, null, null, null, null]);
+    expect([s.base_ref, s.head_ref, s.head_sha, s.pr_number, s.pr_url, s.pr_author]).toEqual([null, null, null, null, null, null]);
   });
 
   it("a new round updates only the refs that are passed", async () => {
@@ -148,6 +150,7 @@ describe("reviewed refs", () => {
     expect(s.head_sha).toBe("b".repeat(40));
     expect(s.pr_number).toBe(123);
     expect(s.base_ref).toBe("origin/main");
+    expect(s.pr_author).toBe("octocat");
   });
 
   it("complete-round persists head_sha into round-meta.json", async () => {

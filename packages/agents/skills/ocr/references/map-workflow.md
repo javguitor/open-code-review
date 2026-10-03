@@ -82,7 +82,7 @@ ocr state begin \
   --session-dir "$SESSION_DIR"
 ```
 
-For a PR target (`pr:<n>` or a PR URL), resolve it first with `references/pr-target.md` (session id `{date}-pr-<n>`, branch = `headRefName`) and add `--base-ref --head-ref --head-sha --pr-number --pr-url` to `ocr state begin`.
+For a PR target (`pr:<n>` or a PR URL), resolve it first with `references/pr-target.md` (session id `{date}-pr-<n>`, branch = `headRefName`) and add `--base-ref --head-ref --head-sha --pr-number --pr-url --pr-author` to `ocr state begin`.
 
 Then transition to the first map phase:
 ```bash

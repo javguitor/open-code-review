@@ -13,7 +13,7 @@ import { join, dirname, basename } from 'node:path'
 import type { AiCliService } from '../services/ai-cli/index.js'
 import type { WorktreeCleanup } from '@open-code-review/config/worktree-config'
 
-const VALID_IDES = ['vscode', 'cursor', 'windsurf', 'jetbrains', 'sublime'] as const
+const VALID_IDES = ['vscode', 'cursor', 'windsurf', 'jetbrains', 'sublime', 'zed'] as const
 type IdeType = (typeof VALID_IDES)[number]
 
 function detectIde(): IdeType {
@@ -38,6 +38,7 @@ function detectIde(): IdeType {
   if (termProgram.includes('vscode') || editor.includes('code')) return 'vscode'
   if (editor.includes('idea') || editor.includes('webstorm') || editor.includes('jetbrains')) return 'jetbrains'
   if (editor.includes('subl')) return 'sublime'
+  if (editor.includes('zed')) return 'zed'
 
   return 'vscode' // sensible default
 }

@@ -13,6 +13,7 @@ const reviews = {
   'reviews.count_of': '{shown} de {total} revisiones',
   'reviews.no_match': 'Ninguna revisión coincide con los filtros.',
   'reviews.col_branch': 'Rama',
+  'reviews.col_author': 'Autor',
   'reviews.col_round': 'Round',
   'reviews.col_verdict': 'Veredicto',
   'reviews.col_blockers': 'Bloqueantes',
@@ -65,6 +66,7 @@ const reviews = {
   'reviews.yes': 'Sí',
   'reviews.no': 'No',
   'reviews.open_in_ide': 'Abrir en {ide}',
+  'reviews.worktree_removed_hint': 'Worktree eliminado: los enlaces abren tu checkout.',
   'reviews.triage_aria': 'Estado de triaje de {title}',
 
   // Address feedback
@@ -106,10 +108,10 @@ const reviews = {
   'reviews.recheck': 'Volver a comprobar',
   'reviews.post_team_review': 'Publicar revisión del equipo',
   'reviews.post_team_review_desc':
-    'Publicar tal cual la síntesis original de varios revisores, con el estado de revisión seleccionado.',
+    'Publicar tal cual la síntesis original de varios revisores (con nombres y tablas), con el estado de revisión seleccionado.',
   'reviews.generate_human': 'Generar revisión humana',
   'reviews.generate_human_desc':
-    'Reescribir con una sola voz humana, como si la hubiera escrito la propia persona.',
+    'Una sola revisión respetuosa con tu voz: lo que está bien, lo que bloquea el merge y comentarios en línea sobre el código.',
   'reviews.use_saved_human': 'Usar la revisión humana guardada',
   'reviews.phase_rewriting': 'Reescribiendo con voz propia',
   'reviews.phase_writing': 'Redactando la revisión',

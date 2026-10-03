@@ -15,6 +15,7 @@ import type { Server as SocketIOServer, Socket } from 'socket.io'
 import type { Database } from '@open-code-review/persistence'
 import { execBinaryAsync, isGitHubReviewState, type GitHubReviewState } from '@open-code-review/platform'
 import { getWorktreeConfig } from '@open-code-review/config/worktree-config'
+import { getOutputLanguage } from '@open-code-review/config/language-config'
 import { getSession } from '../db.js'
 import { childEnv } from '../child-env.js'
 import { resolveLocalCli } from './cli-resolver.js'
@@ -26,7 +27,9 @@ import {
   runningExecutionForPr,
   type RunCli,
 } from '../services/worktrees.js'
+import { getPrHead } from '../services/pr-head.js'
 import { startTrackedExecution } from './execution-tracker.js'
+import { buildPreview, buildReviewRequest, composeBody, readRoundPost, type PostPreview } from './post-inline.js'
 import {
   decideSubmitState,
   NEEDS_RECHECK_ERROR,
@@ -177,6 +180,24 @@ async function cleanupWorktreeAfterPost(
   }
 }
 
+/** Absolute `rounds/round-<n>` directory of a session. */
+function roundDirFor(session: { session_dir: string }, sessionId: string, roundNumber: number, ocrDir: string): string {
+  const sessionDir = session.session_dir
+    ? resolveSessionDir(session.session_dir, ocrDir)
+    : join(ocrDir, 'sessions', sessionId)
+  return join(sessionDir, 'rounds', `round-${roundNumber}`)
+}
+
+/** `html_url` of a created review (`gh api` prints the response JSON); null when absent. */
+function htmlUrlOf(stdout: string): string | null {
+  try {
+    const url = (JSON.parse(stdout) as { html_url?: unknown }).html_url
+    return typeof url === 'string' && url.startsWith('https://') ? url : null
+  } catch {
+    return null
+  }
+}
+
 const INVALID_SUBMIT_PAYLOAD = { success: false, code: 'invalid-payload', error: 'Invalid payload' } as const
 
 // ── Active generation processes ──
@@ -202,8 +223,22 @@ export function registerPostHandlers(
   // repo (the parent) is never picked by accident. Each check clears it first.
   const checkedPrs = new Map<
     number,
-    { ownership: PrOwnership; prUrl: string; viewerLogin: string | null; sessionPr: number | null }
+    { ownership: PrOwnership; prUrl: string; viewerLogin: string | null; sessionPr: number | null; sessionHeadSha: string | null }
   >()
+
+  /**
+   * The human review to post, read from the round on disk, or `null` to post
+   * the client's `content` unchanged (no round named, `useHuman: false`, or no
+   * `final-human.md`). `inline: false` moves every comment into the body.
+   */
+  function resolvePlan(p: { sessionId?: unknown; roundNumber?: unknown; useHuman?: unknown; inline?: unknown }): PostPreview | null {
+    if (typeof p.sessionId !== 'string' || !Number.isInteger(p.roundNumber) || p.useHuman === false) return null
+    const session = getSession(db, p.sessionId)
+    if (!session) return null
+    const files = readRoundPost(roundDirFor(session, p.sessionId, p.roundNumber as number, ocrDir))
+    const preview = buildPreview(files, getOutputLanguage(ocrDir), { inline: p.inline !== false })
+    return preview.hasHuman ? preview : null
+  }
 
   // ── Check GitHub CLI auth + find PR ──
   socket.on('post:check-gh', async (payload: { sessionId: string }) => {
@@ -272,7 +307,9 @@ export function registerPostHandlers(
           console.error('Error resolving gh viewer login:', err)
         }
         const ownership = resolveOwnership(pr.authorLogin, viewerLogin)
-        checkedPrs.set(pr.prNumber, { ownership, prUrl: pr.prUrl, viewerLogin, sessionPr: session.pr_number })
+        checkedPrs.set(pr.prNumber, {
+          ownership, prUrl: pr.prUrl, viewerLogin, sessionPr: session.pr_number, sessionHeadSha: session.head_sha,
+        })
         socket.emit('post:gh-result', {
           authenticated: true,
           prNumber: pr.prNumber,
@@ -615,10 +652,43 @@ export function registerPostHandlers(
     },
   )
 
+  // ── Preview what would be posted: summary body + inline vs moved comments ──
+  socket.on('post:preview', (payload: { sessionId: string; roundNumber: number }) => {
+    try {
+      const { sessionId, roundNumber } = payload ?? {}
+      if (typeof sessionId !== 'string' || !Number.isInteger(roundNumber)) {
+        socket.emit('post:error', { error: 'Invalid payload' })
+        return
+      }
+      const session = getSession(db, sessionId)
+      if (!session) {
+        socket.emit('post:error', { error: 'Session not found' })
+        return
+      }
+      const files = readRoundPost(roundDirFor(session, sessionId, roundNumber, ocrDir))
+      const preview: PostPreview = buildPreview(files, getOutputLanguage(ocrDir))
+      socket.emit('post:preview-result', preview)
+    } catch (err) {
+      console.error('Error in post:preview handler:', err)
+      socket.emit('post:error', { error: 'Internal error' })
+    }
+  })
+
   // ── Submit review to GitHub ──
   socket.on(
     'post:submit',
-    async (payload: { prNumber: number; content: string; state?: unknown }) => {
+    async (payload: {
+      prNumber: number
+      content: string
+      state?: unknown
+      /** With `roundNumber`: lets the server read the human review + inline comments from disk. */
+      sessionId?: unknown
+      roundNumber?: unknown
+      /** Post the human review (default: when `final-human.md` exists). */
+      useHuman?: unknown
+      /** Post findings as inline comments (default true). */
+      inline?: unknown
+    }) => {
       try {
         const { prNumber, content, state: rawState } = payload ?? {}
         if (!Number.isInteger(prNumber) || prNumber <= 0 || typeof content !== 'string') {
@@ -660,26 +730,51 @@ export function registerPostHandlers(
           )
         }
 
-        // Write content to temp file for --body-file
+        // Human review plan from disk when the client names the round (supplies the inline
+        // comments, and the body only when `content` is empty).
+        const plan = resolvePlan(payload)
+        // `content` is the human summary as the user saw/edited it (never the moved
+        // comments); the server always appends the comments that cannot go inline for
+        // the chosen `inline` mode, so edits are kept and nothing is duplicated or lost.
+        const body = plan
+          ? composeBody(content.trim() !== '' ? content : plan.summary, plan.moved, getOutputLanguage(ocrDir))
+          : content
+        const inlineComments = plan?.inline ?? []
+
+        // Write content to temp file for --body-file / --input
         const tmpDir = join(tmpdir(), 'ocr-post-comments')
         try { mkdirSync(tmpDir, { recursive: true, mode: 0o700 }) } catch { /* exists */ }
         const tmpFile = join(tmpDir, `${randomUUID()}.md`)
-        writeFileSync(tmpFile, content, { mode: 0o600 })
+        writeFileSync(tmpFile, body, { mode: 0o600 })
 
         const repoRoot = dirname(ocrDir)
+        let requestFile: string | null = null
         try {
-          await runGh(
-            'gh',
-            ghReviewArgs(checked.prUrl, state, tmpFile),
-            { env: childEnv().env, cwd: repoRoot, encoding: 'utf-8' },
-          )
+          const apiPath = reviewsApiPath(checked.prUrl)
+          let urlMatch: string | null = null
+          if (inlineComments.length > 0 && apiPath) {
+            // One review carrying every inline comment (gh pr review cannot attach any).
+            const commitId = checked.sessionHeadSha ?? (await getPrHead(checked.prUrl, { runGh }))
+            requestFile = `${tmpFile}.json`
+            writeFileSync(requestFile, JSON.stringify(buildReviewRequest(state, body, inlineComments, commitId)), { mode: 0o600 })
+            const { stdout } = await runGh(
+              'gh',
+              ['api', '--method', 'POST', apiPath, '--input', requestFile],
+              { env: childEnv().env, cwd: repoRoot, encoding: 'utf-8' },
+            )
+            urlMatch = htmlUrlOf(stdout)
+          } else {
+            await runGh(
+              'gh',
+              ghReviewArgs(checked.prUrl, state, tmpFile),
+              { env: childEnv().env, cwd: repoRoot, encoding: 'utf-8' },
+            )
+          }
 
           // `gh pr review` prints nothing on success; recover the review URL
           // best-effort. A failure here never turns the post into a failure.
-          let urlMatch: string | null = null
           try {
-            const apiPath = reviewsApiPath(checked.prUrl)
-            if (apiPath) {
+            if (apiPath && urlMatch === null) {
               const { stdout } = await runGh(
                 'gh',
                 ['api', '--paginate', '--slurp', apiPath],
@@ -701,6 +796,7 @@ export function registerPostHandlers(
           tracker.finish(0)
           socket.emit('post:submit-result', {
             success: true, commentUrl: urlMatch, state, downgraded, worktree,
+            ...(inlineComments.length > 0 ? { inlineCount: inlineComments.length } : {}),
           })
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : 'Unknown error'
@@ -712,6 +808,7 @@ export function registerPostHandlers(
           })
         } finally {
           try { unlinkSync(tmpFile) } catch { /* ignore */ }
+          if (requestFile) try { unlinkSync(requestFile) } catch { /* ignore */ }
         }
       } catch (err) {
         console.error('Error in post:submit handler:', err)

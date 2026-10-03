@@ -29,6 +29,8 @@ export type SessionRow = {
   head_sha: string | null;
   pr_number: number | null;
   pr_url: string | null;
+  /** GitHub login of the PR author; NULL for non-PR sessions and sessions begun before it was recorded. */
+  pr_author: string | null;
   /** Requirements source (ClickUp/GitHub/file/text); NULL when none was fetched. */
   requirements_source_url: string | null;
   requirements_updated_at: string | null;
@@ -48,6 +50,7 @@ export type InsertSessionParams = {
   head_sha?: string;
   pr_number?: number;
   pr_url?: string;
+  pr_author?: string;
   requirements_source_url?: string;
   requirements_updated_at?: string;
 };
@@ -69,6 +72,7 @@ export type UpdateSessionParams = Partial<
   head_sha?: string;
   pr_number?: number;
   pr_url?: string;
+  pr_author?: string;
   requirements_source_url?: string;
   requirements_updated_at?: string;
 };

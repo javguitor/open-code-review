@@ -843,7 +843,7 @@ describe("stateClose — cascade + idempotency", () => {
     expect(closeEvents.length).toBe(1);
   });
 
-  it("cascade-closes in-flight dependent command_executions", async () => {
+  it("cascade-closes session-instance children but spares the driver execution", async () => {
     const dir = sessionDir("cascade");
     await stateInit({
       sessionId: "cascade",
@@ -858,22 +858,30 @@ describe("stateClose — cascade + idempotency", () => {
     db.run(
       `INSERT INTO command_executions (uid, command, args, started_at, workflow_id, last_heartbeat_at)
        VALUES (?, 'review', '[]', datetime('now'), ?, datetime('now'))`,
-      ["dash-cascade-uid", "cascade"],
+      ["dash-driver-uid", "cascade"],
+    );
+    db.run(
+      `INSERT INTO command_executions (uid, command, args, started_at, workflow_id, last_heartbeat_at)
+       VALUES (?, 'session-instance:principal-1', '[]', datetime('now'), ?, datetime('now'))`,
+      ["child-uid", "cascade"],
     );
 
     await stateClose({ sessionId: "cascade", ocrDir, abort: true });
 
-    const result = db.exec(
-      `SELECT exit_code, finished_at, notes
-         FROM command_executions
-        WHERE uid = ?`,
-      ["dash-cascade-uid"],
-    );
-    const row = result[0]?.values[0];
-    expect(row).toBeDefined();
-    expect(row?.[0]).toBe(-4); // CASCADE_CLOSE_EXIT_CODE
-    expect(row?.[1]).toBeTruthy(); // finished_at populated
-    expect(String(row?.[2] ?? "")).toMatch(/closed by parent workflow close/);
+    const rowOf = (uid: string) =>
+      db.exec(
+        `SELECT exit_code, finished_at, notes FROM command_executions WHERE uid = ?`,
+        [uid],
+      )[0]?.values[0];
+
+    const child = rowOf("child-uid");
+    expect(child?.[0]).toBe(-4); // CASCADE_CLOSE_EXIT_CODE
+    expect(child?.[1]).toBeTruthy(); // finished_at populated
+    expect(String(child?.[2] ?? "")).toMatch(/closed by parent workflow close/);
+
+    const driver = rowOf("dash-driver-uid");
+    expect(driver?.[1]).toBeNull(); // still running: the dashboard finalizes it on process exit
+    expect(driver?.[0]).toBeNull();
   });
 });
 

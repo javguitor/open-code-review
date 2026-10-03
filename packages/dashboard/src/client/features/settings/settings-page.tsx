@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Check, Loader2, X } from 'lucide-react'
-import { cn } from '../../lib/utils'
+import { cn, IDE_TYPES, type IdeType } from '../../lib/utils'
 import { useT, type MessageKey } from '../../lib/i18n'
 import { CLEANUP_MODES, LANGUAGES, buildSettingsPatch, type SettingsErrors, type SettingsField, type SettingsForm } from '../../lib/worktree-ui'
-import { useConfigSettings, usePatchConfig } from './hooks/use-config-settings'
+import { useConfigSettings, usePatchConfig, usePatchIde } from './hooks/use-config-settings'
 
 const INPUT_CLASS = cn(
   'w-full rounded-lg border px-3 py-2 text-sm',
@@ -23,6 +23,7 @@ export function SettingsPage() {
   const { t } = useT()
   const { data, isLoading } = useConfigSettings()
   const patchConfig = usePatchConfig()
+  const patchIde = usePatchIde()
   const [form, setForm] = useState<SettingsForm>({ dir: '', cleanup: 'keep', language: 'en' })
   const [errors, setErrors] = useState<SettingsErrors>({})
   const [serverError, setServerError] = useState<{ key?: string; message: string } | null>(null)
@@ -144,6 +145,27 @@ export function SettingsPage() {
           ))}
         </select>
         <FieldError message={errorFor('language')} />
+      </section>
+
+      <section className={SECTION_CLASS}>
+        <label htmlFor="settings-ide" className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
+          {t('settings.ide')}
+        </label>
+        <select
+          id="settings-ide"
+          value={data.ide}
+          onChange={(e) => patchIde.mutate(e.target.value as IdeType)}
+          disabled={patchIde.isPending}
+          className={cn(INPUT_CLASS, 'w-auto')}
+        >
+          {IDE_TYPES.map((ide) => (
+            <option key={ide} value={ide}>
+              {t(`settings.ide_${ide}` as MessageKey)}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">{t('settings.ide_hint')}</p>
+        <FieldError message={patchIde.error?.message} />
       </section>
 
       <section className={SECTION_CLASS}>

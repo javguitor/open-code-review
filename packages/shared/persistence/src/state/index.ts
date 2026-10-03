@@ -269,6 +269,7 @@ export async function stateInit(params: InitParams): Promise<string> {
     head_sha: params.headSha,
     pr_number: params.prNumber,
     pr_url: params.prUrl,
+    pr_author: params.prAuthor,
     requirements_source_url: params.requirementsUrl,
     requirements_updated_at: params.requirementsUpdatedAt,
   };
@@ -511,8 +512,12 @@ export async function stateClose(params: CloseParams): Promise<void> {
     // Cascade: terminate any dependent command_executions rows still in
     // flight. Without this, a workflow close leaves orphan rows that only
     // the heartbeat sweep can recover — and that sweep needs the dashboard
-    // running. Doing it here makes close authoritative.
-    cascadeTerminateExecutions(db, sessionId, CASCADE_CLOSE_EXIT_CODE, note);
+    // running. Doing it here makes close authoritative. The driver execution
+    // (the process running this very command) is spared: it finishes on its
+    // own and must keep its real exit code instead of -4 ("cancelled").
+    cascadeTerminateExecutions(db, sessionId, CASCADE_CLOSE_EXIT_CODE, note, {
+      sparingDriver: true,
+    });
   });
 }
 
@@ -644,6 +649,7 @@ export async function stateShow(
       head_sha: session.head_sha,
       pr_number: session.pr_number,
       pr_url: session.pr_url,
+      pr_author: session.pr_author,
       requirements_source_url: session.requirements_source_url,
       requirements_updated_at: session.requirements_updated_at,
     },
@@ -689,6 +695,7 @@ export async function stateList(
     head_sha: s.head_sha,
     pr_number: s.pr_number,
     pr_url: s.pr_url,
+    pr_author: s.pr_author,
     requirements_source_url: s.requirements_source_url,
     requirements_updated_at: s.requirements_updated_at,
   }));

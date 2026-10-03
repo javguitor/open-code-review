@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, FolderOpen, FolderOpenDot } from 'lucide-react'
 import { cn, buildIdeLink } from '../../../lib/utils'
 import { useT } from '../../../lib/i18n'
-import { useIdeConfig } from '../../../hooks/use-ide-config'
+import { useCodeRoot } from '../../../hooks/use-code-root'
 import { ProgressBar } from '../../../components/ui/progress-bar'
 import { FileRow } from './file-row'
 import type { MapSection } from '../../../lib/api-types'
@@ -17,7 +17,7 @@ export function SectionCard({ section, onToggleFile }: SectionCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [highlightedFileId, setHighlightedFileId] = useState<number | null>(null)
   const fileListRef = useRef<HTMLDivElement>(null)
-  const { data: config } = useIdeConfig()
+  const { config, codeRoot } = useCodeRoot()
 
   // Scroll to and highlight the first unchecked file after expanding via "Open all"
   useEffect(() => {
@@ -47,7 +47,7 @@ export function SectionCard({ section, onToggleFile }: SectionCardProps) {
       const unreviewedFiles = section.files.filter((f) => !f.is_reviewed)
       const filesToOpen = unreviewedFiles.length > 0 ? unreviewedFiles : section.files
       const urls = filesToOpen.map((file) =>
-        buildIdeLink(config.ide, config.projectRoot, file.file_path),
+        buildIdeLink(config.ide, codeRoot, file.file_path),
       )
 
       function openNext(index: number) {
@@ -64,7 +64,7 @@ export function SectionCard({ section, onToggleFile }: SectionCardProps) {
 
       openNext(0)
     },
-    [config, section.files],
+    [config, codeRoot, section.files],
   )
 
   return (

@@ -615,6 +615,17 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 19,
+    description: "Add nullable sessions.pr_author (GitHub login of the reviewed PR's author)",
+    // Nullable, no default: NULL = not a PR session, or begun before the
+    // author was recorded (the dashboard may look those up on demand).
+    run: (db) => {
+      if (!columnExists(db, "sessions", "pr_author")) {
+        db.run("ALTER TABLE sessions ADD COLUMN pr_author TEXT;");
+      }
+    },
+  },
 ];
 
 /** Whether `table` currently has a column named `column` (for idempotent DDL). */

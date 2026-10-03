@@ -5,6 +5,7 @@ import { DECISION_STATUSES, type DecisionStatus, type RoundFinding } from '../ty
 import { currentStatus } from '../decisions'
 import { DECISION_LABEL_KEY } from '../labels'
 import { useUpdateFindingStatus } from '../hooks/use-reviews'
+import { useCodeRoot } from '../../../hooks/use-code-root'
 import { FindingRow } from './finding-row'
 import { SortableHeader } from '../../../components/ui/sortable-header'
 import { useT } from '../../../lib/i18n'
@@ -62,6 +63,7 @@ export function FindingsTable({ findings, isLoading = false }: FindingsTableProp
   const [triageFilter, setTriageFilter] = useState<DecisionStatus | 'all'>('all')
 
   const updateStatus = useUpdateFindingStatus()
+  const { worktreeRemoved } = useCodeRoot()
 
   function handleSort(field: SortField) {
     if (sortField === field) {
@@ -133,6 +135,11 @@ export function FindingsTable({ findings, isLoading = false }: FindingsTableProp
 
   return (
     <div>
+      {worktreeRemoved && (
+        <p className="mb-3 text-xs text-amber-700 dark:text-amber-400">
+          {t('reviews.worktree_removed_hint')}
+        </p>
+      )}
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Filter className="h-4 w-4 text-zinc-400" />
         <div className="flex items-center gap-2">

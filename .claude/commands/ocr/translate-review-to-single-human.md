@@ -1,5 +1,5 @@
 ---
-description: Translate a multi-reviewer code review into a single human-voice GitHub PR comment.
+description: Translate a multi-reviewer code review into a single human-voice PR review (summary + inline comments).
 ---
 
 # OCR: Translate-review-to-single-human

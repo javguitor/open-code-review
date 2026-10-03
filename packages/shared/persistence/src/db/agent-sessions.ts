@@ -66,13 +66,23 @@ const INSTANCE_COMMAND = "session-instance";
  * Sets `finished_at`, the given `exitCode`, clears `pid`, and appends `note`.
  * The caller is responsible for running this inside its own transaction so
  * the cascade commits atomically with the parent's terminal write.
+ *
+ * `sparingDriver` leaves the row that DRIVES the workflow (its `command` is
+ * not a `session-instance:*` child, e.g. the dashboard's `review`/`map` run)
+ * untouched. `stateClose` runs from inside that process, so stamping it -4
+ * would label a normally-finishing review as cancelled; the dashboard
+ * finalizes the driver with the real exit code when the process exits.
  */
 export function cascadeTerminateExecutions(
   db: Database,
   workflowId: string,
   exitCode: number,
   note: string,
+  options: { sparingDriver?: boolean } = {},
 ): void {
+  const driverClause = options.sparingDriver
+    ? `AND (command = '${INSTANCE_COMMAND}' OR command LIKE '${INSTANCE_COMMAND}:%')`
+    : "";
   db.run(
     `UPDATE command_executions
        SET finished_at = datetime('now'),
@@ -80,7 +90,8 @@ export function cascadeTerminateExecutions(
            pid         = NULL,
            notes       = COALESCE(notes || char(10), '') || ?
      WHERE workflow_id = ?
-       AND finished_at IS NULL`,
+       AND finished_at IS NULL
+       ${driverClause}`,
     [exitCode, note, workflowId],
   );
 }

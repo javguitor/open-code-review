@@ -32,6 +32,7 @@ import {
 } from "../../../lib/review-state";
 import { usePostReview, type ActivityLogEntry } from "../hooks/use-post-review";
 import { useT, type MessageKey } from "../../../lib/i18n";
+import { buildSubmitPayload, commentLocation, groupBySeverity, SEVERITY_LABEL_KEY } from "../../../lib/post-preview";
 import { removeAction, removeStatusKey, worktreeOutcomeKey } from "../../../lib/worktree-ui";
 import { useRemoveWorktree } from "../../sessions/hooks/use-session-worktree";
 
@@ -104,6 +105,8 @@ export function PostReviewDialog({
     activityLog,
     elapsedSeconds,
     postResult,
+    preview,
+    requestPreview,
     error,
     needsRecheck,
     reviewState,
@@ -122,11 +125,15 @@ export function PostReviewDialog({
   const [activityExpanded, setActivityExpanded] = useState(true);
   const hasAutoCollapsed = useRef(false);
   const [draftSaved, setDraftSaved] = useState(false);
+  const [inlineEnabled, setInlineEnabled] = useState(true);
+  const previewRequested = useRef(false);
 
   const close = useCallback(() => {
     setOpen(false);
     setEditMode(false);
     setEditContent("");
+    setInlineEnabled(true);
+    previewRequested.current = false;
     reset();
     resetRemoveWorktree();
   }, [reset, resetRemoveWorktree]);
@@ -136,6 +143,13 @@ export function PostReviewDialog({
     setOpen(true);
     checkGitHub(sessionId);
   }, [sessionId, checkGitHub]);
+
+  // Once the PR check passes, learn whether a human review already exists for this round
+  useEffect(() => {
+    if (step !== "ready" || previewRequested.current) return;
+    previewRequested.current = true;
+    requestPreview(sessionId, roundNumber);
+  }, [step, sessionId, roundNumber, requestPreview]);
 
   // Escape to close
   useEffect(() => {
@@ -175,13 +189,20 @@ export function PostReviewDialog({
     }
   }, [streamingContent, step]);
 
-  // The content to post — either edited, generated, saved human review, or original final
+  // The content to post — either edited, generated, saved human review, or original final.
+  // For the human review this is the summary alone: the server appends the comments that
+  // can't go inline (per the inline toggle), so edits are kept and nothing is duplicated.
+  const humanBase = (): string =>
+    (preview?.hasHuman ? preview.summary : "") ||
+    generatedContent ||
+    savedHumanReview ||
+    finalContent;
   const getPostContent = (): string => {
     if (editMode && editContent) return editContent;
-    if (generatedContent) return generatedContent;
-    if (savedHumanReview) return savedHumanReview;
-    return finalContent;
+    return humanBase();
   };
+  const inlineComments = preview?.hasHuman ? preview.inline : [];
+  const movedComments = preview?.hasHuman ? preview.moved : [];
 
   const prNumber = checkResult?.prNumber ?? 0;
   const posted = postResult?.success ? postResult : null;
@@ -312,37 +333,72 @@ export function PostReviewDialog({
 
                   {stateSelector}
 
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {/* Post team review directly */}
-                    <button
-                      onClick={() => submitToGitHub(prNumber, finalContent, reviewState)}
-                      className="group rounded-lg border border-zinc-200 p-4 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/50 dark:border-zinc-700 dark:hover:border-blue-700 dark:hover:bg-blue-950/20"
-                    >
-                      <div className="mb-2 flex items-center gap-2">
-                        <FileText className="h-5 w-5 text-zinc-500 group-hover:text-blue-600 dark:group-hover:text-blue-400" />
-                        <span className="font-medium text-zinc-900 dark:text-zinc-100">
-                          {t("reviews.post_team_review")}
-                        </span>
-                      </div>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                        {t("reviews.post_team_review_desc")}
-                      </p>
-                    </button>
+                  {/* Human review: the primary path */}
+                  <button
+                    onClick={() =>
+                      preview?.hasHuman
+                        ? setStep("preview")
+                        : generate(sessionId, roundNumber)
+                    }
+                    className="group w-full rounded-lg border-2 border-emerald-300 bg-emerald-50/40 p-4 text-left transition-colors hover:border-emerald-400 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/10 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/20"
+                  >
+                    <div className="mb-2 flex items-center gap-2">
+                      <User className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                      <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                        {preview?.hasHuman
+                          ? t("post.view_human")
+                          : t("reviews.generate_human")}
+                      </span>
+                      <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-white">
+                        {t("post.recommended")}
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      {t("reviews.generate_human_desc")}
+                    </p>
+                  </button>
 
-                    {/* Generate human review */}
+                  {preview?.hasHuman && (
                     <button
                       onClick={() => generate(sessionId, roundNumber)}
-                      className="group rounded-lg border border-zinc-200 p-4 text-left transition-colors hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-zinc-700 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/20"
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
                     >
-                      <div className="mb-2 flex items-center gap-2">
-                        <User className="h-5 w-5 text-zinc-500 group-hover:text-emerald-600 dark:group-hover:text-emerald-400" />
-                        <span className="font-medium text-zinc-900 dark:text-zinc-100">
-                          {t("reviews.generate_human")}
+                      <RefreshCw className="h-3 w-3" />
+                      {t("reviews.regenerate")}
+                    </button>
+                  )}
+
+                  {/* Team version: secondary */}
+                  <div className="space-y-2 border-t border-zinc-200 pt-3 dark:border-zinc-700">
+                    <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                      {t("post.team_secondary")}
+                    </p>
+                    <button
+                      onClick={() =>
+                        submitToGitHub(
+                          buildSubmitPayload({
+                            mode: "team",
+                            prNumber,
+                            content: finalContent,
+                            state: reviewState,
+                            sessionId,
+                            roundNumber,
+                            inlineEnabled: false,
+                            inlineCount: 0,
+                          }),
+                        )
+                      }
+                      className="group flex w-full items-start gap-2 rounded-lg border border-zinc-200 p-3 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/50 dark:border-zinc-700 dark:hover:border-blue-700 dark:hover:bg-blue-950/20"
+                    >
+                      <FileText className="mt-0.5 h-4 w-4 shrink-0 text-zinc-500 group-hover:text-blue-600 dark:group-hover:text-blue-400" />
+                      <span>
+                        <span className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                          {t("reviews.post_team_review")}
                         </span>
-                      </div>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                        {t("reviews.generate_human_desc")}
-                      </p>
+                        <span className="block text-xs text-zinc-500 dark:text-zinc-400">
+                          {t("reviews.post_team_review_desc")}
+                        </span>
+                      </span>
                     </button>
                   </div>
 
@@ -469,11 +525,7 @@ export function PostReviewDialog({
                       onClick={() => {
                         setEditMode(true);
                         if (!editContent) {
-                          setEditContent(
-                            generatedContent ||
-                              savedHumanReview ||
-                              finalContent,
-                          );
+                          setEditContent(humanBase());
                         }
                       }}
                       className={cn(
@@ -491,18 +543,97 @@ export function PostReviewDialog({
                   {/* Content */}
                   {editMode ? (
                     <textarea
-                      value={
-                        editContent ||
-                        generatedContent ||
-                        savedHumanReview ||
-                        finalContent
-                      }
+                      value={editContent || humanBase()}
                       onChange={(e) => setEditContent(e.target.value)}
                       className="h-96 w-full rounded-md border border-zinc-200 bg-zinc-50 p-3 font-mono text-sm text-zinc-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
                     />
                   ) : (
-                    <div className="prose prose-sm dark:prose-invert max-w-none">
-                      <MarkdownRenderer content={getPostContent()} />
+                    <div className="space-y-4">
+                      <div className="prose prose-sm dark:prose-invert max-w-none">
+                        <MarkdownRenderer content={getPostContent()} />
+                      </div>
+                      {preview === null && (
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                          {t("post.preview_loading")}
+                        </p>
+                      )}
+                      {(inlineComments.length > 0 || movedComments.length > 0) && (
+                        <section className="space-y-3 border-t border-zinc-200 pt-3 dark:border-zinc-700">
+                          <label className="flex items-center gap-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                            <input
+                              type="checkbox"
+                              checked={inlineEnabled}
+                              onChange={(e) => setInlineEnabled(e.target.checked)}
+                              className="h-4 w-4 rounded border-zinc-300 text-blue-600 dark:border-zinc-600 dark:bg-zinc-800"
+                            />
+                            {t("post.inline_toggle")}
+                          </label>
+                          {inlineEnabled && inlineComments.length > 0 ? (
+                            <div className="space-y-3">
+                              <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                                {t("post.inline_heading", { count: inlineComments.length })}
+                              </h4>
+                              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                                {t("post.inline_hint")}
+                              </p>
+                              {groupBySeverity(inlineComments).map((group) => (
+                                <div key={group.severity} className="space-y-2">
+                                  {group.comments.map((c, i) => (
+                                    <div
+                                      key={`${commentLocation(c)}-${i}`}
+                                      className="rounded-md border border-zinc-200 p-3 dark:border-zinc-700"
+                                    >
+                                      <div className="mb-1 flex items-center gap-2">
+                                        <code className="text-xs text-zinc-700 dark:text-zinc-300">
+                                          {commentLocation(c)}
+                                        </code>
+                                        <span
+                                          className={cn(
+                                            "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase",
+                                            group.severity === "blocking"
+                                              ? "bg-red-500/15 text-red-700 dark:text-red-400"
+                                              : group.severity === "should_fix"
+                                                ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                                                : "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400",
+                                          )}
+                                        >
+                                          {t(SEVERITY_LABEL_KEY[group.severity])}
+                                        </span>
+                                      </div>
+                                      <div className="prose prose-sm dark:prose-invert max-w-none">
+                                        <MarkdownRenderer content={c.body} />
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            inlineComments.length > 0 && (
+                              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                                {t("post.inline_off_hint")}
+                              </p>
+                            )
+                          )}
+                          {movedComments.length > 0 && (
+                            <div className="space-y-1">
+                              <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                                {t("post.moved_heading", { count: movedComments.length })}
+                              </h4>
+                              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                                {t("post.moved_hint")}
+                              </p>
+                              <ul className="list-disc pl-5 text-xs text-zinc-600 dark:text-zinc-400">
+                                {movedComments.map((c, i) => (
+                                  <li key={`${commentLocation(c)}-${i}`}>
+                                    <code>{commentLocation(c)}</code>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </section>
+                      )}
                     </div>
                   )}
                 </div>
@@ -640,7 +771,18 @@ export function PostReviewDialog({
                     onClick={() => {
                       const content = getPostContent();
                       saveDraft(sessionId, roundNumber, content);
-                      submitToGitHub(prNumber, content, reviewState);
+                      submitToGitHub(
+                        buildSubmitPayload({
+                          mode: "human",
+                          prNumber,
+                          content,
+                          state: reviewState,
+                          sessionId,
+                          roundNumber,
+                          inlineEnabled,
+                          inlineCount: inlineComments.length,
+                        }),
+                      );
                     }}
                     className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
                   >

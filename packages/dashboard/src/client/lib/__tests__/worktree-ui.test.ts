@@ -11,6 +11,7 @@ import type { ConfigSettings, PostWorktreeOutcome, WorktreeRemoveStatus } from '
 const current: ConfigSettings = {
   worktrees: { dir: '/repo/.wt', dir_raw: '.wt', exists: true, cleanup: 'keep' },
   language: 'en',
+  ide: 'vscode',
   integrations: { clickup_token: 'missing' },
 }
 const same = { dir: '.wt', cleanup: 'keep', language: 'en' }

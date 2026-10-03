@@ -7,6 +7,7 @@ import { useReviewers } from '../hooks/use-reviewers'
 import { ReviewerDefaults, type ReviewerSelection } from './reviewer-defaults'
 import { ReviewerDialog } from './reviewer-dialog'
 import { extractQuotedFlag, quoteArg, requirementsArgs, unescapeDoubleQuoted } from '../../../lib/command-string'
+import { resolveDefaultSelection } from '../../../lib/default-team'
 import { RequirementsPreview } from '../../requirements/components/requirements-preview'
 
 // ── Command registry ──
@@ -216,24 +217,6 @@ function serializeTeam(selection: ReviewerSelection[]): string {
   return JSON.stringify(instances)
 }
 
-function selectionsEqual(a: ReviewerSelection[], b: ReviewerSelection[]): boolean {
-  // Ephemeral entries always make selections "different" from defaults
-  if (a.some((s) => s.description) || b.some((s) => s.description)) return false
-  // Per-instance model overrides also count as differences from the default
-  if (
-    a.some((s) => s.models?.some((m) => m !== null)) ||
-    b.some((s) => s.models?.some((m) => m !== null))
-  ) {
-    return false
-  }
-  if (a.length !== b.length) return false
-  const mapA = new Map(a.map((s) => [s.id, s.count]))
-  for (const s of b) {
-    if (mapA.get(s.id) !== s.count) return false
-  }
-  return true
-}
-
 // ── Component ──
 
 type CommandPaletteProps = {
@@ -253,31 +236,16 @@ export function CommandPalette({ isRunning, runningCount, onRunCommand, prefill,
   const highlightTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   // Reviewer state
-  const { reviewers, defaults, isLoaded } = useReviewers()
+  const { reviewers, defaults, defaultTeam, isLoaded } = useReviewers()
   const [teamOverride, setTeamOverride] = useState<ReviewerSelection[] | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
 
   const selectedCommand = COMMANDS.find((c) => c.id === selectedId) ?? COMMANDS[0]!
   const isReview = selectedCommand.id === 'review'
 
-  // Compute default selection from meta.json defaults
+  // Default selection mirrors what the skill runs without --team: config `default_team` counts
   const defaultSelection: ReviewerSelection[] = isLoaded
-    ? defaults.map((id) => {
-        // Try to infer count from config default_team pattern (principal:2 etc.)
-        // For now, default to 1 per reviewer in the defaults list.
-        // If the same ID appears multiple times in defaults, count them.
-        return { id, count: 1 }
-      })
-      // Deduplicate and sum counts for same IDs
-      .reduce<ReviewerSelection[]>((acc, s) => {
-        const existing = acc.find((a) => a.id === s.id)
-        if (existing) {
-          existing.count += s.count
-        } else {
-          acc.push({ ...s })
-        }
-        return acc
-      }, [])
+    ? resolveDefaultSelection(defaults, defaultTeam)
     : []
 
   // Active selection: override or defaults
@@ -322,15 +290,12 @@ export function CommandPalette({ isRunning, runningCount, onRunCommand, prefill,
     setTeamOverride(next)
   }
 
+  // Always keep the selection as an override, even when it equals the defaults:
+  // an opened dialog means the user decided the team, so --team is sent explicitly.
   const handleApplyReviewers = useCallback((selection: ReviewerSelection[]) => {
-    // If selection matches defaults exactly, clear override
-    if (selectionsEqual(selection, defaultSelection)) {
-      setTeamOverride(null)
-    } else {
-      setTeamOverride(selection)
-    }
+    setTeamOverride(selection)
     setDialogOpen(false)
-  }, [defaultSelection])
+  }, [])
 
   function buildCommandString(): string {
     const parts = [selectedCommand.command]
