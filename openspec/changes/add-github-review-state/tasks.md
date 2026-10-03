@@ -62,7 +62,8 @@
 ## 6. Wrap-up
 
 - [ ] 6.1 `pnpm nx run-many -t lint test` green.
-- [ ] 6.2 Manual check, two PRs: on a PR opened by **another account** (a colleague's,
+- [ ] 6.2 Manual check, two PRs (first run `gh repo set-default javguitor/open-code-review`
+      in the checkout — see design.md Risks): on a PR opened by **another account** (a colleague's,
       or a second GitHub account on a test repo) post each of the three states from
       the dashboard and confirm the PR shows a review, not a comment; on the own
       throwaway PR from 1.1 confirm the dialog locks to Comment and that Comment

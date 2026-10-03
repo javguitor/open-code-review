@@ -89,13 +89,22 @@ fake, no internal mocks — see `socket/__tests__/finalizer.test.ts`).
   "Re-check" button. The selector state lives in the `usePostReview` hook
   (`reviewState`, `setReviewState`) and resets with the state machine's `reset()`.
 
+- **Decision: the PR URL, not the number, is the target.** `gh` resolves a bare PR
+  number and the `{owner}/{repo}` placeholders to its *default* repo, which in a fork
+  with an `upstream` remote and no `gh repo set-default` is the parent repo (verified
+  2026-10-03 in this fork: `gh api 'repos/{owner}/{repo}'` → `spencermarx/...`). So
+  `post:check-gh` stores `{ ownership, prUrl }` per PR number for the socket, and
+  `post:submit` runs `gh pr review <prUrl> --<state> --body-file` — `gh pr review`
+  accepts a URL target — and parses `OWNER/REPO/N` out of that URL for the reviews
+  lookup. A `comment` submit with no prior check (older client) falls back to the bare
+  number, which is today's behaviour.
+
 - **Decision: success link.** `post:submit-result` keeps `commentUrl`. After a
   successful `gh pr review`, the server makes one best-effort call
-  `gh api repos/{owner}/{repo}/pulls/<n>/reviews --jq '.[-1].html_url'` (owner/repo
-  from `gh repo view --json nameWithOwner`, or the `:owner/:repo` placeholders gh
-  resolves from `cwd`) and returns that URL; on any failure it returns `null` and the
-  dialog links to `prUrl` instead. The post itself is never reported as failed because
-  of the URL lookup.
+  `gh api repos/OWNER/REPO/pulls/N/reviews --jq '.[-1].html_url'` with the parts
+  parsed from `prUrl` and returns that URL; on any failure (or an unparseable URL) it
+  returns `null` and the dialog links to `prUrl` instead. The post itself is never
+  reported as failed because of the URL lookup.
 
 - **Decision: execution tracking.** The tracked execution keeps the label
   `ocr post-to-github` and its args become `[PR #n, --<state>]` so
@@ -108,6 +117,13 @@ fake, no internal mocks — see `socket/__tests__/finalizer.test.ts`).
   pre-check, so here the retry is explicit and reported, not silent.
 
 ## Risks / Trade-offs
+
+- **Pre-existing, out of scope:** `findPrForBranch` runs `gh pr list --head <branch>`
+  without `--repo`, so in a fork without `gh repo set-default` it searches the parent
+  repo and reports "No open PR found" for a PR that exists on the fork. Follow-up
+  change: resolve the repo from `git remote get-url origin` (or let the user pick) and
+  pass `--repo`. Until then, run `gh repo set-default <fork>` in the checkout (stored
+  in `.git/config`, not committed) — required for task 6.2 on this fork.
 
 - `gh` older than the `pr review --body-file` flag → the command fails with an
   unknown-flag error. Mitigation: the error is already surfaced through
