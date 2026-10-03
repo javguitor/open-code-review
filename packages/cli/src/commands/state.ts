@@ -274,6 +274,8 @@ const showSubcommand = new Command("show")
         ["Head SHA:  ", s.head_sha],
         ["PR:        ", s.pr_number],
         ["PR URL:    ", s.pr_url],
+        ["Reqs URL:  ", s.requirements_source_url],
+        ["Reqs date: ", s.requirements_updated_at],
       ];
       for (const [label, value] of refRows) {
         if (value !== null) {
@@ -443,6 +445,8 @@ const beginSubcommand = new Command("begin")
     return Number(v);
   })
   .option("--pr-url <url>", "Pull request URL")
+  .option("--requirements-url <url>", "URL of the requirements source (ClickUp card, issue, ...)")
+  .option("--requirements-updated-at <iso>", "Provider's last-updated timestamp of the requirements source")
   .option("--json", "Output the result as JSON")
   .action(
     async (options: {
@@ -450,6 +454,8 @@ const beginSubcommand = new Command("begin")
       branch: string;
       workflowType: WorkflowType;
       sessionDir?: string;
+      requirementsUrl?: string;
+      requirementsUpdatedAt?: string;
       baseRef?: string;
       headRef?: string;
       headSha?: string;
@@ -476,6 +482,8 @@ const beginSubcommand = new Command("begin")
           headSha: options.headSha,
           prNumber: options.prNumber,
           prUrl: options.prUrl,
+          requirementsUrl: options.requirementsUrl,
+          requirementsUpdatedAt: options.requirementsUpdatedAt,
         });
         // Superset of `init`: wire up dashboard linkage so the dashboard can
         // bind outcome + offer resume.

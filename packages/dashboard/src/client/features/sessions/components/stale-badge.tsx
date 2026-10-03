@@ -54,8 +54,12 @@ export function StaleBadge({ session }: StaleBadgeProps) {
           {t('sessions.re_review')}
         </button>
       )}
-      {check.isError && (
-        <span className="text-[11px] text-red-600 dark:text-red-400">{t('sessions.check_updates_failed')}</span>
+      {check.isError ? (
+        <span className="text-[11px] text-red-600 dark:text-red-400">{t('sessions.check_updates_error_generic')}</span>
+      ) : (
+        check.data?.pr_error && (
+          <span className="text-[11px] text-red-600 dark:text-red-400">{t('sessions.check_updates_failed')}</span>
+        )
       )}
     </span>
   )

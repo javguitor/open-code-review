@@ -36,10 +36,61 @@ export type SessionSummary = {
   pr_head_sha: string | null
   /** Detail endpoint only: where the PR worktree lives. */
   worktree_path?: string | null
+  // Requirements source recorded for the session (null when none)
+  requirements_source_url: string | null
+  requirements_updated_at: string | null
+  requirements_title: string | null
+  /** Whether the source was fetched with `--with-comments`; null when unknown. */
+  requirements_with_comments: boolean | null
+  /** true = the source changed after the review; null = n/a or the lookup failed. */
+  requirements_stale: boolean | null
+  requirements_current_updated_at: string | null
 }
 
 /** Response of `POST /api/sessions/:id/check-updates`. */
-export type CheckUpdatesResponse = Pick<SessionSummary, 'head_sha' | 'stale' | 'pr_head_sha'>
+export type CheckUpdatesResponse = Pick<SessionSummary, 'head_sha' | 'stale' | 'pr_head_sha'> &
+  Pick<SessionSummary, 'requirements_stale' | 'requirements_current_updated_at'> & {
+    requirements_error?: string
+    /** The PR-head lookup failed (the requirements fields are still valid). */
+    pr_error?: string
+  }
+
+export type RequirementsSourceType = 'clickup' | 'github-issue' | 'github-pr' | 'file' | 'text'
+
+export type RequirementsSource = {
+  type: RequirementsSourceType
+  id: string
+  url: string
+  title: string
+  fetched_at: string
+  updated_at: string
+  author: string | null
+  with_comments: boolean
+  description_format: 'markdown' | 'plain'
+}
+
+export type RequirementsPreviewErrorCode =
+  | 'missing-token'
+  | 'invalid-source'
+  | 'not-found'
+  | 'fetch-failed'
+  | 'session-not-found'
+
+/** Response of `POST /api/requirements/preview` (HTTP 200 for both shapes). */
+export type RequirementsPreview =
+  | { ok: true; source: RequirementsSource; preview: string; files: null }
+  | { ok: false; code: RequirementsPreviewErrorCode; error: string }
+
+/** Response of `GET /api/requirements/detect`. */
+export type RequirementsCandidates = {
+  candidates: Array<{ url: string; type: 'clickup' | 'github-issue' }>
+}
+
+/** Response of `GET /api/sessions/:id/requirements`. */
+export type SessionRequirements = {
+  normalized: string | null
+  sources: Array<{ files: { md: string; json: string }; source: RequirementsSource }>
+}
 
 export type OrchestrationEvent = {
   id: number
@@ -385,6 +436,7 @@ export type ConfigSettings = {
     cleanup: WorktreeCleanup
   }
   language: string
+  integrations: { clickup_token: 'configured' | 'missing' }
 }
 
 /** Body of `PATCH /api/config`; omitted keys are left untouched. */

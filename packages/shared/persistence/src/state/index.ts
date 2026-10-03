@@ -269,6 +269,8 @@ export async function stateInit(params: InitParams): Promise<string> {
     head_sha: params.headSha,
     pr_number: params.prNumber,
     pr_url: params.prUrl,
+    requirements_source_url: params.requirementsUrl,
+    requirements_updated_at: params.requirementsUpdatedAt,
   };
 
   const existing = getSession(db, sessionId);
@@ -642,6 +644,8 @@ export async function stateShow(
       head_sha: session.head_sha,
       pr_number: session.pr_number,
       pr_url: session.pr_url,
+      requirements_source_url: session.requirements_source_url,
+      requirements_updated_at: session.requirements_updated_at,
     },
     events: events.map((e) => ({
       id: e.id,
@@ -685,6 +689,8 @@ export async function stateList(
     head_sha: s.head_sha,
     pr_number: s.pr_number,
     pr_url: s.pr_url,
+    requirements_source_url: s.requirements_source_url,
+    requirements_updated_at: s.requirements_updated_at,
   }));
 }
 

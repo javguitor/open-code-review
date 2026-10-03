@@ -97,6 +97,7 @@ const sessions = {
   'sessions.check_updates': 'Check for updates',
   'sessions.checking_updates': 'Checking…',
   'sessions.check_updates_failed': 'Could not reach GitHub to check the PR.',
+  'sessions.check_updates_error_generic': 'Could not check for updates. Try again.',
   'sessions.re_review': 'Re-review',
   'sessions.pr_title': 'Pull request',
   'sessions.pr_base': 'Base',

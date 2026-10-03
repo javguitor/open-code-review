@@ -39,7 +39,10 @@ optional dependency; the CLI already owns every write to session state.
   `Updated: <iso>` + `## Description` (markdown as provided) + `## Checklists` + `##
   Custom Fields` (name: value) + `## Comments` (author, date, text; only with
   `--with-comments`). `requirements/source.json`: `{ type, id, url, title, fetched_at,
-  updated_at, author, with_comments }`. Second source → `source-2.*`. The normalized
+  updated_at, author, with_comments }`. A different source → the next free `source-<n>.*`;
+  re-fetching a URL already stored replaces its pair in place (one pair per URL), so
+  normalization never sees two versions of the same card as a conflict. Literal text
+  (positional or `--stdin`) is a `text` source keyed by a content hash. The normalized
   `requirements.md` keeps its current place at the session root (manifest unchanged
   for consumers).
 - **Decision: normalization template** `references/requirements-normalization.md`:
@@ -79,11 +82,15 @@ optional dependency; the CLI already owns every write to session state.
 Additive: new files under `requirements/`, two nullable columns, new commands and
 routes. Sessions without sources behave as today.
 
-## Open Questions
+## Resolved Questions (2026-10-03)
 
-- Should `requirements.md` be regenerated on a new round when the source changed, or
-  only on `--fresh`? Proposed: regenerate on new round only when the user accepts the
-  "Requirements changed" banner's "Refresh" action.
+- `requirements.md` is regenerated only when the user starts a new round through
+  "Re-review with refreshed requirements" (which passes `--requirements <url>`); a plain
+  new round keeps the existing file.
+- Implementation notes: the dashboard runs the CLI (`ocr requirements fetch --json
+  --dry-run -- <source>`), never imports it; any URL that is not ClickUp or GitHub is
+  refused (`invalid-source`) instead of being web-fetched; `text:`/`file://` sources
+  have no staleness.
 
 ## How to execute this change (handoff)
 

@@ -1,3 +1,4 @@
+import { buildAddressCommand } from '../../../lib/command-string'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Play, ClipboardCopy, Check, X, ShieldAlert } from 'lucide-react'
@@ -115,11 +116,7 @@ function RunModeContent({
   const navigate = useNavigate()
 
   function buildCommandString(): string {
-    const parts = ['ocr address', finalPath]
-    if (notes.trim()) {
-      parts.push('--requirements', notes.trim())
-    }
-    return parts.join(' ')
+    return buildAddressCommand(finalPath, notes)
   }
 
   function buildSlashCommand(): string {

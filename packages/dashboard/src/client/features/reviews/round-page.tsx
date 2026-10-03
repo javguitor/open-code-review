@@ -1,6 +1,8 @@
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, MessageSquare, Terminal } from 'lucide-react'
+import { ArrowLeft, ListChecks, MessageSquare, Terminal } from 'lucide-react'
 import { useState } from 'react'
+import { useSession } from '../sessions/hooks/use-sessions'
+import { RequirementsPanel } from '../requirements/components/requirements-panel'
 import { useRound, useRoundFindings, useArtifact, useUpdateRoundStatus } from './hooks/use-reviews'
 import type { RoundTriage } from '../../lib/api-types'
 import { useT } from '../../lib/i18n'
@@ -43,6 +45,10 @@ export function RoundPage() {
   const { data: finalArtifact } = useArtifact(sessionId ?? '', 'final')
   const { data: finalHumanArtifact } = useArtifact(sessionId ?? '', 'final-human')
   const { data: discourseArtifact } = useArtifact(sessionId ?? '', 'discourse')
+
+  const { data: session } = useSession(sessionId ?? '')
+  const hasRequirements = !!session?.requirements_source_url
+  const [requirementsOpen, setRequirementsOpen] = useState(false)
 
   const updateStatus = useUpdateRoundStatus()
 
@@ -136,6 +142,17 @@ export function RoundPage() {
               roundNumber={roundNumber}
             />
           )}
+          {hasRequirements && (
+            <button
+              type="button"
+              aria-expanded={requirementsOpen}
+              onClick={() => setRequirementsOpen((v) => !v)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+            >
+              <ListChecks className="h-3.5 w-3.5" />
+              {t('requirements.open_link')}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setChatOpen(true)}
@@ -161,6 +178,13 @@ export function RoundPage() {
           workflowId={sessionId}
           onClose={() => setHandoffOpen(false)}
         />
+      )}
+
+      {hasRequirements && requirementsOpen && sessionId && (
+        <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="mb-3 text-sm font-medium text-zinc-900 dark:text-zinc-100">{t('requirements.title')}</h2>
+          <RequirementsPanel sessionId={sessionId} updatedAt={session?.requirements_updated_at} alwaysOpen />
+        </div>
       )}
 
       {/* Axis 1 — the merge gate. The banner normalizes the raw verdict to the

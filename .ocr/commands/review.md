@@ -7,7 +7,7 @@ tags: [ocr, review, code-review]
 
 **Usage**
 ```
-/ocr-review [target] [--fresh] [--team <ids>] [--reviewer "<description>"]
+/ocr-review [target] [--fresh] [--team <ids>] [--reviewer "<description>"] [--requirements <url|path|text>] [--with-comments]
 ```
 
 **Arguments**
@@ -15,6 +15,8 @@ tags: [ocr, review, code-review]
 - `--fresh` (optional): Clear any existing session for today's date and start from scratch.
 - `--team` (optional): Replace the default reviewer team for this run. Strict format: `reviewer-id:count[,reviewer-id:count...]` — the `:count` is required, each reviewer-id appears once, and ids are lowercase (e.g. `principal`, `martin-fowler`). Example: `--team principal:2,martin-fowler:1`. Forwarded as-is to `ocr team resolve --team`, which parses and validates it.
 - `--reviewer` (optional, repeatable): Add an ephemeral reviewer described in natural language. The Tech Lead will synthesize a focused reviewer persona from the description. Does not persist. Example: `--reviewer "Focus on error handling in the auth flow"`.
+- `--requirements <url|path|text>` (optional): What the change should do. A ClickUp task URL, a GitHub issue/PR URL, a file path, or literal text. The CLI fetches it (`ocr requirements fetch`) into `requirements/source.md`, and the Tech Lead normalizes it into `requirements.md` with numbered `AC-n` criteria that reviewers and the final "Requirements Assessment" reference. ClickUp needs `CLICKUP_API_TOKEN` exported in the environment (never pass it in the prompt); if it is missing the review asks whether to continue without requirements. The model never fetches these URLs itself. For a PR target without this flag, links found in the PR body are only suggested. See `references/requirements-normalization.md`.
+- `--with-comments` (optional): Also include the source's comments (last 50) so they can refine the criteria. Only meaningful with `--requirements`.
 
 **Examples**
 ```
@@ -26,6 +28,11 @@ tags: [ocr, review, code-review]
 /ocr-review pr:123             # Review PR #123 from a dedicated worktree
 /ocr-review https://github.com/o/r/pull/123   # Same, by URL
 /ocr-review --team principal:2,security:1   # Custom team composition
+/ocr-review --requirements https://app.clickup.com/t/abc123                 # ClickUp task as requirements (needs CLICKUP_API_TOKEN)
+/ocr-review --requirements https://app.clickup.com/t/abc123 --with-comments # ...including its comments
+/ocr-review --requirements https://github.com/o/r/issues/45                 # GitHub issue as requirements
+/ocr-review pr:123 --requirements openspec/changes/add-auth/proposal.md     # A file as requirements
+/ocr-review --requirements "Users must be rate-limited after 5 failed logins"  # Literal text
 /ocr-review --reviewer "Review as a junior developer would"
 /ocr-review --team principal:1 --reviewer "Focus on error handling" --reviewer "Check accessibility"
 ```
@@ -90,7 +97,8 @@ You MUST create these files sequentially. **Do NOT skip to `final.md`.**
 ```
 .ocr/sessions/{YYYY-MM-DD}-{branch}/
 ├── discovered-standards.md # Phase 1: merged project standards
-├── requirements.md         # Phase 1: user requirements (if provided)
+├── requirements/           # Phase 1: raw sources fetched by `ocr requirements fetch` (if provided)
+├── requirements.md         # Phase 1: normalized requirements with AC-n criteria (if provided)
 ├── context.md              # Phase 2+3: change summary + Tech Lead guidance
 └── rounds/
     └── round-1/            # Review round (increments on re-review)

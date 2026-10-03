@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { Play, ShieldAlert, Sparkles } from 'lucide-react'
 import { useT } from '../../../lib/i18n'
 import type { MessageKey } from '../../../lib/i18n'
@@ -6,6 +6,8 @@ import { cn } from '../../../lib/utils'
 import { useReviewers } from '../hooks/use-reviewers'
 import { ReviewerDefaults, type ReviewerSelection } from './reviewer-defaults'
 import { ReviewerDialog } from './reviewer-dialog'
+import { extractQuotedFlag, quoteArg, requirementsArgs, unescapeDoubleQuoted } from '../../../lib/command-string'
+import { RequirementsPreview } from '../../requirements/components/requirements-preview'
 
 // ── Command registry ──
 
@@ -32,7 +34,8 @@ const COMMANDS: CommandDef[] = [
     description: 'commands.cmd_review_description',
     params: [
       { name: 'target', type: 'text', label: 'commands.param_target', placeholder: 'commands.param_target_placeholder' },
-      { name: 'requirements', type: 'text', label: 'commands.param_requirements', placeholder: 'commands.param_requirements_placeholder' },
+      { name: 'requirements', type: 'text', label: 'commands.param_requirements', placeholder: 'requirements.placeholder' },
+      { name: 'withComments', type: 'toggle', label: 'requirements.include_comments' },
       { name: 'fresh', type: 'toggle', label: 'commands.param_fresh' },
     ],
   },
@@ -43,7 +46,8 @@ const COMMANDS: CommandDef[] = [
     description: 'commands.cmd_map_description',
     params: [
       { name: 'target', type: 'text', label: 'commands.param_target', placeholder: 'commands.param_target_placeholder' },
-      { name: 'requirements', type: 'text', label: 'commands.param_requirements', placeholder: 'commands.param_requirements_placeholder' },
+      { name: 'requirements', type: 'text', label: 'commands.param_requirements', placeholder: 'requirements.placeholder' },
+      { name: 'withComments', type: 'toggle', label: 'requirements.include_comments' },
       { name: 'fresh', type: 'toggle', label: 'commands.param_fresh' },
     ],
   },
@@ -66,9 +70,9 @@ export type ParsedCommand = {
 function extractReviewerFlags(raw: string): { cleaned: string; entries: { description: string; count: number }[] } {
   const entries: { description: string; count: number }[] = []
   // Match --reviewer optionally followed by N: then a quoted string
-  const cleaned = raw.replace(/--reviewer\s+(?:(\d+):)?(?:"([^"]*?)"|'([^']*?)')/g, (_match, countStr, dq, sq) => {
+  const cleaned = raw.replace(/--reviewer\s+(?:(\d+):)?(?:"((?:[^"\\]|\\.)*)"|'([^']*?)')/g, (_match, countStr, dq, sq) => {
     entries.push({
-      description: dq ?? sq ?? '',
+      description: dq !== undefined ? unescapeDoubleQuoted(dq) : (sq ?? ''),
       count: parseInt(countStr ?? '1', 10) || 1,
     })
     return ''
@@ -78,7 +82,9 @@ function extractReviewerFlags(raw: string): { cleaned: string; entries: { descri
 
 export function parseCommandString(raw: string): ParsedCommand | null {
   // Extract --reviewer flags first (they contain spaces that break split)
-  const { cleaned, entries: reviewerEntries } = extractReviewerFlags(raw)
+  const { cleaned: withoutReviewers, entries: reviewerEntries } = extractReviewerFlags(raw)
+  // --requirements takes ONE value (quoted when it has spaces), like the server parses it.
+  const { cleaned, values: requirementsValues } = extractQuotedFlag(withoutReviewers, 'requirements')
 
   const normalized = cleaned.replace(/^ocr\s+/, '')
   const parts = normalized.split(/\s+/)
@@ -94,23 +100,13 @@ export function parseCommandString(raw: string): ParsedCommand | null {
     if (token === '--fresh') {
       params['fresh'] = true
       i++
+    } else if (token === '--with-comments') {
+      params['withComments'] = true
+      i++
     } else if (token === '--team' && i + 1 < parts.length) {
       const teamStr = parts[i + 1] ?? ''
       team = parseTeamArg(teamStr)
       i += 2
-    } else if (token === '--requirements' && i + 1 < parts.length) {
-      // Consume remaining tokens as requirements (must be last)
-      const remaining = parts.slice(i + 1)
-      // Stop at --team if it appears after --requirements
-      const teamIdx = remaining.indexOf('--team')
-      if (teamIdx >= 0) {
-        params['requirements'] = remaining.slice(0, teamIdx).join(' ')
-        const teamStr = remaining[teamIdx + 1] ?? ''
-        team = parseTeamArg(teamStr)
-      } else {
-        params['requirements'] = remaining.join(' ')
-      }
-      break
     } else if (!token.startsWith('--')) {
       params['target'] = token
       i++
@@ -118,6 +114,8 @@ export function parseCommandString(raw: string): ParsedCommand | null {
       i++
     }
   }
+
+  if (requirementsValues[0] !== undefined) params['requirements'] = requirementsValues[0]
 
   // Append ephemeral selections from --reviewer flags
   if (reviewerEntries.length > 0) {
@@ -356,20 +354,15 @@ export function CommandPalette({ isRunning, runningCount, onRunCommand, prefill,
       // Add --reviewer flags for ephemeral reviewers (with optional count prefix)
       for (const s of teamOverride) {
         if (s.description) {
-          const escaped = s.description.replace(/"/g, '\\"')
-          if (s.count > 1) {
-            parts.push('--reviewer', `${s.count}:"${escaped}"`)
-          } else {
-            parts.push('--reviewer', `"${escaped}"`)
-          }
+          const quoted = quoteArg(s.description)
+          parts.push('--reviewer', s.count > 1 ? `${s.count}:${quoted}` : quoted)
         }
       }
     }
 
-    const requirements = paramValues['requirements']
-    if (typeof requirements === 'string' && requirements.trim()) {
-      parts.push('--requirements', requirements.trim())
-    }
+    parts.push(
+      ...requirementsArgs(paramValues['requirements'], paramValues['withComments'] === true),
+    )
 
     return parts.join(' ')
   }
@@ -426,7 +419,8 @@ export function CommandPalette({ isRunning, runningCount, onRunCommand, prefill,
         <div className="space-y-3">
           {selectedCommand.params.map((param) =>
             param.type === 'text' ? (
-              <div key={param.name} className="flex items-center gap-3">
+              <Fragment key={param.name}>
+              <div className="flex items-center gap-3">
                 <label className="w-28 shrink-0 text-right text-xs font-medium text-zinc-500 dark:text-zinc-400">
                   {t(param.label)}
                 </label>
@@ -445,6 +439,16 @@ export function CommandPalette({ isRunning, runningCount, onRunCommand, prefill,
                   )}
                 />
               </div>
+              {param.name === 'requirements' && (
+                <RequirementsPreview
+                  target={typeof paramValues['target'] === 'string' ? paramValues['target'] : ''}
+                  requirements={typeof paramValues['requirements'] === 'string' ? paramValues['requirements'] : ''}
+                  withComments={paramValues['withComments'] === true}
+                  disabled={isRunning}
+                  onUseSource={(url) => setParam('requirements', url)}
+                />
+              )}
+              </Fragment>
             ) : (
               <div key={param.name} className="flex items-center gap-3">
                 <span className="w-28 shrink-0" />

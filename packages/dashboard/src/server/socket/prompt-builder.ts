@@ -7,7 +7,11 @@
  * isolation. `prompt-injection.test.ts` covers `buildPrompt` / `escapeUserHeaders`.
  */
 
-/** Split a command string into tokens, respecting single and double quotes. */
+/**
+ * Split a command string into tokens, respecting single and double quotes.
+ * Inside double quotes, `\"` and `\\` are literal characters (the dashboard's
+ * `quoteArg` escapes free text that way); any other backslash is kept as is.
+ */
 export function shellSplit(str: string): string[] {
   const tokens: string[] = []
   let current = ''
@@ -15,7 +19,11 @@ export function shellSplit(str: string): string[] {
   for (let i = 0; i < str.length; i++) {
     const ch = str[i]!
     if (quote) {
-      if (ch === quote) {
+      const next = str[i + 1]
+      if (quote === '"' && ch === '\\' && (next === '"' || next === '\\')) {
+        current += next
+        i++
+      } else if (ch === quote) {
         quote = null
       } else {
         current += ch
@@ -190,7 +198,7 @@ export function buildPrompt(opts: BuildPromptOptions): {
     const argsStr = subArgs.length > 0 ? subArgs.join(' ') : 'none'
     userContentLines.push(`Arguments: ${escapeUserHeaders(argsStr)}`)
   } else {
-    // Review/map arg parsing: target, --fresh, --requirements, --team, --reviewer
+    // Review/map arg parsing: target, --fresh, --with-comments, --requirements, --team, --reviewer
     let target = 'staged changes'
     let requirements = ''
     let team = ''
@@ -201,6 +209,9 @@ export function buildPrompt(opts: BuildPromptOptions): {
       const arg = subArgs[i] ?? ''
       if (arg === '--fresh') {
         options.push('--fresh')
+        i++
+      } else if (arg === '--with-comments') {
+        options.push('--with-comments')
         i++
       } else if (arg === '--requirements' && i + 1 < subArgs.length) {
         // Single-value flag: the requirements text arrives as one quoted token

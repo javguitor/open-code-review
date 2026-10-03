@@ -1,3 +1,4 @@
+import { buildCreateReviewerCommand } from '../../../lib/command-string'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { X, Plus, Loader2 } from 'lucide-react'
 import { cn } from '../../../lib/utils'
@@ -76,7 +77,7 @@ export function CreateReviewerDialog({ open, onClose }: CreateReviewerDialogProp
     if (!canSubmit || !socket) return
     setOutput('')
     setFinished(false)
-    const command = `create-reviewer ${slug} --focus "${focus.replace(/"/g, '\\"')}"`
+    const command = buildCreateReviewerCommand(slug, focus)
     socket.emit('command:run', { command })
   }, [canSubmit, socket, slug, focus])
 

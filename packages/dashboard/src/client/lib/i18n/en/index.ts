@@ -15,6 +15,7 @@ import { notes } from './notes'
 import { home } from './home'
 import { settings } from './settings'
 import { post } from './post'
+import { requirements } from './requirements'
 
 const en = {
   ...common,
@@ -31,6 +32,7 @@ const en = {
   ...home,
   ...settings,
   ...post,
+  ...requirements,
 }
 
 export type MessageKey = keyof typeof en

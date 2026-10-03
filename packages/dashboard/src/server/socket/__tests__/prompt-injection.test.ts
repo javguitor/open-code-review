@@ -275,6 +275,18 @@ describe('buildPrompt — structural ordering', () => {
   })
 })
 
+describe('shellSplit', () => {
+  it('keeps a quoted multi-word --requirements value as one token', () => {
+    expect(shellSplit('review pr:1 --requirements "a b c" --fresh')).toEqual([
+      'review', 'pr:1', '--requirements', 'a b c', '--fresh',
+    ])
+  })
+
+  it('treats \\" and \\\\ inside double quotes as literal characters', () => {
+    expect(shellSplit('--requirements "say \\"hi\\" C:\\\\x"')).toEqual(['--requirements', 'say "hi" C:\\x'])
+  })
+})
+
 describe('buildPrompt — argument parsing (S15)', () => {
   // shellSplit collapses a quoted value into a single token before buildPrompt
   // sees it, so each subArgs element below is exactly what the parser receives.
@@ -304,6 +316,18 @@ describe('buildPrompt — argument parsing (S15)', () => {
     expect(resumeWorkflowId).toBe('2026-05-06-wf')
     // The requirements value must not absorb later flags' tokens.
     expect(prompt).not.toContain('Requirements: fix the auth bug --reviewer')
+  })
+
+  it('forwards --with-comments in the options line and keeps the requirements value', () => {
+    const { prompt } = buildPrompt({
+      baseCommand: 'review',
+      subArgs: ['target', '--fresh', '--with-comments', '--requirements', 'https://app.clickup.com/t/abc'],
+      commandContent: '# review',
+      executionUid: 'uid',
+      localCli: '/abs/cli.js',
+    })
+    expect(prompt).toContain('Options: --fresh --with-comments')
+    expect(prompt).toContain('Requirements: https://app.clickup.com/t/abc')
   })
 
   it('captures requirements regardless of flag order', () => {

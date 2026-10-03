@@ -15,9 +15,9 @@
 
 import { Command } from "commander";
 import chalk from "chalk";
-import { execFileSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import { execBinary } from "@open-code-review/platform";
 import { requireOcrSetup } from "../lib/guards.js";
 import { isValidPrNumber } from "../lib/pr-number.js";
 import { getWorktreeConfig } from "@open-code-review/config/worktree-config";
@@ -27,7 +27,7 @@ import type { SessionRow } from "@open-code-review/persistence";
 // ── Git helpers ──
 
 function git(cwd: string, args: string[]): string {
-  return execFileSync("git", args, {
+  return execBinary("git", args, {
     cwd,
     encoding: "utf-8",
     stdio: ["ignore", "pipe", "pipe"],

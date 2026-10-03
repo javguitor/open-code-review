@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import type { AddressInfo } from 'node:net'
 import type { Server } from 'node:http'
 import { join } from 'node:path'
@@ -10,6 +10,7 @@ import { openDb } from '../../db.js'
 import { createSessionsRouter } from '../sessions.js'
 import { captureChildEnvBase, initChildEnvBase, resetChildEnvBaseForTests } from '../../child-env.js'
 import { clearPrHeadCacheForTests, getPrHead } from '../../services/pr-head.js'
+import { RequirementsHeadLookupError } from '../../services/requirements-head.js'
 
 const PR_URL = 'https://github.com/o/r/pull/7'
 
@@ -19,10 +20,14 @@ let db: Database
 let server: Server
 let heads: Map<string, string | null>
 let headCalls: Array<{ url: string; force: boolean }>
+let reqHeads: Map<string, string>
+let reqFail: boolean
+let reqCalls: Array<{ url: string; force: boolean; cacheOnly: boolean }>
+const CARD = 'https://app.clickup.com/t/abc'
 /** When set, the route uses the real `getPrHead` (cache + failure semantics) over this runner. */
 let realGh: Parameters<typeof getPrHead>[1] extends infer O ? (O extends { runGh?: infer R } ? R : never) : never
 
-function insert(id: string, extra: { pr_url?: string; head_sha?: string; pr_number?: number; status?: string; updated_at?: string } = {}) {
+function insert(id: string, extra: { requirements_source_url?: string; requirements_updated_at?: string; pr_url?: string; head_sha?: string; pr_number?: number; status?: string; updated_at?: string } = {}) {
   db.run(
     `INSERT INTO sessions (id, branch, workflow_type, status, current_phase, phase_number, current_round, current_map_run, session_dir, pr_url, head_sha, pr_number, base_ref, head_ref)
      VALUES (?, 'b', 'review', ?, 'context', 1, 1, 1, ?, ?, ?, ?, ?, ?)`,
@@ -37,6 +42,13 @@ function insert(id: string, extra: { pr_url?: string; head_sha?: string; pr_numb
       extra.pr_url ? 'feat' : null,
     ],
   )
+  if (extra.requirements_source_url) {
+    db.run('UPDATE sessions SET requirements_source_url = ?, requirements_updated_at = ? WHERE id = ?', [
+      extra.requirements_source_url,
+      extra.requirements_updated_at ?? null,
+      id,
+    ])
+  }
   if (extra.updated_at) db.run('UPDATE sessions SET updated_at = ? WHERE id = ?', [extra.updated_at, id])
 }
 
@@ -53,6 +65,9 @@ beforeEach(async () => {
   db = await openDb(ocrDir)
   heads = new Map()
   headCalls = []
+  reqHeads = new Map()
+  reqFail = false
+  reqCalls = []
   realGh = undefined as never
   clearPrHeadCacheForTests()
   resetChildEnvBaseForTests()
@@ -62,6 +77,11 @@ beforeEach(async () => {
     '/api/sessions',
     createSessionsRouter(db, {
       ocrDir,
+      getRequirementsHead: async (url, opts) => {
+        reqCalls.push({ url, force: opts.force ?? false, cacheOnly: opts.cacheOnly ?? false })
+        if (reqFail && opts.force) throw new RequirementsHeadLookupError(url, 'no token')
+        return reqHeads.get(url) ?? null
+      },
       getPrHead: async (url, opts) => {
         if (realGh) return getPrHead(url, { ...opts, runGh: realGh })
         headCalls.push({ url, force: opts?.force ?? false })
@@ -157,11 +177,14 @@ describe('POST /api/sessions/:id/check-updates', () => {
     heads.set(PR_URL, 'ccc')
     const { status, body } = await api('POST', '/pr/check-updates')
     expect(status).toBe(200)
-    expect(body).toEqual({ head_sha: 'aaa', stale: true, pr_head_sha: 'ccc' })
+    expect(body).toEqual({
+      head_sha: 'aaa', stale: true, pr_head_sha: 'ccc',
+      requirements_title: null, requirements_with_comments: null, requirements_stale: null, requirements_current_updated_at: null,
+    })
     expect(headCalls).toEqual([{ url: PR_URL, force: true }])
   })
 
-  it('stale known + forced failure keeps stale and returns 502', async () => {
+  it('stale known + forced PR failure keeps stale and reports pr_error in a 200', async () => {
     insert('pr', { pr_url: PR_URL, head_sha: 'aaa', pr_number: 7 })
     let fail = false
     realGh = async () => {
@@ -171,12 +194,107 @@ describe('POST /api/sessions/:id/check-updates', () => {
     expect((await api('GET', '')).body[0]).toMatchObject({ stale: true, pr_head_sha: 'ccc' })
     fail = true
     const res = await api('POST', '/pr/check-updates')
-    expect(res.status).toBe(502)
-    expect(res.body.error).toEqual(expect.any(String))
+    expect(res.status).toBe(200)
+    expect(res.body.pr_error).toEqual(expect.any(String))
+    expect(res.body).toMatchObject({ stale: null, pr_head_sha: null })
     expect((await api('GET', '')).body[0]).toMatchObject({ stale: true, pr_head_sha: 'ccc' })
   })
 
   it('404s for an unknown session', async () => {
     expect((await api('POST', '/nope/check-updates')).status).toBe(404)
+  })
+})
+
+describe('requirements staleness', () => {
+  const withCard = (id = 'r', extra = {}) =>
+    insert(id, { requirements_source_url: CARD, requirements_updated_at: '2026-10-01T10:00:00.000Z', ...extra })
+
+  it('list and detail expose the stored fields, the title and stale=true when the provider is newer', async () => {
+    withCard()
+    mkdirSync(join(ocrDir, 'sessions', 'r', 'requirements'), { recursive: true })
+    writeFileSync(join(ocrDir, 'sessions', 'r', 'requirements', 'source.json'), JSON.stringify({ title: 'My card' }))
+    reqHeads.set(CARD, '2026-10-02T10:00:00.000Z')
+    const expected = {
+      requirements_source_url: CARD,
+      requirements_updated_at: '2026-10-01T10:00:00.000Z',
+      requirements_title: 'My card',
+      requirements_stale: true,
+      requirements_current_updated_at: '2026-10-02T10:00:00.000Z',
+    }
+    expect((await api('GET', '')).body[0]).toMatchObject(expected)
+    expect((await api('GET', '/r')).body).toMatchObject(expected)
+  })
+
+  it('is false when unchanged or older, and null (title null) for sessions without a source', async () => {
+    withCard()
+    insert('plain')
+    reqHeads.set(CARD, '2026-10-01T10:00:00.000Z')
+    const body = (await api('GET', '')).body
+    const byId = Object.fromEntries(body.map((s: any) => [s.id, s]))
+    expect(byId.r).toMatchObject({ requirements_stale: false })
+    expect(byId.plain).toMatchObject({
+      requirements_source_url: null, requirements_title: null, requirements_stale: null, requirements_current_updated_at: null,
+    })
+    expect(reqCalls.map((c) => c.url)).toEqual([CARD])
+  })
+
+  it('never looks up text: or file:// sources', async () => {
+    withCard('t', { requirements_source_url: 'text:abc123' })
+    withCard('f', { requirements_source_url: 'file:///x/reqs.md' })
+    const body = (await api('GET', '')).body
+    expect(body.map((s: any) => s.requirements_stale)).toEqual([null, null])
+    expect((await api('POST', '/t/check-updates')).body.requirements_stale).toBeNull()
+    expect(reqCalls).toEqual([])
+  })
+
+  it('serves requirements cacheOnly on list and detail, even for active sessions', async () => {
+    withCard('c', { status: 'active' })
+    await api('GET', '')
+    await api('GET', '/c')
+    expect(reqCalls).toEqual([
+      { url: CARD, force: false, cacheOnly: true },
+      { url: CARD, force: false, cacheOnly: true },
+    ])
+  })
+
+  it('exposes requirements_with_comments from source.json', async () => {
+    withCard()
+    mkdirSync(join(ocrDir, 'sessions', 'r', 'requirements'), { recursive: true })
+    writeFileSync(join(ocrDir, 'sessions', 'r', 'requirements', 'source.json'), JSON.stringify({ title: 'T', with_comments: true }))
+    expect((await api('GET', '/r')).body.requirements_with_comments).toBe(true)
+    expect((await api('GET', '')).body[0].requirements_with_comments).toBe(true)
+  })
+
+  it('a PR-head failure still returns the requirements result, and both errors can coexist', async () => {
+    insert('both', { pr_url: PR_URL, head_sha: 'aaa', pr_number: 7, requirements_source_url: CARD, requirements_updated_at: '2026-10-01T10:00:00.000Z' })
+    realGh = async () => {
+      throw new Error('offline')
+    }
+    reqHeads.set(CARD, '2026-10-05T00:00:00.000Z')
+    const ok = await api('POST', '/both/check-updates')
+    expect(ok.status).toBe(200)
+    expect(ok.body).toMatchObject({ pr_error: expect.any(String), requirements_stale: true })
+    reqFail = true
+    const bad = await api('POST', '/both/check-updates')
+    expect(bad.body.pr_error).toEqual(expect.any(String))
+    expect(bad.body.requirements_error).toMatch(/no token/)
+  })
+
+  it('check-updates forces the lookup and reports the result', async () => {
+    withCard()
+    reqHeads.set(CARD, '2026-10-05T00:00:00.000Z')
+    const { status, body } = await api('POST', '/r/check-updates')
+    expect(status).toBe(200)
+    expect(body).toMatchObject({ requirements_stale: true, requirements_current_updated_at: '2026-10-05T00:00:00.000Z' })
+    expect(reqCalls).toEqual([{ url: CARD, force: true, cacheOnly: false }])
+  })
+
+  it('a requirements lookup failure is requirements_error, not a 502', async () => {
+    withCard()
+    reqFail = true
+    const { status, body } = await api('POST', '/r/check-updates')
+    expect(status).toBe(200)
+    expect(body).toMatchObject({ requirements_stale: null, requirements_current_updated_at: null })
+    expect(body.requirements_error).toMatch(/no token/)
   })
 })

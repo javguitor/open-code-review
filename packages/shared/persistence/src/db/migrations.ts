@@ -527,6 +527,19 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 16,
+    description:
+      "Add nullable requirements_source_url and requirements_updated_at columns to sessions",
+    // Nullable, no defaults: sessions without a fetched requirements source keep NULLs.
+    run: (db) => {
+      for (const name of ["requirements_source_url", "requirements_updated_at"]) {
+        if (!columnExists(db, "sessions", name)) {
+          db.run(`ALTER TABLE sessions ADD COLUMN ${name} TEXT;`);
+        }
+      }
+    },
+  },
 ];
 
 /** Whether `table` currently has a column named `column` (for idempotent DDL). */
