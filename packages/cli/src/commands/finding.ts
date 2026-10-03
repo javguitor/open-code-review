@@ -22,9 +22,9 @@ import { Command } from "commander";
 import chalk from "chalk";
 import { join } from "node:path";
 import { requireOcrSetup } from "../lib/guards.js";
-import { resolveMainCheckout } from "../lib/main-checkout.js";
 import {
   ensureDatabase,
+  resolveMainCheckout,
   FindingError,
   getFinding,
   getFindingRevisions,

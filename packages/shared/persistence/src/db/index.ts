@@ -19,6 +19,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { openEngine, type Database } from "./engine.js";
 import { runMigrations, getSchemaVersion } from "./migrations.js";
+import { dbPathFor } from "./main-checkout.js";
 import { reconcileLegacyState } from "./reconcile.js";
 import type { ReconcileResult } from "./reconcile.js";
 
@@ -230,6 +231,7 @@ export type {
   DbPruneBackupsResult,
 } from "./maintenance.js";
 export { getSchemaVersion } from "./migrations.js";
+export { dbPathFor, resolveMainCheckout } from "./main-checkout.js";
 
 export {
   cacheDir,
@@ -276,21 +278,7 @@ export async function openDatabase(dbPath: string): Promise<Database> {
  * within the given OCR directory.
  */
 export async function getDb(ocrDir: string): Promise<Database> {
-  const dbPath = join(ocrDir, "data", "ocr.db");
-  return openDatabase(dbPath);
-}
-
-/**
- * A PR worktree (`<main>/.ocr/worktrees/pr-N/`) carries a versioned `.ocr/` but
- * no `data/`; the database is the main checkout's. Running a command there must
- * not create a second, empty database that later shadows the real one, so an
- * `.ocr/` under `<main>/.ocr/worktrees/<name>/` without its own `data/` resolves
- * to `<main>/.ocr/`. Custom `worktrees.dir` locations are handled by the CLI's
- * `resolveMainCheckout`.
- */
-export function sharedOcrDir(ocrDir: string): string {
-  const m = /^(.*)[\\/]\.ocr[\\/]worktrees[\\/][^\\/]+[\\/]\.ocr$/.exec(ocrDir);
-  return m && !existsSync(join(ocrDir, "data")) ? join(m[1]!, ".ocr") : ocrDir;
+  return openDatabase(dbPathFor(ocrDir));
 }
 
 /**
@@ -298,13 +286,7 @@ export function sharedOcrDir(ocrDir: string): string {
  * and persists the result. Callable from both CLI and dashboard server.
  */
 export async function ensureDatabase(ocrDir: string): Promise<Database> {
-  ocrDir = sharedOcrDir(ocrDir);
-  const dataDir = join(ocrDir, "data");
-  if (!existsSync(dataDir)) {
-    mkdirSync(dataDir, { recursive: true });
-  }
-
-  const dbPath = join(dataDir, "ocr.db");
+  const dbPath = dbPathFor(ocrDir);
   const db = await openDatabase(dbPath);
   let before = 0;
   try {

@@ -224,6 +224,51 @@ describe('id-preserving finding ingestion', () => {
     expect(rows('SELECT line_start FROM review_findings ORDER BY id').map((r) => r['line_start'])).toEqual([44])
   })
 
+  describe('weak pass decisions (status/reason per row)', () => {
+    const A = { ...F_SQL, flagged_by: undefined }
+    const decisions = () =>
+      rows('SELECT id, line_start FROM review_findings ORDER BY id').map((r) => {
+        const d = getFinding(db, r['id'] as number)?.decision
+        return [r['line_start'], d ? `${d.status}:${d.reason}` : null]
+      })
+
+    it('a retired row never comes back through the weak key', async () => {
+      writeMeta([{ ...A, line_start: 10 }])
+      await scan()
+      const id = findingId('SQL injection in login')
+      setFindingDecision(db, { findingId: id, status: 'dismissed', reason: 'checked, false positive' })
+      writeMeta([{ ...A, title: 'Something else entirely' }])
+      await scan() // retires the decided row
+      writeMeta([{ ...A, line_start: 11 }])
+      await scan()
+      expect(decisions()).toEqual([[10, 'dismissed:checked, false positive'], [11, null]])
+      expect(rows('SELECT retired_at FROM review_findings WHERE id = ?', [id])[0]?.['retired_at']).not.toBeNull()
+    })
+
+    it('an exact tie between live rows inserts a new row and leaves the decision where it was', async () => {
+      writeMeta([{ ...A, line_start: 10 }, { ...A, line_start: 30 }])
+      await scan()
+      const first = rows('SELECT id FROM review_findings ORDER BY id')[0]!['id'] as number
+      setFindingDecision(db, { findingId: first, status: 'dismissed', reason: 'tie-test reason' })
+      writeMeta([{ ...A, line_start: 20 }])
+      await scan()
+      // 10 is retired (decided), 30 deleted (undecided), 20 inserted fresh
+      expect(decisions()).toEqual([[10, 'dismissed:tie-test reason'], [20, null]])
+    })
+
+    it('two twins [A@20, A@12] with a decided row at line 10: the decision goes to line 12, not 20', async () => {
+      writeMeta([{ ...A, line_start: 10 }])
+      await scan()
+      const id = findingId('SQL injection in login')
+      setFindingDecision(db, { findingId: id, status: 'dismissed', reason: 'twin-test reason' })
+      writeMeta([{ ...A, line_start: 20 }, { ...A, line_start: 12 }])
+      await scan()
+      expect(rows('SELECT id, line_start FROM review_findings ORDER BY id').map((r) => [r['id'], r['line_start']]))
+        .toEqual([[id, 12], [id + 1, 20]])
+      expect(decisions()).toEqual([[12, 'dismissed:twin-test reason'], [20, null]])
+    })
+  })
+
   it('read/acknowledged alone do not protect a row; a row that matches again is un-retired', async () => {
     writeMeta([F_SQL, F_VAL])
     await scan()

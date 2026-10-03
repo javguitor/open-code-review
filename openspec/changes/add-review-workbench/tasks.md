@@ -32,4 +32,4 @@
 - [x] 5.2 Request verification on a finding → `ocr verify` execution visible in Commands; `verifications/finding-<id>.md` written; status + note shown.
 - [x] 5.3 Ask the Team: "¿Es realmente un blocker el hallazgo 3?" → answer with a proposal block → Apply → severity changed, revision `source: chat` with reason and conversation id.
 - [x] 5.4 New round on the same branch → previous-round decision hints shown; old decisions intact.
-- [ ] 5.5 `nx run-many -t lint test typecheck` green; `openspec validate add-review-workbench --strict`; OCR review of the branch before merge.
+- [x] 5.5 `nx run-many -t lint test typecheck` green; `openspec validate add-review-workbench --strict`; OCR review of the branch before merge.

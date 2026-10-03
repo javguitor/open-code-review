@@ -8,7 +8,7 @@ import { MarkdownRenderer } from '../../../components/markdown/markdown-renderer
 import { useT } from '../../../lib/i18n'
 import type { MessageKey } from '../../../lib/i18n'
 import { DECISION_STATUSES, type DecisionStatus, type RoundFinding } from '../types'
-import { MIN_DECISION_REASON_LENGTH, requiresReason } from '@open-code-review/persistence/finding-rules'
+import { isActionable, MIN_DECISION_REASON_LENGTH, requiresReason } from '@open-code-review/persistence/finding-rules'
 import { currentStatus, reasonMessageKey, synthesisNote } from '../decisions'
 import { CATEGORY_LABEL_KEY, DECISION_LABEL_KEY, SEVERITY_LABEL_KEY } from '../labels'
 
@@ -167,8 +167,11 @@ export function FindingRow({ finding, onTriageChange }: FindingRowProps) {
           <select
             value={pending ?? currentStatus(finding)}
             onChange={(e) => handleStatusChange(e.target.value as DecisionStatus)}
+            // A retired finding takes no decision (the server would answer 409).
+            disabled={!isActionable({ retired_at: finding.retired_at ?? null })}
+            title={isActionable({ retired_at: finding.retired_at ?? null }) ? undefined : t('workbench.retired_no_actions')}
             aria-label={t('reviews.triage_aria', { title: finding.title })}
-            className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+            className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900"
           >
             {DECISION_STATUSES.map((status) => (
               <option key={status} value={status}>

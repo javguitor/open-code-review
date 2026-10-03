@@ -37,6 +37,7 @@
     }
   },
   "dependencies": {
+    "@open-code-review/config": "workspace:*",
     "@open-code-review/platform": "workspace:*"
   }
 }

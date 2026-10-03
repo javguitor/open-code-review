@@ -84,10 +84,12 @@ const lineDistance = (a: number | null, b: number | null): number =>
 /**
  * Pair each incoming finding with an existing row. Strong key (title+file+line)
  * first, over live and retired rows alike. Then title+file over LIVE rows only
- * (a retired row never comes back through the weak key), taking the candidate
- * whose line is closest; a tie that cannot be resolved matches nothing, so a new
- * row is inserted. When in doubt, human state does not move to another finding.
- * Deliberately no similarity pass: a rephrased finding is a new finding.
+ * (a retired row never comes back through the weak key), and only between MUTUAL
+ * nearest neighbours: the row chosen for incoming `i` is the unique closest live
+ * row to `i`, AND `i` is the unique closest to that row among all the incoming
+ * findings still unmatched with the same key. Anything else (a tie on either side,
+ * a closer twin) inserts a new row, so human state never moves to another finding
+ * by input order. Deliberately no similarity pass: a rephrased finding is a new finding.
  */
 function matchRows(existing: ExistingRow[], incoming: IncomingFinding[]): Map<number, ExistingRow> {
   const matches = new Map<number, ExistingRow>()
@@ -101,16 +103,29 @@ function matchRows(existing: ExistingRow[], incoming: IncomingFinding[]): Map<nu
     const row = existing.find((e) => !used.has(e.id) && strongKey(e.title, e.filePath, e.lineStart) === key)
     if (row) claim(i, row)
   })
-  incoming.forEach((f, i) => {
-    if (matches.has(i)) return
-    const key = weakKey(f.title, f.filePath)
-    const candidates = existing.filter((e) => !e.retired && !used.has(e.id) && weakKey(e.title, e.filePath) === key)
-    if (candidates.length === 0) return
-    const dist = candidates.map((e) => lineDistance(e.lineStart, f.lineStart))
+
+  const pending = incoming.map((f, i) => ({ f, i })).filter(({ i }) => !matches.has(i))
+  const free = existing.filter((e) => !e.retired && !used.has(e.id))
+  /** The only element at the minimum distance, or undefined on a tie / no candidates. */
+  const uniqueClosest = <T>(items: T[], distance: (item: T) => number): T | undefined => {
+    const dist = items.map(distance)
     const best = Math.min(...dist)
-    const closest = candidates.filter((_, k) => dist[k] === best)
-    if (closest.length === 1) claim(i, closest[0]!)
-  })
+    const closest = items.filter((_, k) => dist[k] === best)
+    return closest.length === 1 ? closest[0] : undefined
+  }
+  for (const { f, i } of pending) {
+    const key = weakKey(f.title, f.filePath)
+    const row = uniqueClosest(
+      free.filter((e) => weakKey(e.title, e.filePath) === key),
+      (e) => lineDistance(e.lineStart, f.lineStart),
+    )
+    if (!row) continue
+    const rival = uniqueClosest(
+      pending.filter((p) => weakKey(p.f.title, p.f.filePath) === key),
+      (p) => lineDistance(row.lineStart, p.f.lineStart),
+    )
+    if (rival?.i === i) claim(i, row)
+  }
   return matches
 }
 

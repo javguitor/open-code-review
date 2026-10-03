@@ -1,9 +1,10 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { execBinary } from "@open-code-review/platform";
-import { makeTempWorkspace, removeTempWorkspace } from "@open-code-review/persistence/test-support";
-import { resolveMainCheckout } from "./main-checkout.js";
+import { makeTempWorkspace, removeTempWorkspace } from "../test-support.js";
+import { dbPathFor, resolveMainCheckout } from "../main-checkout.js";
+import { closeAllDatabases, ensureDatabase, getDb } from "../index.js";
 
 let root: string | undefined;
 afterEach(() => root && removeTempWorkspace(root));
@@ -90,5 +91,33 @@ describe("resolveMainCheckout", () => {
     const wt = join(root, "wt");
     git(bare, "worktree", "add", "-q", wt, "-b", "pr");
     expect(resolveMainCheckout(wt)).toBe(wt);
+  });
+});
+
+describe("dbPathFor", () => {
+  it("sends every PR-worktree .ocr/ to the main database, even once the worktree has its own data/", async () => {
+    root = realpathSync(makeTempWorkspace("ocr-dbpath-"));
+    const main = join(root, "main");
+    mkdirSync(join(main, ".ocr"), { recursive: true });
+    writeFileSync(join(main, ".ocr", "config.yaml"), "worktrees:\n  dir: ../prs\n");
+    git(main, "init", "-q");
+    git(main, "commit", "-q", "--allow-empty", "-m", "init");
+    const custom = join(root, "prs", "pr-2");
+    const inTree = join(main, ".ocr", "worktrees", "pr-1");
+    git(main, "worktree", "add", "-q", custom, "-b", "a");
+    git(main, "worktree", "add", "-q", inTree, "-b", "b");
+    const mainDb = join(main, ".ocr", "data", "ocr.db");
+
+    for (const wt of [custom, inTree]) {
+      mkdirSync(join(wt, ".ocr", "data"), { recursive: true });
+      expect(dbPathFor(join(wt, ".ocr"))).toBe(mainDb);
+      const db = await ensureDatabase(join(wt, ".ocr"));
+      db.run("INSERT INTO sessions (id, branch, workflow_type, current_phase, phase_number, session_dir, status, started_at, updated_at) VALUES (?, 'b', 'review', 'x', 1, 'd', 'active', 't', 't')", [`s-${wt.length}`]);
+    }
+    expect(dbPathFor(join(main, ".ocr"))).toBe(mainDb);
+    const rows = (await getDb(join(main, ".ocr"))).exec("SELECT COUNT(*) FROM sessions")[0]!.values[0]![0];
+    expect(rows).toBe(2);
+    expect(existsSync(join(custom, ".ocr", "data", "ocr.db"))).toBe(false);
+    closeAllDatabases();
   });
 });

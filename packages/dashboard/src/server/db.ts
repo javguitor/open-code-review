@@ -33,6 +33,7 @@
 import {
   ensureDatabase,
   closeDatabase,
+  dbPathFor,
   resultToRows,
   resultToRow,
   type Database,
@@ -252,7 +253,7 @@ let cachedDbPath: string | null = null
  * first use. The shared module caches the connection per path.
  */
 export async function openDb(ocrDir: string): Promise<Database> {
-  const dbPath = join(ocrDir, 'data', 'ocr.db')
+  const dbPath = dbPathFor(ocrDir)
   const db = await ensureDatabase(ocrDir)
   cachedDb = db
   cachedDbPath = dbPath
