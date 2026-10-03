@@ -396,6 +396,8 @@ export type NormalizedStreamEvent =
   | { type: 'error'; source: 'agent' | 'process'; message: string; detail?: string }
   | { type: 'notice'; level: 'info' | 'warning'; code: string; message: string }
   | { type: 'session_id'; id: string }
+  /** Ends a turn; a `--print` run may start more turns (background sub-agent
+   *  completions arrive as a burst of results followed by a new turn). */
   | { type: 'result'; isError: boolean; subtype?: string }
 
 export type StreamEvent = NormalizedStreamEvent & {

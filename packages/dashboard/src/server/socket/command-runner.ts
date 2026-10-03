@@ -30,6 +30,7 @@ import {
   generateCommandUid,
   appendCommandLog,
   getFinding,
+  getSession,
 } from '@open-code-review/persistence'
 import { getWorkflowHardDeadlineMs } from '@open-code-review/config/runtime-config'
 import {
@@ -48,6 +49,7 @@ import {
   WATCHDOG_TICK_MS,
   POST_RESULT_GRACE_MS,
   decideWatchdogTick,
+  trackResultEvent,
   makeHeartbeatBumper,
 } from './watchdog.js'
 import { finishExecution } from './finalizer.js'
@@ -409,6 +411,22 @@ function verifyTargetOf(
   return finding ? { sessionId: finding.session_id, roundNumber: finding.round_number } : undefined
 }
 
+/**
+ * Target of the session `--resume <workflow-id>` names. The args carry no target
+ * of their own, so the prompt would default to "staged changes" and the resumed
+ * conversation would conclude there is nothing to review. Returns the PR URL
+ * when it was a PR review, else a pointer to the session's own recorded context;
+ * undefined when the session does not exist.
+ */
+export function resumeTargetOf(db: Database, workflowId: string): string | undefined {
+  const session = getSession(db, workflowId)
+  if (!session) return undefined
+  return (
+    session.pr_url ??
+    `resumed session ${session.id} (branch ${session.branch}) - use the target recorded in its context.md`
+  )
+}
+
 function spawnAiCommand(
   io: SocketIOServer,
   _socket: Socket,
@@ -474,6 +492,10 @@ function spawnAiCommand(
     executionUid: entry.uid,
     localCli,
     verifyTarget: verifyTargetOf(db, baseCommand, subArgs),
+    resolveResumeTarget:
+      baseCommand === 'review' || baseCommand === 'map'
+        ? (workflowId) => resumeTargetOf(db, workflowId)
+        : undefined,
   })
   if (built.targetError) {
     const content = `Error: ${built.targetError}\n`
@@ -777,6 +799,7 @@ function spawnAiCommand(
   }
 
   function handleEvent(evt: NormalizedEvent): void {
+    trackResultEvent(entry, evt, Date.now())
     switch (evt.type) {
       case 'text_delta':
         emitContent(evt.text)
@@ -827,13 +850,12 @@ function spawnAiCommand(
         break
       }
       case 'result': {
-        // The agent's turn loop is done. Record it for the watchdog: a healthy
-        // process exits within a moment (the `close` handler finalizes
-        // normally); a wedged one (leaked grandchild holding the pipe) is reaped
-        // by the watchdog after POST_RESULT_GRACE_MS so finalization never hangs
-        // on stdio EOF.
-        entry.resultSeenAt = Date.now()
-        entry.resultIsError = evt.isError
+        // `result` ends a turn; a `--print` run may start more turns (background
+        // sub-agent completions arrive as a burst of results followed by a new
+        // turn). `trackResultEvent` above armed the watchdog's grace clock; any
+        // later event disarms it. A healthy process exits and `close` finalizes
+        // normally; a wedged one (leaked grandchild holding the pipe) whose last
+        // output was a `result` is reaped after POST_RESULT_GRACE_MS.
         emitStreamEvent(evt)
         break
       }

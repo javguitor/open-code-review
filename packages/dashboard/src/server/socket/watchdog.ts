@@ -15,6 +15,7 @@
 
 import type { Database } from '@open-code-review/persistence'
 import { WATCHDOG_DEADLINE_EXIT_CODE } from '@open-code-review/persistence'
+import type { NormalizedEvent } from '../services/ai-cli/types.js'
 import type { ProcessEntry } from './process-registry.js'
 
 // The `result`-grace path fires ~30s after the agent's work completes —
@@ -39,7 +40,7 @@ export type WatchdogTickInput = {
    *  (`exitCode`/`signalCode`). Strictly stronger than a PID liveness probe,
    *  which can detect death but not recycling. */
   exited: boolean
-  /** Epoch ms the terminal `result` event was seen, if any. */
+  /** Epoch ms of the latest `result` event not followed by further output, if any. */
   resultSeenAt: number | undefined
   /** Whether that `result` reported an error (selects the finalize code). */
   resultIsError: boolean | undefined
@@ -99,6 +100,37 @@ export function decideWatchdogTick(i: WatchdogTickInput): WatchdogTickDecision {
     }
   }
   return i.exited ? { action: 'wait' } : { action: 'beat' }
+}
+
+// ── Result tracking ──
+
+/**
+ * Record what a normalized stream event means for the watchdog's "work is done"
+ * evidence. A `result` arms it; ANY other event disarms it.
+ *
+ * `result` ends a turn; a `--print` run may start more turns. With background
+ * sub-agents, Claude Code dumps their completions as a burst of `result` lines
+ * (cumulative `subagent_stats`) and then starts a new turn (`system/init`, ...)
+ * about 100 ms later (incident ce80933b). Treating the first `result` as final
+ * made the watchdog reap a live review ~30s later, mid-workflow, recording
+ * exit 0. Output after a `result` proves the agent is still working, so the
+ * grace clock only counts silence since the LAST `result`. A truly finished
+ * process emits nothing after its final `result`, so the wedged-`close`
+ * finalize is unchanged. Disarming also drops `resultIsError`: a later turn
+ * invalidates the earlier verdict.
+ */
+export function trackResultEvent(
+  entry: Pick<ProcessEntry, 'resultSeenAt' | 'resultIsError'>,
+  evt: Pick<NormalizedEvent, 'type'> & { isError?: boolean },
+  nowMs: number,
+): void {
+  if (evt.type === 'result') {
+    entry.resultSeenAt = nowMs
+    entry.resultIsError = evt.isError === true
+    return
+  }
+  entry.resultSeenAt = undefined
+  entry.resultIsError = undefined
 }
 
 // ── Liveness heartbeat (S19) ──

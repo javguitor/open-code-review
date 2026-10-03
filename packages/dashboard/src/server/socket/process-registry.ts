@@ -39,9 +39,10 @@ export type ProcessEntry = {
    * finalization from stdio EOF, which a leaked grandchild can hold open.
    */
   finalized?: boolean
-  /** Epoch ms when the terminal `result` event was seen (watchdog input). */
+  /** Epoch ms of the latest `result` event not followed by further output
+   *  (watchdog input). `result` ends a turn; a `--print` run may start more. */
   resultSeenAt?: number
-  /** Whether the terminal `result` reported an error (sets the watchdog exit code). */
+  /** Whether that `result` reported an error (sets the watchdog exit code). */
   resultIsError?: boolean
   /** Per-execution supervisor/watchdog timer; cleared on finalize. */
   watchdog?: ReturnType<typeof setInterval>

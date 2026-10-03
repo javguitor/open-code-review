@@ -341,10 +341,11 @@ class ClaudeLineParser implements LineParser {
       events.push({ type: 'error', source: 'agent', message })
     }
 
-    // Terminal `result` line — the turn loop is done. Emitted before the
-    // process necessarily exits, so the command-runner can finalize on this
-    // instead of waiting for stdio EOF (which a leaked grandchild can hold
-    // open). `subtype` is e.g. 'success' | 'error_max_turns'; `is_error` is
+    // `result` line — a turn ended. A `--print` run may start more turns
+    // afterwards (background sub-agent completions arrive as a burst of
+    // results followed by a new turn), so this is NOT proof the process is
+    // done; the watchdog only trusts the latest `result` that no further output
+    // follows. `subtype` is e.g. 'success' | 'error_max_turns'; `is_error` is
     // the vendor's own failure flag.
     if (type === 'result') {
       events.push({
