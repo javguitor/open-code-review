@@ -2,17 +2,20 @@ import { cn } from '../../../lib/utils'
 import { useT, type MessageKey } from '../../../lib/i18n'
 import type { SessionStatus, WorkflowType } from '../../../lib/api-types'
 
+export type StatusFilter = SessionStatus | 'all' | 'unposted'
+
 type SessionFiltersProps = {
-  statusFilter: SessionStatus | 'all'
+  statusFilter: StatusFilter
   workflowFilter: WorkflowType | 'all'
-  onStatusChange: (status: SessionStatus | 'all') => void
+  onStatusChange: (status: StatusFilter) => void
   onWorkflowChange: (workflow: WorkflowType | 'all') => void
 }
 
-const STATUS_OPTIONS: { value: SessionStatus | 'all'; label: MessageKey }[] = [
+const STATUS_OPTIONS: { value: StatusFilter; label: MessageKey }[] = [
   { value: 'all', label: 'sessions.filter_all' },
   { value: 'active', label: 'status.active' },
   { value: 'closed', label: 'status.closed' },
+  { value: 'unposted', label: 'sessions.filter_unposted' },
 ]
 
 const WORKFLOW_OPTIONS: { value: WorkflowType | 'all'; label: MessageKey }[] = [

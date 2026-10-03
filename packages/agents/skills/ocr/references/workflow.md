@@ -835,6 +835,8 @@ Synthesis prose follows the configured `language`; headings, labels, verdicts an
 
    These go in a prominent "Clarifying Questions" section for stakeholder response.
 
+   **Open `final.md` with `## What This Change Does`** (before `## Verdict`): plain-language "what the task asks" / "what the PR implements" plus one `mermaid` diagram, per Step 8 of `references/final-template.md`. It is internal and is never posted.
+
 7. **Pipe structured round data to the CLI (BEFORE `final.md`)**:
 
    > The CLI is the **sole writer** of `round-meta.json`. The orchestrator constructs JSON in memory and pipes it to the CLI, which validates the schema, writes the file to the correct session path, and records a `round_completed` orchestration event — all in one command.

@@ -1,8 +1,34 @@
+import { Children, isValidElement, lazy, Suspense } from 'react'
+import type { ReactNode } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import type { Components } from 'react-markdown'
 import { cn } from '../../lib/utils'
+
+// mermaid is ~2MB: load it only when a document actually contains a diagram.
+const MermaidRenderer = lazy(() => import('./mermaid-renderer'))
+
+/** Flattens a React children tree to its text (code blocks arrive as strings or spans). */
+function nodeText(node: ReactNode): string {
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map(nodeText).join('')
+  if (isValidElement<{ children?: ReactNode }>(node)) return nodeText(node.props.children)
+  return ''
+}
+
+/**
+ * Returns the diagram source when a `<pre>`'s only child is a ```mermaid code
+ * block, else null.
+ */
+export function getMermaidSource(children: ReactNode): string | null {
+  const only = Children.toArray(children)[0]
+  if (!isValidElement<{ className?: string; children?: ReactNode }>(only)) return null
+  const classes = only.props.className?.split(/\s+/) ?? []
+  if (!classes.includes('language-mermaid')) return null
+  const source = nodeText(only.props.children).trim()
+  return source.length > 0 ? source : null
+}
 
 type MarkdownRendererProps = {
   content: string
@@ -112,7 +138,25 @@ const components: Components = {
       </code>
     )
   },
-  pre({ node, className, ...props }) {
+  pre({ node, className, children, ...props }) {
+    const mermaidSource = getMermaidSource(children)
+    if (mermaidSource) {
+      return (
+        <div className="mb-4 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <Suspense
+            fallback={
+              <div
+                data-mermaid-loading
+                className="h-32 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-800"
+              />
+            }
+          >
+            {/* 'strict': the diagram is AI-generated from untrusted PR text. */}
+            <MermaidRenderer definition={mermaidSource} securityLevel="strict" />
+          </Suspense>
+        </div>
+      )
+    }
     return (
       <pre
         className={cn(
@@ -120,7 +164,9 @@ const components: Components = {
           className,
         )}
         {...props}
-      />
+      >
+        {children}
+      </pre>
     )
   },
   table({ node, className, ...props }) {
@@ -159,7 +205,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
     <div className={cn('ocr-markdown', className)}>
       <Markdown
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeHighlight]}
+        rehypePlugins={[[rehypeHighlight, { plainText: ['mermaid'] }]]}
         components={components}
       >
         {content}

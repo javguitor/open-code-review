@@ -1,20 +1,23 @@
 import { useMemo, useState } from 'react'
 import { useSessions } from './hooks/use-sessions'
-import { SessionFilters } from './components/session-filters'
+import { SessionFilters, type StatusFilter } from './components/session-filters'
 import { SessionList } from './components/session-list'
 import { useT } from '../../lib/i18n'
-import type { SessionStatus, WorkflowType } from '../../lib/api-types'
+import { isUnposted } from './lib/posted'
+import type { WorkflowType } from '../../lib/api-types'
 
 export function SessionsPage() {
   const { t } = useT()
   const { data: sessions, isLoading } = useSessions()
-  const [statusFilter, setStatusFilter] = useState<SessionStatus | 'all'>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [workflowFilter, setWorkflowFilter] = useState<WorkflowType | 'all'>('all')
 
   const filtered = useMemo(() => {
     if (!sessions) return []
     return sessions.filter((s) => {
-      if (statusFilter !== 'all' && s.status !== statusFilter) return false
+      if (statusFilter === 'unposted') {
+        if (!isUnposted(s)) return false
+      } else if (statusFilter !== 'all' && s.status !== statusFilter) return false
       if (workflowFilter !== 'all' && s.workflow_type !== workflowFilter) return false
       return true
     })

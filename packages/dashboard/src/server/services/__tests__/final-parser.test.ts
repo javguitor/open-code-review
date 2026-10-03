@@ -592,3 +592,66 @@ Description.
     expect(result.suggestionCount).toBe(4)
   })
 })
+
+describe('parseFinalMd — "What This Change Does" section before the verdict', () => {
+  const content = `# Code Review: feat/x
+
+**Date**: 2026-10-03
+**Reviewers**: @principal-1
+
+---
+
+## What This Change Does
+
+**What the task asks**
+
+Let users see why a review finished.
+
+**What the PR implements**
+
+The review page now shows a short explanation and a picture.
+
+\`\`\`mermaid
+flowchart TD
+  A["Review ends"] --> B["Explanation written"]
+  B --- C["Shown in dashboard"]
+\`\`\`
+
+---
+
+## Verdict
+
+**REQUEST CHANGES**
+
+One blocker remains.
+
+---
+
+## Blockers
+
+### 1. Missing guard
+
+**Flagged by**: @principal-1
+
+---
+
+## Should Fix
+
+- **Naming** — rename it
+
+---
+
+## Suggestions
+
+- Add a test — @quality-1
+`
+
+  it('still extracts the verdict and counts', () => {
+    expect(parseFinalMd(content)).toEqual({
+      verdict: 'REQUEST CHANGES',
+      blockerCount: 1,
+      shouldFixCount: 1,
+      suggestionCount: 1,
+    })
+  })
+})

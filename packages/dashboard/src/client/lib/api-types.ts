@@ -25,6 +25,9 @@ export type SessionSummary = {
   latest_verdict: string | null
   latest_blocker_count: number
   latest_round_status: string | null
+  /** When the latest round was posted to GitHub (null = not posted). */
+  latest_posted_at: string | null
+  latest_posted_url: string | null
   // PR-targeted sessions (null for branch/staged/range targets)
   base_ref: string | null
   head_ref: string | null
@@ -129,6 +132,9 @@ export type ReviewRound = {
   should_fix_count: number
   final_md_path: string | null
   parsed_at: string | null
+  /** Set once the round was posted to GitHub (null = never posted). */
+  posted_at?: string | null
+  posted_url?: string | null
   /** GitHub login of the PR author (reviews list); null for non-PR sessions or unknown. */
   pr_author?: string | null
   reviewer_outputs: ReviewerOutput[]

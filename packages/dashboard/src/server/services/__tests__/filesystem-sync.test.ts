@@ -637,6 +637,21 @@ Info level.
       expect(session?.['current_round']).toBe(2)
     })
 
+    it('leaves updated_at alone when a rescan changes no count', async () => {
+      // A no-op resync on every dashboard start made every session read
+      // "updated seconds ago" in the list.
+      const sessionId = '2026-01-01-unchanged'
+      mkdirSync(join(sessionsDir, sessionId, 'rounds', 'round-1', 'reviews'), { recursive: true })
+      writeFileSync(join(sessionsDir, sessionId, 'context.md'), '# Context\n')
+      seedSession(sessionId, { round: 1 })
+      db.run("UPDATE sessions SET updated_at = '2020-01-01 00:00:00' WHERE id = ?", [sessionId])
+
+      await new FilesystemSync(db, sessionsDir).fullScan()
+
+      const session = queryOne(db, 'SELECT updated_at FROM sessions WHERE id = ?', [sessionId])
+      expect(session?.['updated_at']).toBe('2020-01-01 00:00:00')
+    })
+
     it('a backfilled session with final.md but no round_completed event derives synthesis, stays open, and is not complete', async () => {
       // The accept-too-soon defect: final.md presence alone must NOT be read as
       // terminal completion. Such a round is at the synthesis phase, the session

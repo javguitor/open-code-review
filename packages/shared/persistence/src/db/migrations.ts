@@ -626,6 +626,19 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 20,
+    description: "Add nullable review_rounds.posted_at/posted_url/posted_state (round posted to GitHub)",
+    // Nullable, no default: NULL = never posted. posted_state is the state
+    // actually sent (approve|request-changes|comment), after any own-PR downgrade.
+    run: (db) => {
+      for (const column of ["posted_at", "posted_url", "posted_state"]) {
+        if (!columnExists(db, "review_rounds", column)) {
+          db.run(`ALTER TABLE review_rounds ADD COLUMN ${column} TEXT;`);
+        }
+      }
+    },
+  },
 ];
 
 /** Whether `table` currently has a column named `column` (for idempotent DDL). */

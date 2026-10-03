@@ -7,7 +7,7 @@ Applies when `language` in `.ocr/config.yaml` is not `en`. The Tech Lead substit
 Write all prose in **{language}**: summaries, explanations, issue descriptions, why-it-matters, suggestions, questions, discourse reasoning, synthesis narrative, chat answers. Use the natural register of that language (do not transliterate English fillers such as "tbh"/"fwiw"; use their equivalents or drop them).
 
 Keep the following **exactly as written in English** — tools parse them:
-- Section headings: `## Summary`, `## What I Explored`, `## Requirements Assessment`, `## Findings`, `### Finding N: <title>`, `## What's Working Well`, `## Clarifying Questions`, `## Questions for Other Reviewers`, `## Verdict`, `## Blockers`, `## Should Fix`, `## Suggestions`, `## Consensus & Dissent`, `## Individual Reviews`, `## Discourse from <reviewer>`.
+- Section headings: `## What This Change Does`, `## Summary`, `## What I Explored`, `## Requirements Assessment`, `## Findings`, `### Finding N: <title>`, `## What's Working Well`, `## Clarifying Questions`, `## Questions for Other Reviewers`, `## Verdict`, `## Blockers`, `## Should Fix`, `## Suggestions`, `## Consensus & Dissent`, `## Individual Reviews`, `## Discourse from <reviewer>`.
 - Field labels: `Severity`, `Location`, `File`, `Lines`, `Issue`, `Why It Matters`, `Suggestion`, `Requirements Impact`, `Flagged by`, `Evidence`, `Type`, `Date`, `Reviewers`, `Mode`.
 - Synthesis counts (bold lines): `**Blockers**: N`, `**Should Fix**: N`, `**Suggestions**: N`.
 - Map: `## Section N: <title>` headings, the table columns `Done`, `File`, `Role`, `Type`, `Description`, and the bold labels `**Files**` and `**The Story**:`.

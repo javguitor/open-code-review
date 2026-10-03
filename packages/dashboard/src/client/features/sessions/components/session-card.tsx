@@ -7,6 +7,7 @@ import { useT } from '../../../lib/i18n'
 import { phaseLabel } from '../lib/phase-label'
 import { StaleBadge } from './stale-badge'
 import { PrAuthor } from './pr-author'
+import { PostedBadge } from './posted-badge'
 import type { SessionSummary } from '../../../lib/api-types'
 
 type SessionCardProps = {
@@ -122,9 +123,10 @@ export function SessionCard({ session }: SessionCardProps) {
         )}
       </div>
 
-      {session.pr_url && (
-        <div className="mt-2">
-          <StaleBadge session={session} />
+      {(session.pr_url || session.latest_posted_at) && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {session.pr_url && <StaleBadge session={session} />}
+          <PostedBadge postedAt={session.latest_posted_at} postedUrl={session.latest_posted_url} insideLink />
         </div>
       )}
 

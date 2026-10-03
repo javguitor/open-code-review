@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useSocket, useSocketEvent } from '../../../providers/socket-provider'
 import type { GitHubReviewState } from '@open-code-review/platform/verdict'
 import type { PostReviewStep, PostCheckResult, PostSubmitResult, PostPreviewResult, ChatToolStatus } from '../../../lib/api-types'
@@ -41,6 +42,7 @@ type UsePostReviewReturn = {
 export function usePostReview(verdict: string | null): UsePostReviewReturn {
   const { socket } = useSocket()
   const { t } = useT()
+  const queryClient = useQueryClient()
 
   const [step, setStep] = useState<PostReviewStep>('idle')
   const [checkResult, setCheckResult] = useState<PostCheckResult | null>(null)
@@ -212,6 +214,9 @@ export function usePostReview(verdict: string | null): UsePostReviewReturn {
       setPostResult(data)
       if (data.success) {
         setStep('posted')
+        // The server recorded the post: refresh the lists that show the "Posted" badge.
+        queryClient.invalidateQueries({ queryKey: ['sessions'] })
+        queryClient.invalidateQueries({ queryKey: ['reviews'] })
       } else {
         setError(data.error)
         if (data.code === 'needs-recheck') {
@@ -221,7 +226,7 @@ export function usePostReview(verdict: string | null): UsePostReviewReturn {
           setStep('error')
         }
       }
-    }, []),
+    }, [queryClient]),
   )
 
   // ── Actions ──

@@ -6,7 +6,7 @@ import { useTheme } from '../../../providers/theme-provider'
 import { fetchApi } from '../../../lib/utils'
 import type { MapSection, SectionDependency } from '../../../lib/api-types'
 
-const MermaidRenderer = lazy(() => import('./mermaid-renderer'))
+const MermaidRenderer = lazy(() => import('../../../components/markdown/mermaid-renderer'))
 
 type GraphResponse = {
   dependencies: SectionDependency[]
@@ -72,6 +72,7 @@ export function DependencyGraph({ sessionId, runNumber, sections, onSectionClick
         >
           <MermaidRenderer
             definition={graphDefinition}
+            securityLevel="loose"
             onNodeClick={handleNodeClick}
           />
         </Suspense>

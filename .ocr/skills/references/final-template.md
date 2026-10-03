@@ -214,14 +214,60 @@ The CLI **rejects** a contradictory pair (exit 7, nothing written), so pick the 
 
 ---
 
+### Step 8: Write the Plain-Language Overview
+
+Before the verdict, `final.md` opens with `## What This Change Does`: a short section that lets a human who has not read the diff understand the change. It is **internal** — it is never posted (the single-human translation drops it).
+
+- **`**What the task asks**`** — from `requirements.md` or the card when present. With no requirements, say what the change is for, inferred from the PR description.
+- **`**What the PR implements**`** — the behaviour change in plain words. Few technical terms; no file-by-file walk.
+- **One ` ```mermaid ` diagram** — `sequenceDiagram` when the change is about components or services talking over time, `flowchart` for a decision or workflow. At most ~12 nodes or messages; plain-word labels, double-quoted when they contain punctuation; no HTML and no `click` directives. Add a second "before → after" diagram only when the change alters an existing flow. Draw it as ONE `flowchart LR` with two subgraphs with ASCII ids and quoted titles, `direction TB` inside each, and an invisible link between them so Mermaid keeps the order (without it, unconnected subgraphs can come out stacked and reversed):
+
+  ```
+  flowchart LR
+      subgraph before["Before"]
+          direction TB
+          A1["..."] --> A2["..."]
+      end
+      subgraph after["After"]
+          direction TB
+          B1["..."] --> B2["..."]
+      end
+      before ~~~ after
+  ```
+- Keep the whole section under ~25 lines. The two bold labels are prose and follow the configured language; the heading stays in English.
+
+---
+
 ## Final Review Template
 
-```markdown
+````markdown
 # Code Review: {branch/PR}
 
 **Date**: {YYYY-MM-DD}
 **Reviewers**: @principal-1, @principal-2, @quality-1, @security-1
 **Mode**: Full (with discourse) | Quick (no discourse)
+
+---
+
+## What This Change Does
+
+**What the task asks**
+
+{From the requirements/card; if none, what the change is for, inferred from the PR description. Plain words.}
+
+**What the PR implements**
+
+{The behaviour change in plain words. Few technical terms, no file-by-file walk.}
+
+```mermaid
+sequenceDiagram
+    participant A as {Who or what starts it}
+    participant B as {What it talks to}
+    A->>B: {plain-word message}
+    B-->>A: {plain-word reply}
+```
+
+{Optional second diagram, "before → after", only when the change alters an existing flow.}
 
 ---
 
@@ -356,7 +402,7 @@ Full reviews available in session directory:
 
 **Session**: `.ocr/sessions/{session-id}/`
 **Discourse**: `rounds/round-{n}/discourse.md`
-```
+````
 
 ---
 

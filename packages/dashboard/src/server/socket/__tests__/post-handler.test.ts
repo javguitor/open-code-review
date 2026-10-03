@@ -460,6 +460,78 @@ describe('post:submit', () => {
   })
 })
 
+describe('post:submit records the posted round', () => {
+  const REVIEW_POST = 'api --method POST repos/x/y/pulls/42/reviews'
+  const CREATED = JSON.stringify({ id: 9, html_url: 'https://github.com/x/y/pull/42#pullrequestreview-9' })
+  const posted = () =>
+    db.exec('SELECT posted_at, posted_url, posted_state FROM review_rounds WHERE session_id = ? AND round_number = 1', ['sess-1'])[0]?.values[0]
+  const submit = (h: ReturnType<typeof setup>, extra: Record<string, unknown> = {}) =>
+    h.fire('post:submit', { prNumber: PR_NUMBER, content: 'CLIENT', sessionId: 'sess-1', roundNumber: 1, ...extra })
+
+  beforeEach(() => {
+    db.run("INSERT INTO review_rounds (session_id, round_number) VALUES ('sess-1', 1)")
+  })
+
+  it('records time, url and state (reviews API path) and emits session:updated', async () => {
+    const roundDir = join(ocrDir, 'sessions', 'sess-1', 'rounds', 'round-1')
+    mkdirSync(roundDir, { recursive: true })
+    writeFileSync(join(roundDir, 'final-human.md'), 'Resumen')
+    writeFileSync(join(roundDir, 'diff.patch'), ['diff --git a/a.ts b/a.ts', '--- a/a.ts', '+++ b/a.ts', '@@ -1,1 +1,2 @@', ' c', '+n', ''].join('\n'))
+    writeFileSync(join(roundDir, 'final-human-comments.json'), JSON.stringify({ comments: [{ path: 'a.ts', line: 2, side: 'RIGHT', severity: 'nit', body: 'x' }] }))
+    const h = setup([...checkRules('them'), { match: REVIEW_POST, stdout: CREATED }])
+    await checkGh(h)
+    await submit(h, { state: 'request-changes' })
+    const [at, url, state] = posted()!
+    expect(at).toEqual(expect.any(String))
+    expect(url).toBe('https://github.com/x/y/pull/42#pullrequestreview-9')
+    expect(state).toBe('request-changes')
+    expect(h.ioEvents.filter((e) => e.event === 'session:updated')).toEqual([
+      { event: 'session:updated', payload: expect.objectContaining({ id: 'sess-1' }) },
+    ])
+  })
+
+  it('records the downgraded state and the recovered URL (gh pr review path)', async () => {
+    const mine = { user: { login: 'me' }, html_url: REVIEW_URL }
+    const h = setup([...checkRules('me'), REVIEW_OK, reviewsRule([mine])])
+    await checkGh(h)
+    await submit(h, { state: 'approve' })
+    expect(posted()).toEqual([expect.any(String), REVIEW_URL, 'comment'])
+  })
+
+  it('records a null url when the link cannot be recovered', async () => {
+    const h = setup([...checkRules('them'), REVIEW_OK, { match: 'api --paginate', fail: true }])
+    await checkGh(h)
+    await submit(h, { state: 'comment' })
+    expect(posted()).toEqual([expect.any(String), null, 'comment'])
+  })
+
+  it('records nothing without a round and does not emit', async () => {
+    const h = setup([...checkRules('them'), REVIEW_OK, reviewsRule([])])
+    await checkGh(h)
+    await h.fire('post:submit', { prNumber: PR_NUMBER, content: 'x' })
+    expect(posted()).toEqual([null, null, null])
+    expect(h.ioEvents.filter((e) => e.event === 'session:updated')).toHaveLength(0)
+  })
+
+  it('records nothing when gh fails', async () => {
+    const h = setup([...checkRules('them'), { match: 'pr review', fail: true }])
+    await checkGh(h)
+    await submit(h)
+    expect(posted()).toEqual([null, null, null])
+  })
+
+  it('a recording failure never fails the post', async () => {
+    db.run('ALTER TABLE review_rounds DROP COLUMN posted_state')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const h = setup([...checkRules('them'), REVIEW_OK, reviewsRule([])])
+    await checkGh(h)
+    await submit(h)
+    expect(h.last('post:submit-result')).toMatchObject({ success: true })
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+})
+
 describe('post:submit worktree cleanup (after-post)', () => {
   let WT_PATH: string
   let ROW: Record<string, unknown>
