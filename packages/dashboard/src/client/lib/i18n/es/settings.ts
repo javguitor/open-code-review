@@ -33,6 +33,13 @@ const settings = {
   'settings.error_dir_required': 'El directorio no puede estar vacío.',
   'settings.error_cleanup_invalid': 'Elige uno de los modos de limpieza.',
   'settings.error_language_required': 'Elige un idioma.',
+  'settings.theme_title': 'Tema',
+  'settings.theme_hint': 'Se guarda en este navegador y se aplica al instante. Las paletas vienen de los temas de Omarchy; el modo claro/oscuro lo marca el tema elegido.',
+  'settings.theme_default': 'Por defecto',
+  'settings.theme_omarchy_current': 'Omarchy (actual: {name})',
+  'settings.theme_omarchy_unavailable': 'Omarchy (no detectado)',
+  'settings.theme_group_dark': 'Temas oscuros',
+  'settings.theme_group_light': 'Temas claros',
 }
 
 export { settings }

@@ -30,6 +30,13 @@
         "config": "packages/dashboard/vitest.config.ts"
       }
     },
+    "sync-themes": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm sync:themes",
+        "cwd": "{projectRoot}"
+      }
+    },
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {

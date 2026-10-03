@@ -36,6 +36,7 @@ import { createAgentSessionsRouter } from './routes/agent-sessions.js'
 import { createHandoffRouter } from './routes/handoff.js'
 import { createTeamRouter } from './routes/team.js'
 import { createRequirementsRouter } from './routes/requirements.js'
+import { createOmarchyRouter } from './routes/omarchy.js'
 import { AiCliService } from './services/ai-cli/index.js'
 import { createSessionCaptureService } from './services/capture/session-capture-service.js'
 import { FilesystemSync } from './services/filesystem-sync.js'
@@ -580,6 +581,7 @@ export async function startServer(options: StartServerOptions): Promise<void> {
   app.use('/api/agent-sessions', createAgentSessionsRouter(db, () => pullSync()))
   app.use('/api/sessions', createHandoffRouter(sessionCapture, ocrDir, () => pullSync()))
   app.use('/api/team', createTeamRouter(ocrDir))
+  app.use('/api/omarchy', createOmarchyRouter())
 
   // ── Static file serving (production) ──
 

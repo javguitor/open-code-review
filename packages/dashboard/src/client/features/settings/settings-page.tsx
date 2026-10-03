@@ -3,6 +3,7 @@ import { Check, Loader2, X } from 'lucide-react'
 import { cn, IDE_TYPES, type IdeType } from '../../lib/utils'
 import { useT, type MessageKey } from '../../lib/i18n'
 import { CLEANUP_MODES, LANGUAGES, buildSettingsPatch, type SettingsErrors, type SettingsField, type SettingsForm } from '../../lib/worktree-ui'
+import { ThemeSection } from './theme-section'
 import { useConfigSettings, usePatchConfig, usePatchIde } from './hooks/use-config-settings'
 
 const INPUT_CLASS = cn(
@@ -171,6 +172,8 @@ export function SettingsPage() {
         <p className="text-xs text-zinc-500 dark:text-zinc-400">{t('settings.posting_language_hint')}</p>
         <FieldError message={errorFor('posting.language')} />
       </section>
+
+      <ThemeSection className={SECTION_CLASS} />
 
       <section className={SECTION_CLASS}>
         <label htmlFor="settings-ide" className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">

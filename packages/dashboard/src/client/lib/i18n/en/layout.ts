@@ -49,6 +49,7 @@ const layout = {
   'layout.time_minutes_ago': '{n}m ago',
   'layout.time_hours_ago': '{n}h ago',
   'layout.time_days_ago': '{n}d ago',
+  'layout.theme_locked': 'Light/dark is set by the {name} theme (change it in Settings)',
 }
 
 export { layout }
