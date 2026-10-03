@@ -30,6 +30,7 @@ import {
   generateCommandUid,
   appendCommandLog,
   getFinding,
+  getSession,
 } from '@open-code-review/persistence'
 import { getWorkflowHardDeadlineMs } from '@open-code-review/config/runtime-config'
 import {
@@ -48,6 +49,7 @@ import {
   WATCHDOG_TICK_MS,
   POST_RESULT_GRACE_MS,
   decideWatchdogTick,
+  trackResultEvent,
   makeHeartbeatBumper,
 } from './watchdog.js'
 import { finishExecution } from './finalizer.js'
@@ -399,6 +401,23 @@ function spawnCliCommand(
 // ── AI workflow command spawn (adapter strategy) ──
 
 /** Session/round of the finding a `verify` run targets (undefined for other commands / unknown ids). */
+/**
+ * `--resume <workflow-id>` carries no target of its own, so the prompt would
+ * default to "staged changes" and the resumed conversation would conclude there
+ * is nothing to review. Recover the target from the session row: the PR URL when
+ * it was a PR review, else a pointer to the session's own recorded context.
+ */
+function resumeTargetOf(db: Database, subArgs: string[]): string | undefined {
+  const at = subArgs.indexOf('--resume')
+  const id = at >= 0 ? subArgs[at + 1] : undefined
+  const session = id ? getSession(db, id) : undefined
+  if (!session) return undefined
+  return (
+    session.pr_url ??
+    `resumed session ${session.id} (branch ${session.branch}) - use the target recorded in its context.md`
+  )
+}
+
 function verifyTargetOf(
   db: Database,
   baseCommand: string,
@@ -474,6 +493,7 @@ function spawnAiCommand(
     executionUid: entry.uid,
     localCli,
     verifyTarget: verifyTargetOf(db, baseCommand, subArgs),
+    resumeTarget: resumeTargetOf(db, subArgs),
   })
   if (built.targetError) {
     const content = `Error: ${built.targetError}\n`
@@ -777,6 +797,7 @@ function spawnAiCommand(
   }
 
   function handleEvent(evt: NormalizedEvent): void {
+    trackResultEvent(entry, evt, Date.now())
     switch (evt.type) {
       case 'text_delta':
         emitContent(evt.text)
@@ -832,8 +853,8 @@ function spawnAiCommand(
         // normally); a wedged one (leaked grandchild holding the pipe) is reaped
         // by the watchdog after POST_RESULT_GRACE_MS so finalization never hangs
         // on stdio EOF.
-        entry.resultSeenAt = Date.now()
-        entry.resultIsError = evt.isError
+        // (`trackResultEvent` above armed it; a later non-result event disarms it,
+        // because a `--print` run can continue with new turns after a `result`.)
         emitStreamEvent(evt)
         break
       }

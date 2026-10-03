@@ -181,6 +181,10 @@ export type BuildPromptOptions = {
   localCli: string | null
   /** `verify` only: session and round of the finding (looked up before spawning). */
   verifyTarget?: { sessionId: string; roundNumber: number }
+  /** `--resume` only: the target the resumed session was started with. Used
+   *  when the args carry no explicit target, so the resumed conversation is not
+   *  told the target is "staged changes". */
+  resumeTarget?: string
 }
 
 export function buildPrompt(opts: BuildPromptOptions): {
@@ -218,6 +222,7 @@ export function buildPrompt(opts: BuildPromptOptions): {
   } else {
     // Review/map arg parsing: target, --fresh, --with-comments, --requirements, --team, --reviewer
     let target = 'staged changes'
+    let explicitTarget = false
     let requirements = ''
     let team = ''
     const reviewerDescriptions: { description: string; count: number }[] = []
@@ -257,12 +262,14 @@ export function buildPrompt(opts: BuildPromptOptions): {
         i += 2
       } else if (!arg.startsWith('--')) {
         target = arg
+        explicitTarget = true
         i++
       } else {
         i++
       }
     }
 
+    if (resumeWorkflowId && !explicitTarget && opts.resumeTarget) target = opts.resumeTarget
     target = normalizePrTarget(target)
     targetError = validatePrTarget(target)
 
@@ -271,6 +278,9 @@ export function buildPrompt(opts: BuildPromptOptions): {
       `Target: ${escapeUserHeaders(target)}`,
       `Options: ${escapeUserHeaders(optionsStr)}`,
     )
+    if (resumeWorkflowId) {
+      userContentLines.push(`Resume session: ${escapeUserHeaders(resumeWorkflowId)}`)
+    }
     if (team) {
       // `team` is JSON-stringified; headers can't appear inside valid
       // JSON, but we still pass through the escaper as defense in
@@ -292,6 +302,15 @@ export function buildPrompt(opts: BuildPromptOptions): {
   promptLines.push(
     `Follow the instructions below to run the OCR ${baseCommand} workflow.`,
   )
+
+  if (resumeWorkflowId) {
+    promptLines.push(
+      '',
+      'This run RESUMES an existing OCR session (see "Resume session" below). Continue it from its',
+      'recorded phase via the forward-resume control loop (`ocr state status --json`); do not start a',
+      'new session and do not treat the target as "staged changes".',
+    )
+  }
 
   // ── Trusted block 1: CLI resolution ──
   if (localCli) {

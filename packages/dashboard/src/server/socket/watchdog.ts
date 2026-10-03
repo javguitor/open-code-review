@@ -101,6 +101,34 @@ export function decideWatchdogTick(i: WatchdogTickInput): WatchdogTickDecision {
   return i.exited ? { action: 'wait' } : { action: 'beat' }
 }
 
+// ── Terminal-result tracking ──
+
+/**
+ * Record what a normalized stream event means for the watchdog's "work is done"
+ * evidence. A `result` arms it; ANY other event disarms it.
+ *
+ * Claude Code's `--print` run does not end at the first `result`: with
+ * background sub-agents, each completion notification starts a NEW turn in the
+ * same process (and its own `result`). Treating the first `result` as final made
+ * the watchdog reap a live review ~30s later, mid-workflow, recording exit 0.
+ * Output after a `result` proves the agent is still working, so the grace clock
+ * only counts silence since the LAST `result`. A truly finished process emits
+ * nothing after its final `result`, so the wedged-`close` finalize is unchanged.
+ */
+export function trackResultEvent(
+  entry: Pick<ProcessEntry, 'resultSeenAt' | 'resultIsError'>,
+  evt: { type: string; isError?: boolean },
+  nowMs: number,
+): void {
+  if (evt.type === 'result') {
+    entry.resultSeenAt = nowMs
+    entry.resultIsError = evt.isError === true
+    return
+  }
+  entry.resultSeenAt = undefined
+  entry.resultIsError = undefined
+}
+
 // ── Liveness heartbeat (S19) ──
 
 /**
