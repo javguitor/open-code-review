@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -13,7 +13,13 @@ import {
   makeTempWorkspace,
   removeTempWorkspace,
 } from "@open-code-review/persistence/test-support";
-import { findStaleWorktrees, listPrWorktrees, removePrWorktree } from "./worktree.js";
+import {
+  findStaleWorktrees,
+  listPrWorktrees,
+  removePrWorktree,
+  worktreeCommand,
+} from "./worktree.js";
+import { isValidPrNumber } from "../lib/pr-number.js";
 import { cleanupPrWorktree } from "./state.js";
 
 let root: string;
@@ -49,6 +55,7 @@ beforeEach(() => {
   ocrDir = join(root, ".ocr");
   wtDir = join(ocrDir, "worktrees");
   mkdirSync(join(ocrDir, "sessions"), { recursive: true });
+  mkdirSync(join(ocrDir, "skills"), { recursive: true });
   git("init", "-q");
   git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init");
 });
@@ -69,12 +76,11 @@ describe("listPrWorktrees", () => {
 });
 
 describe("removePrWorktree", () => {
-  it("removes a clean worktree and deletes refs/ocr/pr/<n> and branch ocr/pr-<n>", () => {
+  it("removes a clean worktree and deletes refs/ocr/pr/<n>", () => {
     const path = addWorktree(1);
-    git("branch", "ocr/pr-1");
     expect(removePrWorktree({ ocrDir, prNumber: 1 })).toEqual({ status: "removed", path });
     expect(existsSync(path)).toBe(false);
-    expect(git("for-each-ref", "refs/ocr", "refs/heads/ocr")).toBe("");
+    expect(git("for-each-ref", "refs/ocr")).toBe("");
   });
 
   it("refuses a dirty worktree without --force", () => {
@@ -160,5 +166,90 @@ describe("cleanupPrWorktree (state finish, cleanup: on-close)", () => {
     await addSession("s1", null, "closed");
     await cleanupPrWorktree(ocrDir, "s1");
     expect(existsSync(path)).toBe(true);
+  });
+});
+
+describe("isValidPrNumber", () => {
+  it("accepts plain positive integers only", () => {
+    for (const ok of ["1", "42", "1000"]) expect(isValidPrNumber(ok)).toBe(true);
+    for (const bad of ["0", "01", "1e1", "0x2", "+3", "-1", "1.5", " 4", ""]) {
+      expect(isValidPrNumber(bad)).toBe(false);
+    }
+  });
+});
+
+describe("ocr worktree remove (command)", () => {
+  const removeSub = worktreeCommand.commands.find((c) => c.name() === "remove")!;
+  const originalCwd = process.cwd();
+  let errors: string[];
+  let logs: string[];
+
+  async function run(...args: string[]): Promise<number> {
+    // Commander keeps option values between parses on the same instance.
+    removeSub.setOptionValue("allStale", undefined);
+    removeSub.setOptionValue("force", undefined);
+    let code = 0;
+    vi.spyOn(process, "exit").mockImplementation(((c?: number) => {
+      code = c ?? 0;
+      throw new Error("exit");
+    }) as never);
+    try {
+      await worktreeCommand.parseAsync(["remove", ...args], { from: "user" });
+    } catch (e) {
+      if ((e as Error).message !== "exit") throw e;
+    }
+    return code;
+  }
+
+  beforeEach(() => {
+    process.chdir(root);
+    errors = [];
+    logs = [];
+    vi.spyOn(console, "error").mockImplementation((...a) => void errors.push(a.join(" ")));
+    vi.spyOn(console, "log").mockImplementation((...a) => void logs.push(a.join(" ")));
+  });
+
+  afterEach(() => {
+    process.chdir(originalCwd);
+    vi.restoreAllMocks();
+  });
+
+  it("rejects non-strict PR numbers like 1e1", async () => {
+    addWorktree(10);
+    expect(await run("1e1")).toBe(1);
+    expect(errors.join("\n")).toContain("Invalid PR number");
+    expect(existsSync(join(wtDir, "pr-10"))).toBe(true);
+  });
+
+  it("refuses a PR with an active session unless --force", async () => {
+    const path = addWorktree(1);
+    await addSession("s1", 1, "active");
+    expect(await run("1")).toBe(1);
+    expect(errors.join("\n")).toContain("active session");
+    expect(existsSync(path)).toBe(true);
+    expect(await run("1", "--force")).toBe(0);
+    expect(existsSync(path)).toBe(false);
+  });
+
+  it("--all-stale reports a failing PR, continues with the rest and exits 1", async () => {
+    await ensureDatabase(ocrDir);
+    const p2 = addWorktree(2);
+    const p3 = addWorktree(3);
+    // A locked worktree makes `git worktree remove` fail without --force.
+    git("worktree", "lock", p2);
+    expect(await run("--all-stale")).toBe(1);
+    expect(errors.join("\n")).toMatch(/PR #2: [\s\S]*lock/i);
+    expect(existsSync(p2)).toBe(true);
+    expect(existsSync(p3)).toBe(false);
+    expect(logs.join("\n")).toContain("PR #3: removed");
+  });
+
+  it("--all-stale exits 0 when every removal succeeds", async () => {
+    addWorktree(2);
+    await addSession("s1", 1, "active");
+    addWorktree(1);
+    expect(await run("--all-stale")).toBe(0);
+    expect(existsSync(join(wtDir, "pr-1"))).toBe(true);
+    expect(existsSync(join(wtDir, "pr-2"))).toBe(false);
   });
 });

@@ -23,6 +23,7 @@ import chalk from "chalk";
 import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { requireOcrSetup } from "../lib/guards.js";
+import { isValidPrNumber } from "../lib/pr-number.js";
 import { getWorktreeConfig } from "@open-code-review/config/worktree-config";
 import { removePrWorktree } from "./worktree.js";
 import {
@@ -433,10 +434,10 @@ const beginSubcommand = new Command("begin")
     "Dashboard command_executions uid to link this workflow to (takes precedence over OCR_DASHBOARD_EXECUTION_UID)",
   )
   .option("--base-ref <ref>", "Base ref of the reviewed change (e.g. origin/main)")
-  .option("--head-ref <ref>", "Head ref of the reviewed change (e.g. the PR branch)")
+  .option("--head-ref <ref>", "Local ref that was reviewed (e.g. refs/ocr/pr/<n>)")
   .option("--head-sha <sha>", "Commit SHA being reviewed")
   .option("--pr-number <n>", "Pull request number (positive integer)", (v: string) => {
-    if (!/^[1-9][0-9]*$/.test(v)) {
+    if (!isValidPrNumber(v)) {
       throw new InvalidArgumentError(`Invalid PR number: "${v}". Must be a positive integer.`);
     }
     return Number(v);

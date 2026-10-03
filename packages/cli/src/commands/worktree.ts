@@ -16,6 +16,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { requireOcrSetup } from "../lib/guards.js";
+import { isValidPrNumber } from "../lib/pr-number.js";
 import { getWorktreeConfig } from "@open-code-review/config/worktree-config";
 import { getAllSessions, getDb } from "@open-code-review/persistence";
 import type { SessionRow } from "@open-code-review/persistence";
@@ -28,15 +29,6 @@ function git(cwd: string, args: string[]): string {
     encoding: "utf-8",
     stdio: ["ignore", "pipe", "pipe"],
   });
-}
-
-function gitSucceeds(cwd: string, args: string[]): boolean {
-  try {
-    git(cwd, args);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function canonical(path: string): string {
@@ -87,8 +79,7 @@ export type RemoveWorktreeResult =
   | { status: "dirty"; path: string };
 
 /**
- * Remove the PR worktree, then its `refs/ocr/pr/<n>` ref and legacy
- * `ocr/pr-<n>` branch. Refuses a dirty worktree unless `force`; `--force` is
+ * Remove the PR worktree, then its `refs/ocr/pr/<n>` ref. Refuses a dirty worktree unless `force`; `--force` is
  * forwarded to git only in that case, so a clean worktree is never force-removed.
  */
 export function removePrWorktree(params: {
@@ -109,10 +100,6 @@ export function removePrWorktree(params: {
     git(repoRoot, ["worktree", "prune"]);
   }
   git(repoRoot, ["update-ref", "-d", `refs/ocr/pr/${prNumber}`]);
-  const branch = `ocr/pr-${prNumber}`;
-  if (gitSucceeds(repoRoot, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`])) {
-    git(repoRoot, ["branch", "-D", branch]);
-  }
   return { status: "removed", path: entry.path };
 }
 
@@ -195,16 +182,18 @@ const listSubcommand = new Command("list")
   });
 
 function parsePrNumber(value: string): number {
-  const n = Number(value);
-  if (!Number.isInteger(n) || n <= 0) fail(`Invalid PR number: ${value}`);
-  return n;
+  if (!isValidPrNumber(value)) fail(`Invalid PR number: "${value}". Must be a positive integer.`);
+  return Number(value);
 }
 
 const removeSubcommand = new Command("remove")
   .description("Remove a PR worktree and its refs/ocr/pr/<n> ref (refuses dirty without --force)")
   .argument("[pr-number]", "PR number whose worktree to remove")
-  .option("--all-stale", "Remove every worktree whose PR has no active session")
-  .option("--force", "Remove even if the worktree has uncommitted changes")
+  .option(
+    "--all-stale",
+    "Remove every worktree whose PR has no active session (unrelated to the dashboard's Stale badge)",
+  )
+  .option("--force", "Remove even if the worktree is dirty or its PR has an active session")
   .action(
     async (prArg: string | undefined, options: { allStale?: boolean; force?: boolean }) => {
       if (Boolean(prArg) === Boolean(options.allStale)) {
@@ -222,20 +211,35 @@ const removeSubcommand = new Command("remove")
           console.log(chalk.dim("No stale worktrees."));
           return;
         }
+        const active = openPrNumbers(getAllSessions(await getDb(ocrDir)));
         let failed = false;
         for (const prNumber of targets) {
-          const result = removePrWorktree({ ocrDir, prNumber, force: options.force });
-          if (result.status === "removed") {
-            console.log(`PR #${prNumber}: removed ${result.path}`);
-          } else if (result.status === "dirty") {
+          try {
+            if (!options.force && active.has(prNumber)) {
+              console.error(
+                chalk.red(`PR #${prNumber}: has an active session — refusing to remove (use --force)`),
+              );
+              failed = true;
+              continue;
+            }
+            const result = removePrWorktree({ ocrDir, prNumber, force: options.force });
+            if (result.status === "removed") {
+              console.log(`PR #${prNumber}: removed ${result.path}`);
+            } else if (result.status === "dirty") {
+              console.error(
+                chalk.yellow(
+                  `PR #${prNumber}: ${result.path} has uncommitted changes — skipped (use --force)`,
+                ),
+              );
+              failed = true;
+            } else {
+              console.error(chalk.red(`PR #${prNumber}: not a registered worktree under the configured directory`));
+              failed = true;
+            }
+          } catch (error) {
             console.error(
-              chalk.yellow(
-                `PR #${prNumber}: ${result.path} has uncommitted changes — skipped (use --force)`,
-              ),
+              chalk.red(`PR #${prNumber}: ${error instanceof Error ? error.message : String(error)}`),
             );
-            failed = true;
-          } else {
-            console.error(chalk.red(`PR #${prNumber}: not a registered worktree under the configured directory`));
             failed = true;
           }
         }
