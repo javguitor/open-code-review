@@ -38,6 +38,8 @@ export type InitParams = {
   headSha?: string;
   prNumber?: number;
   prUrl?: string;
+  requirementsUrl?: string;
+  requirementsUpdatedAt?: string;
 };
 
 export type TransitionParams = {
@@ -301,6 +303,8 @@ export type ShowResult = {
     head_sha: string | null;
     pr_number: number | null;
     pr_url: string | null;
+    requirements_source_url: string | null;
+    requirements_updated_at: string | null;
   };
   events: Array<{
     id: number;

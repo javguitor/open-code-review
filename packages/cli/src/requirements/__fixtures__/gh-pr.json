@@ -1,0 +1,10 @@
+{
+  "title": "Fix Safari login",
+  "body": "Steps:\n1. open\n2. click",
+  "updatedAt": "2026-01-02T10:00:00Z",
+  "url": "https://github.com/acme/app/pull/9",
+  "author": { "login": "carol" },
+  "comments": [
+    { "author": { "login": "dave" }, "body": "Reproduced", "createdAt": "2026-01-01T09:00:00Z" }
+  ]
+}

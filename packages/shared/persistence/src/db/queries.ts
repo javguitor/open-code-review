@@ -29,12 +29,14 @@ export function insertSession(db: Database, params: InsertSessionParams): void {
     head_sha = null,
     pr_number = null,
     pr_url = null,
+    requirements_source_url = null,
+    requirements_updated_at = null,
   } = params;
 
   db.run(
-    `INSERT INTO sessions (id, branch, workflow_type, current_phase, phase_number, current_round, current_map_run, session_dir, base_ref, head_ref, head_sha, pr_number, pr_url)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, branch, workflow_type, current_phase, phase_number, current_round, current_map_run, session_dir, base_ref, head_ref, head_sha, pr_number, pr_url],
+    `INSERT INTO sessions (id, branch, workflow_type, current_phase, phase_number, current_round, current_map_run, session_dir, base_ref, head_ref, head_sha, pr_number, pr_url, requirements_source_url, requirements_updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, branch, workflow_type, current_phase, phase_number, current_round, current_map_run, session_dir, base_ref, head_ref, head_sha, pr_number, pr_url, requirements_source_url, requirements_updated_at],
   );
 }
 
@@ -67,7 +69,15 @@ export function updateSession(
     values.push(params.current_map_run);
   }
 
-  for (const column of ["base_ref", "head_ref", "head_sha", "pr_number", "pr_url"] as const) {
+  for (const column of [
+    "base_ref",
+    "head_ref",
+    "head_sha",
+    "pr_number",
+    "pr_url",
+    "requirements_source_url",
+    "requirements_updated_at",
+  ] as const) {
     const value = params[column];
     if (value !== undefined) {
       setClauses.push(`${column} = ?`);
