@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useId } from 'react'
 import mermaid from 'mermaid'
+import { useT } from '../../../lib/i18n'
 import { useTheme } from '../../../providers/theme-provider'
 
 type MermaidRendererProps = {
@@ -14,6 +15,7 @@ type MermaidRendererProps = {
 export default function MermaidRenderer({ definition, onNodeClick }: MermaidRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [error, setError] = useState<string | null>(null)
+  const { t } = useT()
   const { resolved: theme } = useTheme()
   const uniqueId = useId().replace(/:/g, '_')
 
@@ -68,7 +70,7 @@ export default function MermaidRenderer({ definition, onNodeClick }: MermaidRend
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Failed to render diagram')
+          setError(err instanceof Error ? err.message : t('map.render_diagram_failed'))
         }
       }
     }
@@ -83,12 +85,12 @@ export default function MermaidRenderer({ definition, onNodeClick }: MermaidRend
       cancelled = true
       container.removeEventListener('click', handleContainerClick)
     }
-  }, [definition, theme, uniqueId, onNodeClick])
+  }, [definition, theme, uniqueId, onNodeClick, t])
 
   if (error) {
     return (
       <div className="rounded-lg border border-red-500/25 bg-red-500/5 p-4 text-sm text-red-600 dark:text-red-400">
-        Failed to render dependency graph: {error}
+        {t('map.render_graph_failed', { error })}
       </div>
     )
   }

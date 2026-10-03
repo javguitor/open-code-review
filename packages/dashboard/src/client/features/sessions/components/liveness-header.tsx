@@ -2,6 +2,7 @@ import { Activity, AlertTriangle, CircleSlash, CheckCircle2 } from 'lucide-react
 import { cn } from '../../../lib/utils'
 import { parseUtcDate } from '../../../lib/utils'
 import { formatElapsed } from '../../../lib/date-utils'
+import { useT, type MessageKey } from '../../../lib/i18n'
 import type { AgentSessionRow } from '../../../lib/api-types'
 import { useAgentSessions, classifyLiveness, type AgentLiveness } from '../hooks/use-agent-sessions'
 
@@ -9,57 +10,64 @@ type LivenessHeaderProps = {
   workflowId: string
 }
 
+type Translate = ReturnType<typeof useT>['t']
+
 const STATUS_META: Record<
   AgentLiveness,
   {
-    label: string
+    label: MessageKey
     icon: typeof Activity
     iconClass: string
     border: string
     bg: string
-    descriptor: (lastActivity: string | null) => string
+    descriptor: (lastActivity: string | null, t: Translate) => string
   }
 > = {
   running: {
-    label: 'Running',
+    label: 'sessions.liveness_running',
     icon: Activity,
     iconClass: 'text-emerald-600 dark:text-emerald-400',
     border: 'border-emerald-500/30',
     bg: 'bg-emerald-500/5 dark:bg-emerald-500/10',
-    descriptor: (last) =>
-      last ? `Last activity ${formatElapsed(last)} ago` : 'Active agent session',
+    descriptor: (last, t) =>
+      last
+        ? t('sessions.liveness_running_last', { elapsed: formatElapsed(last) })
+        : t('sessions.liveness_running_none'),
   },
   stalled: {
-    label: 'Stalled',
+    label: 'sessions.liveness_stalled',
     icon: AlertTriangle,
     iconClass: 'text-amber-600 dark:text-amber-400',
     border: 'border-amber-500/30',
     bg: 'bg-amber-500/5 dark:bg-amber-500/10',
-    descriptor: (last) =>
+    descriptor: (last, t) =>
       last
-        ? `Last activity ${formatElapsed(last)} ago — your AI may have crashed`
-        : 'No recent heartbeat',
+        ? t('sessions.liveness_stalled_last', { elapsed: formatElapsed(last) })
+        : t('sessions.liveness_stalled_none'),
   },
   orphaned: {
-    label: 'Orphaned',
+    label: 'sessions.liveness_orphaned',
     icon: CircleSlash,
     iconClass: 'text-zinc-500 dark:text-zinc-400',
     border: 'border-zinc-300 dark:border-zinc-700',
     bg: 'bg-zinc-100/50 dark:bg-zinc-800/30',
-    descriptor: (last) =>
-      last ? `Auto-marked after ${formatElapsed(last)} of inactivity` : 'Reclassified by sweep',
+    descriptor: (last, t) =>
+      last
+        ? t('sessions.liveness_orphaned_last', { elapsed: formatElapsed(last) })
+        : t('sessions.liveness_orphaned_none'),
   },
   idle: {
-    label: 'Idle',
+    label: 'sessions.liveness_idle_label',
     icon: CheckCircle2,
     iconClass: 'text-zinc-400 dark:text-zinc-500',
     border: 'border-zinc-200 dark:border-zinc-800',
     bg: 'bg-white dark:bg-zinc-900',
-    descriptor: () => 'No active agent sessions',
+    descriptor: (_last, t) => t('sessions.liveness_idle'),
   },
 }
 
 export function LivenessHeader({ workflowId }: LivenessHeaderProps) {
+  const { t } = useT()
   const { data, isLoading } = useAgentSessions(workflowId)
 
   if (isLoading || !data) return null
@@ -90,7 +98,7 @@ export function LivenessHeader({ workflowId }: LivenessHeaderProps) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-            {meta.label}
+            {t(meta.label)}
           </span>
           {newestHeartbeat && (
             <span
@@ -102,7 +110,7 @@ export function LivenessHeader({ workflowId }: LivenessHeaderProps) {
           )}
         </div>
         <p className="text-xs text-zinc-600 dark:text-zinc-400">
-          {meta.descriptor(newestHeartbeat)}
+          {meta.descriptor(newestHeartbeat, t)}
         </p>
         <AgentSessionsSummary rows={rows} />
       </div>
@@ -115,6 +123,7 @@ type AgentSessionsSummaryProps = {
 }
 
 function AgentSessionsSummary({ rows }: AgentSessionsSummaryProps) {
+  const { t } = useT()
   if (rows.length === 0) return null
 
   // Bucket counts by status for an at-a-glance summary
@@ -125,7 +134,7 @@ function AgentSessionsSummary({ rows }: AgentSessionsSummaryProps) {
   const order = ['running', 'done', 'orphaned', 'crashed', 'cancelled', 'spawning'] as const
   const visible = order
     .filter((s) => counts[s])
-    .map((s) => `${counts[s]} ${s}`)
+    .map((s) => `${counts[s]} ${t(`sessions.agent_${s}`)}`)
     .join(' · ')
 
   if (!visible) return null

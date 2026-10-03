@@ -3,6 +3,8 @@ import { ArrowLeft, MessageSquare, Terminal } from 'lucide-react'
 import { useState } from 'react'
 import { useRound, useRoundFindings, useArtifact, useUpdateRoundStatus } from './hooks/use-reviews'
 import type { RoundTriage } from '../../lib/api-types'
+import { useT } from '../../lib/i18n'
+import type { MessageKey } from '../../lib/i18n'
 import { ReviewerCard } from './components/reviewer-card'
 import { FindingsTable } from './components/findings-table'
 import { VerdictBanner } from '../../components/markdown/verdict-banner'
@@ -16,15 +18,16 @@ import { PostReviewDialog } from './components/post-review-dialog'
 import { AddressFeedbackPopover } from './components/address-feedback-popover'
 import { TerminalHandoffPanel } from '../sessions/components/terminal-handoff-panel'
 
-const ROUND_STATUS_OPTIONS: { value: RoundTriage; label: string }[] = [
-  { value: 'needs_review', label: 'Needs Review' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'changes_made', label: 'Changes Made' },
-  { value: 'acknowledged', label: 'Acknowledged' },
-  { value: 'dismissed', label: 'Dismissed' },
+const ROUND_STATUS_OPTIONS: { value: RoundTriage; labelKey: MessageKey }[] = [
+  { value: 'needs_review', labelKey: 'status.needs_review' },
+  { value: 'in_progress', labelKey: 'status.in_progress' },
+  { value: 'changes_made', labelKey: 'status.changes_made' },
+  { value: 'acknowledged', labelKey: 'status.acknowledged' },
+  { value: 'dismissed', labelKey: 'status.dismissed' },
 ]
 
 export function RoundPage() {
+  const { t } = useT()
   const { id: sessionId, round: roundStr } = useParams<{
     id: string
     round: string
@@ -48,7 +51,7 @@ export function RoundPage() {
   const [handoffOpen, setHandoffOpen] = useState(false)
 
   if (isLoading) {
-    return <p className="text-sm text-zinc-500 dark:text-zinc-400">Loading round...</p>
+    return <p className="text-sm text-zinc-500 dark:text-zinc-400">{t('reviews.loading_round')}</p>
   }
 
   if (!round) {
@@ -59,9 +62,9 @@ export function RoundPage() {
           className="mb-4 inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to session
+          {t('reviews.back_to_session')}
         </Link>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Round not found.</p>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">{t('reviews.round_not_found')}</p>
       </div>
     )
   }
@@ -77,19 +80,19 @@ export function RoundPage() {
         className="inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300"
       >
         <ArrowLeft className="h-4 w-4" />
-        Back to session
+        {t('reviews.back_to_session')}
       </Link>
 
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold">Round {round.round_number}</h1>
+            <h1 className="text-2xl font-semibold">{t('reviews.round_n', { number: round.round_number })}</h1>
             {/* Axis 2 — your triage status for this round. Distinct from the
                 verdict (the AI's merge gate, shown in the banner below) and from
                 per-finding triage (in the findings table). Labeled so the three
                 are never conflated. */}
             <label className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
-              Your triage
+              {t('reviews.your_triage')}
               <select
                 value={round.progress?.status ?? 'needs_review'}
                 onChange={(e) =>
@@ -102,15 +105,19 @@ export function RoundPage() {
               >
                 {ROUND_STATUS_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
-                    {opt.label}
+                    {t(opt.labelKey)}
                   </option>
                 ))}
               </select>
             </label>
           </div>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            {(round.reviewer_outputs ?? []).length} reviewer
-            {(round.reviewer_outputs ?? []).length !== 1 ? 's' : ''}
+            {t(
+              (round.reviewer_outputs ?? []).length === 1
+                ? 'reviews.reviewer_count_one'
+                : 'reviews.reviewer_count_other',
+              { count: (round.reviewer_outputs ?? []).length },
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -135,16 +142,16 @@ export function RoundPage() {
             className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
           >
             <MessageSquare className="h-3.5 w-3.5" />
-            Ask the Team
+            {t('reviews.ask_team')}
           </button>
           <button
             type="button"
             onClick={() => setHandoffOpen(true)}
-            title="Copy a resume command to continue this review's AI conversation in your terminal"
+            title={t('reviews.resume_terminal_title')}
             className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
           >
             <Terminal className="h-3.5 w-3.5" />
-            Resume in terminal
+            {t('reviews.resume_terminal')}
           </button>
         </div>
       </div>
@@ -171,7 +178,7 @@ export function RoundPage() {
       {/* Reviewer Cards */}
       <div>
         <h2 className="mb-3 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          Reviewers
+          {t('reviews.reviewers')}
         </h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {(round.reviewer_outputs ?? []).map((reviewer) => (
@@ -190,7 +197,7 @@ export function RoundPage() {
           a deliberate "clean" outcome rather than a missing section. */}
       <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
         <h2 className="mb-4 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          Findings{findings ? ` (${findings.length})` : ''}
+          {findings ? t('reviews.findings_count', { count: findings.length }) : t('reviews.findings')}
         </h2>
         <FindingsTable findings={findings ?? []} isLoading={findingsLoading} />
       </div>
@@ -203,7 +210,7 @@ export function RoundPage() {
             className="flex items-center gap-2 text-sm font-medium text-zinc-900 transition-colors hover:text-zinc-700 dark:text-zinc-100 dark:hover:text-zinc-300"
           >
             <MessageSquare className="h-4 w-4" />
-            {showDiscourse ? 'Hide Discourse' : 'View Discourse'}
+            {showDiscourse ? t('reviews.hide_discourse') : t('reviews.view_discourse')}
           </button>
           {showDiscourse && (
             <div className="mt-4 space-y-4">
@@ -227,7 +234,7 @@ export function RoundPage() {
       {finalArtifact && (
         <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-4 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            Final Review
+            {t('reviews.final_review')}
           </h2>
           <MarkdownRenderer content={finalArtifact.content} />
         </div>

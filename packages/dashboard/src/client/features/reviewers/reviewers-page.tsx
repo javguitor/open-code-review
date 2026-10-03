@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Search, RefreshCw, Plus, ChevronDown, ChevronRight, Loader2, Users } from 'lucide-react'
 import { cn } from '../../lib/utils'
+import { useT } from '../../lib/i18n'
+import { RichText } from '../commands/components/rich-text'
 import { TIER_CONFIG, filterReviewers, groupByTier } from '../../lib/reviewer-utils'
 import { useReviewers, type ReviewerTier } from '../commands/hooks/use-reviewers'
 import { useAiCli } from '../../hooks/use-ai-cli'
@@ -12,6 +14,7 @@ import { PromptViewerSheet } from './components/prompt-viewer-sheet'
 import { CreateReviewerDialog } from './components/create-reviewer-dialog'
 
 export function ReviewersPage() {
+  const { t } = useT()
   const { reviewers, isLoaded } = useReviewers()
   const { isAvailable: aiAvailable } = useAiCli()
   const { socket } = useSocket()
@@ -74,13 +77,13 @@ export function ReviewersPage() {
       {/* Header */}
       <div>
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Review Team</h1>
+          <h1 className="text-2xl font-semibold">{t('reviewers.title')}</h1>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleSync}
               disabled={!aiAvailable || syncing}
-              title={!aiAvailable ? 'AI CLI required' : 'Sync reviewer metadata'}
+              title={!aiAvailable ? t('reviewers.ai_cli_required') : t('reviewers.sync_title')}
               className={cn(
                 'flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors',
                 'border-zinc-300 text-zinc-600 hover:bg-zinc-100',
@@ -93,13 +96,13 @@ export function ReviewersPage() {
               ) : (
                 <RefreshCw className="h-3.5 w-3.5" />
               )}
-              Sync
+              {t('reviewers.sync')}
             </button>
             <button
               type="button"
               onClick={() => setCreateOpen(true)}
               disabled={!aiAvailable}
-              title={!aiAvailable ? 'AI CLI required to create reviewers' : 'Create a new reviewer'}
+              title={!aiAvailable ? t('reviewers.ai_cli_required_create') : t('reviewers.create_title')}
               className={cn(
                 'flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition-colors',
                 'hover:bg-indigo-700',
@@ -107,12 +110,12 @@ export function ReviewersPage() {
               )}
             >
               <Plus className="h-3.5 w-3.5" />
-              Create Reviewer
+              {t('reviewers.create_reviewer')}
             </button>
           </div>
         </div>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Manage your AI reviewer personas.
+          {t('reviewers.subtitle')}
         </p>
       </div>
 
@@ -126,7 +129,7 @@ export function ReviewersPage() {
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search reviewers..."
+          placeholder={t('reviewers.search_placeholder')}
           className={cn(
             'w-full rounded-lg border py-2.5 pl-9 pr-4 text-sm',
             'border-zinc-200 bg-zinc-50 placeholder:text-zinc-400',
@@ -138,24 +141,23 @@ export function ReviewersPage() {
 
       {/* Content */}
       {!isLoaded ? (
-        <p className="text-sm text-zinc-400 dark:text-zinc-500">Loading reviewers...</p>
+        <p className="text-sm text-zinc-400 dark:text-zinc-500">{t('reviewers.loading')}</p>
       ) : reviewers.length === 0 ? (
         <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-8 text-center dark:border-zinc-800 dark:bg-zinc-900/50">
           <Users className="mx-auto mb-3 h-8 w-8 text-zinc-300 dark:text-zinc-600" />
           <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            No reviewers found
+            {t('reviewers.empty_title')}
           </h3>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Click <strong>Sync</strong> above or run{' '}
-            <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs dark:bg-zinc-800">
-              /ocr:sync-reviewers
-            </code>{' '}
-            from your IDE to populate your reviewer team.
+            <RichText
+              text={t('reviewers.empty_body')}
+              codeClassName="rounded bg-zinc-200 px-1.5 py-0.5 text-xs dark:bg-zinc-800"
+            />
           </p>
         </div>
       ) : grouped.length === 0 ? (
         <p className="py-8 text-center text-sm text-zinc-400 dark:text-zinc-500">
-          No reviewers match your search.
+          {t('reviewers.no_match')}
         </p>
       ) : (
         <div className="space-y-6">
@@ -176,7 +178,7 @@ export function ReviewersPage() {
                   ) : (
                     <ChevronDown className="h-3.5 w-3.5" />
                   )}
-                  {config.label}
+                  {t(config.labelKey)}
                   <span className="font-normal text-zinc-300 dark:text-zinc-600">
                     ({items.length})
                   </span>

@@ -22,13 +22,22 @@ import {
 } from "lucide-react";
 import { cn } from "../../../lib/utils";
 import { MarkdownRenderer } from "../../../components/markdown/markdown-renderer";
-import { GITHUB_REVIEW_STATES } from "@open-code-review/platform/verdict";
 import {
-  REVIEW_STATE_LABELS,
+  GITHUB_REVIEW_STATES,
+  type GitHubReviewState,
+} from "@open-code-review/platform/verdict";
+import {
   isStateSelectable,
   lockReason,
 } from "../../../lib/review-state";
 import { usePostReview, type ActivityLogEntry } from "../hooks/use-post-review";
+import { useT, type MessageKey } from "../../../lib/i18n";
+
+const REVIEW_STATE_LABEL_KEYS: Record<GitHubReviewState, MessageKey> = {
+  approve: "reviews.state_approve",
+  "request-changes": "reviews.state_request_changes",
+  comment: "reviews.state_comment",
+};
 
 type PostReviewDialogProps = {
   sessionId: string;
@@ -45,14 +54,15 @@ function formatElapsedTime(seconds: number): string {
 }
 
 function generationPhaseLabel(
+  t: (key: MessageKey) => string,
   hasTools: boolean,
   hasContent: boolean,
   currentTool?: string,
 ): string {
-  if (currentTool === "Write") return "Rewriting as your voice";
-  if (hasContent) return "Writing review";
-  if (hasTools) return "Analyzing source material";
-  return "Starting up";
+  if (currentTool === "Write") return t("reviews.phase_rewriting");
+  if (hasContent) return t("reviews.phase_writing");
+  if (hasTools) return t("reviews.phase_analyzing");
+  return t("reviews.phase_starting");
 }
 
 function ActivityIcon({ tool }: { tool: string }) {
@@ -76,6 +86,7 @@ export function PostReviewDialog({
   savedHumanReview,
   verdict,
 }: PostReviewDialogProps) {
+  const { t } = useT();
   const [open, setOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editContent, setEditContent] = useState("");
@@ -171,12 +182,16 @@ export function PostReviewDialog({
   const posted = postResult?.success ? postResult : null;
 
   const ownership = checkResult?.ownership;
-  const reason = lockReason(ownership);
+  const lock = lockReason(ownership);
+  const reason =
+    lock === null
+      ? null
+      : t(ownership === "own" ? "reviews.lock_own" : "reviews.lock_unknown");
   const stateSelector = (
     <div className="space-y-1.5">
       <div
         role="group"
-        aria-label="GitHub review state"
+        aria-label={t("reviews.state_group_aria")}
         className="inline-flex rounded-md border border-zinc-200 p-0.5 dark:border-zinc-700"
       >
         {GITHUB_REVIEW_STATES.map((state) => (
@@ -193,7 +208,7 @@ export function PostReviewDialog({
                 : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800",
             )}
           >
-            {REVIEW_STATE_LABELS[state]}
+            {t(REVIEW_STATE_LABEL_KEYS[state])}
           </button>
         ))}
       </div>
@@ -202,7 +217,8 @@ export function PostReviewDialog({
           <span>
             {needsRecheck && error
               ? error
-              : (reason ?? `Suggested from the round verdict: ${verdict}`)}
+              : (reason ??
+                t("reviews.state_suggested", { verdict: verdict ?? "" }))}
           </span>
           {(ownership === "unknown" || needsRecheck) && (
             <button
@@ -211,7 +227,7 @@ export function PostReviewDialog({
               className="inline-flex items-center gap-1 rounded border border-zinc-200 px-1.5 py-0.5 font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
               <RefreshCw className="h-3 w-3" />
-              Re-check
+              {t("reviews.recheck")}
             </button>
           )}
         </p>
@@ -227,7 +243,7 @@ export function PostReviewDialog({
         className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
       >
         <Send className="h-3.5 w-3.5" />
-        Post to GitHub
+        {t("reviews.post_to_github")}
       </button>
 
       {open && (
@@ -251,12 +267,14 @@ export function PostReviewDialog({
                 id="post-review-title"
                 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100"
               >
-                {step === "posted" ? "Review Posted" : "Post Review to GitHub"}
+                {step === "posted"
+                  ? t("reviews.review_posted_title")
+                  : t("reviews.post_review_to_github")}
               </h3>
               <button
                 onClick={close}
                 className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-                aria-label="Close dialog"
+                aria-label={t("reviews.close_dialog")}
               >
                 <X className="h-5 w-5" />
               </button>
@@ -269,7 +287,7 @@ export function PostReviewDialog({
                 <div className="flex items-center justify-center gap-3 py-12">
                   <Loader2 className="h-5 w-5 animate-spin text-zinc-500" />
                   <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                    Checking GitHub CLI...
+                    {t("reviews.checking_gh")}
                   </p>
                 </div>
               )}
@@ -280,7 +298,7 @@ export function PostReviewDialog({
                   <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-700 dark:bg-zinc-800">
                     <p className="text-sm text-zinc-700 dark:text-zinc-300">
                       <Github className="mr-1.5 inline h-4 w-4" />
-                      PR #{checkResult.prNumber} on branch{" "}
+                      {t("reviews.pr_on_branch", { number: checkResult.prNumber ?? "" })}{" "}
                       <code className="rounded bg-zinc-200 px-1.5 py-0.5 text-xs dark:bg-zinc-700">
                         {checkResult.branch}
                       </code>
@@ -298,12 +316,11 @@ export function PostReviewDialog({
                       <div className="mb-2 flex items-center gap-2">
                         <FileText className="h-5 w-5 text-zinc-500 group-hover:text-blue-600 dark:group-hover:text-blue-400" />
                         <span className="font-medium text-zinc-900 dark:text-zinc-100">
-                          Post Team Review
+                          {t("reviews.post_team_review")}
                         </span>
                       </div>
                       <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                        Post the original multi-reviewer synthesis as-is, with the
-                        selected review state.
+                        {t("reviews.post_team_review_desc")}
                       </p>
                     </button>
 
@@ -315,12 +332,11 @@ export function PostReviewDialog({
                       <div className="mb-2 flex items-center gap-2">
                         <User className="h-5 w-5 text-zinc-500 group-hover:text-emerald-600 dark:group-hover:text-emerald-400" />
                         <span className="font-medium text-zinc-900 dark:text-zinc-100">
-                          Generate Human Review
+                          {t("reviews.generate_human")}
                         </span>
                       </div>
                       <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                        Rewrite as a single human voice — sounds like you wrote
-                        it.
+                        {t("reviews.generate_human_desc")}
                       </p>
                     </button>
                   </div>
@@ -335,7 +351,7 @@ export function PostReviewDialog({
                       className="w-full rounded-lg border border-dashed border-zinc-300 p-3 text-left text-sm text-zinc-600 transition-colors hover:border-zinc-400 hover:text-zinc-800 dark:border-zinc-600 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:text-zinc-300"
                     >
                       <Save className="mr-1.5 inline h-3.5 w-3.5" />
-                      Use previously saved human review
+                      {t("reviews.use_saved_human")}
                     </button>
                   )}
                 </div>
@@ -354,13 +370,14 @@ export function PostReviewDialog({
                       <div>
                         <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
                           {generationPhaseLabel(
+                            t,
                             activityLog.length > 0,
                             !!streamingContent,
                             toolStatus?.tool,
                           )}
                         </p>
                         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                          All findings preserved — just the tone changes
+                          {t("reviews.findings_preserved")}
                         </p>
                       </div>
                     </div>
@@ -378,7 +395,7 @@ export function PostReviewDialog({
                     >
                       <Loader2 className="h-3 w-3 animate-spin shrink-0 text-emerald-500" />
                       <span className="flex-1 truncate text-left font-medium">
-                        {toolStatus?.detail ?? "Reading review files..."}
+                        {toolStatus?.detail ?? t("reviews.reading_files")}
                       </span>
                       {activityLog.length > 0 && (
                         <span className="flex items-center gap-1 text-zinc-400 dark:text-zinc-500">
@@ -415,7 +432,7 @@ export function PostReviewDialog({
                     <>
                       <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
                         <Edit3 className="h-3 w-3" />
-                        <span className="font-medium">Generated Review</span>
+                        <span className="font-medium">{t("reviews.generated_review")}</span>
                       </div>
                       <div className="prose prose-sm dark:prose-invert max-w-none">
                         <MarkdownRenderer content={streamingContent} />
@@ -441,7 +458,7 @@ export function PostReviewDialog({
                       )}
                     >
                       <Eye className="h-3.5 w-3.5" />
-                      Preview
+                      {t("reviews.tab_preview")}
                     </button>
                     <button
                       onClick={() => {
@@ -462,7 +479,7 @@ export function PostReviewDialog({
                       )}
                     >
                       <Edit3 className="h-3.5 w-3.5" />
-                      Edit
+                      {t("reviews.tab_edit")}
                     </button>
                   </div>
 
@@ -491,7 +508,7 @@ export function PostReviewDialog({
                 <div className="flex items-center justify-center gap-3 py-12">
                   <Loader2 className="h-5 w-5 animate-spin text-zinc-500" />
                   <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                    Posting to GitHub...
+                    {t("reviews.posting")}
                   </p>
                 </div>
               )}
@@ -503,12 +520,11 @@ export function PostReviewDialog({
                     <Check className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
                   </div>
                   <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                    Review posted to GitHub
+                    {t("reviews.review_posted")}
                   </p>
                   {posted?.downgraded && (
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                      Posted as comment — GitHub does not allow approving or
-                      requesting changes on your own pull request.
+                      {t("reviews.posted_as_comment")}
                     </p>
                   )}
                   {(posted?.commentUrl ?? checkResult?.prUrl) && (
@@ -518,7 +534,9 @@ export function PostReviewDialog({
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
                     >
-                      {posted?.commentUrl ? "View review" : "View pull request"}
+                      {posted?.commentUrl
+                        ? t("reviews.view_review")
+                        : t("reviews.view_pr")}
                       <ExternalLink className="h-3.5 w-3.5" />
                     </a>
                   )}
@@ -546,7 +564,7 @@ export function PostReviewDialog({
                   onClick={() => cancelGeneration(sessionId, roundNumber)}
                   className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
               )}
 
@@ -559,7 +577,7 @@ export function PostReviewDialog({
                     className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                   >
                     <RefreshCw className="h-3.5 w-3.5" />
-                    Regenerate
+                    {t("reviews.regenerate")}
                   </button>
                   <button
                     onClick={() => {
@@ -579,7 +597,7 @@ export function PostReviewDialog({
                     ) : (
                       <Save className="h-3.5 w-3.5" />
                     )}
-                    {draftSaved ? "Saved!" : "Save Draft"}
+                    {draftSaved ? t("reviews.saved") : t("reviews.save_draft")}
                   </button>
                   <button
                     onClick={() => {
@@ -590,7 +608,7 @@ export function PostReviewDialog({
                     className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
                   >
                     <Send className="h-3.5 w-3.5" />
-                    Post to GitHub
+                    {t("reviews.post_to_github")}
                   </button>
                 </>
               )}
@@ -603,13 +621,13 @@ export function PostReviewDialog({
                     className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                   >
                     <RefreshCw className="h-3.5 w-3.5" />
-                    Retry
+                    {t("common.retry")}
                   </button>
                   <button
                     onClick={close}
                     className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                   >
-                    Close
+                    {t("common.close")}
                   </button>
                 </>
               )}
@@ -620,7 +638,7 @@ export function PostReviewDialog({
                   onClick={close}
                   className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
                 >
-                  Done
+                  {t("common.done")}
                 </button>
               )}
             </div>

@@ -9,6 +9,7 @@
 import { AlertCircle, Copy } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '../../../../lib/utils'
+import { useT } from '../../../../lib/i18n'
 
 type ErrorEntryProps = {
   source: 'agent' | 'process'
@@ -17,6 +18,7 @@ type ErrorEntryProps = {
 }
 
 export function ErrorEntry({ source, message, detail }: ErrorEntryProps) {
+  const { t } = useT()
   const [copied, setCopied] = useState(false)
   const fullText = detail ? `${message}\n\n${detail}` : message
 
@@ -47,7 +49,7 @@ export function ErrorEntry({ source, message, detail }: ErrorEntryProps) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-medium uppercase tracking-wider text-red-700 dark:text-red-400">
-              {source === 'agent' ? 'Agent error' : 'Process error'}
+              {source === 'agent' ? t('commands.agent_error') : t('commands.process_error')}
             </span>
             <button
               type="button"
@@ -55,7 +57,7 @@ export function ErrorEntry({ source, message, detail }: ErrorEntryProps) {
               className="ml-auto inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-red-700 transition-colors hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/30"
             >
               <Copy aria-hidden className="h-3 w-3" />
-              {copied ? 'Copied' : 'Copy'}
+              {copied ? t('commands.copied') : t('commands.copy')}
             </button>
           </div>
           <p className="mt-1 text-[13px] font-medium text-red-800 dark:text-red-200">

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, FolderOpen, FolderOpenDot } from 'lucide-react'
 import { cn, buildIdeLink } from '../../../lib/utils'
+import { useT } from '../../../lib/i18n'
 import { useIdeConfig } from '../../../hooks/use-ide-config'
 import { ProgressBar } from '../../../components/ui/progress-bar'
 import { FileRow } from './file-row'
@@ -12,6 +13,7 @@ type SectionCardProps = {
 }
 
 export function SectionCard({ section, onToggleFile }: SectionCardProps) {
+  const { t } = useT()
   const [expanded, setExpanded] = useState(false)
   const [highlightedFileId, setHighlightedFileId] = useState<number | null>(null)
   const fileListRef = useRef<HTMLDivElement>(null)
@@ -87,16 +89,16 @@ export function SectionCard({ section, onToggleFile }: SectionCardProps) {
               {section.section_number}. {section.title}
             </span>
             <span className="text-xs text-zinc-500 dark:text-zinc-400">
-              {section.file_count} {section.file_count === 1 ? 'file' : 'files'}
+              {t(section.file_count === 1 ? 'map.file_count_one' : 'map.file_count_other', { count: section.file_count })}
             </span>
             {config && section.files.length > 0 && (
               <button
                 onClick={openAllInIde}
-                title={`Open all ${section.file_count} files in ${config.ide}`}
+                title={t('map.open_all_title', { count: section.file_count, ide: config.ide })}
                 className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-600 transition-colors hover:border-zinc-300 hover:bg-zinc-50 hover:text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:border-zinc-600 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
               >
                 <FolderOpenDot className="h-3 w-3" />
-                Open all
+                {t('map.open_all')}
               </button>
             )}
           </div>
@@ -128,7 +130,7 @@ export function SectionCard({ section, onToggleFile }: SectionCardProps) {
         >
           {section.files.length === 0 ? (
             <p className="px-4 py-3 text-sm text-zinc-500 dark:text-zinc-400">
-              No files in this section.
+              {t('map.no_files')}
             </p>
           ) : (
             section.files.map((file) => (

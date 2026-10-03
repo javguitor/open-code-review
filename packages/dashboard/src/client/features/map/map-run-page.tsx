@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Map, MessageSquare } from 'lucide-react'
+import { useT } from '../../lib/i18n'
 import { ProgressBar } from '../../components/ui/progress-bar'
 import { SectionCard } from './components/section-card'
 import { ClearProgressDialog } from './components/clear-progress-dialog'
@@ -10,6 +11,7 @@ import { useMapRun, useToggleFileReview, useClearMapProgress } from './hooks/use
 import { ChatPanel } from '../chat/components/chat-panel'
 
 export function MapRunPage() {
+  const { t } = useT()
   const { id: sessionId, run } = useParams<{ id: string; run: string }>()
   const runNumber = parseInt(run ?? '0', 10)
 
@@ -24,7 +26,7 @@ export function MapRunPage() {
   }, [])
 
   if (isLoading) {
-    return <p className="text-sm text-zinc-500 dark:text-zinc-400">Loading map run...</p>
+    return <p className="text-sm text-zinc-500 dark:text-zinc-400">{t('map.loading_run')}</p>
   }
 
   if (!mapRun) {
@@ -35,9 +37,9 @@ export function MapRunPage() {
           className="mb-4 inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to session
+          {t('map.back_to_session')}
         </Link>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Map run not found.</p>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">{t('map.run_not_found')}</p>
       </div>
     )
   }
@@ -52,7 +54,7 @@ export function MapRunPage() {
         className="inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300"
       >
         <ArrowLeft className="h-4 w-4" />
-        Back to session
+        {t('map.back_to_session')}
       </Link>
 
       {/* Header */}
@@ -62,11 +64,11 @@ export function MapRunPage() {
             <div className="flex items-center gap-2">
               <Map className="h-5 w-5 text-zinc-400" />
               <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-                Map Run {mapRun.run_number}
+                {t('map.run_title', { number: mapRun.run_number })}
               </h1>
             </div>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              {reviewedFiles} / {totalFiles} files reviewed
+              {t('map.files_reviewed', { reviewed: reviewedFiles, total: totalFiles })}
             </p>
           </div>
 
@@ -77,7 +79,7 @@ export function MapRunPage() {
               className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
             >
               <MessageSquare className="h-3.5 w-3.5" />
-              Ask the Team
+              {t('map.ask_the_team')}
             </button>
             <RawMapView sessionId={sessionId ?? ''} />
             <ClearProgressDialog
@@ -104,7 +106,7 @@ export function MapRunPage() {
       {mapRun.sections.length === 0 ? (
         <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            No sections found in this map run.
+            {t('map.no_sections')}
           </p>
         </div>
       ) : (

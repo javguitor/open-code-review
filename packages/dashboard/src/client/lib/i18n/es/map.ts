@@ -1,2 +1,30 @@
-// Filled by the extraction of the map UI strings.
-export const map = {}
+const map = {
+  'map.loading_run': 'Cargando ejecución del map...',
+  'map.back_to_session': 'Volver a la sesión',
+  'map.run_not_found': 'No se encontró la ejecución del map.',
+  'map.run_title': 'Ejecución de map {number}',
+  'map.files_reviewed': '{reviewed} / {total} archivos revisados',
+  'map.ask_the_team': 'Preguntar al equipo',
+  'map.no_sections': 'No hay secciones en esta ejecución del map.',
+  'map.clear_progress': 'Borrar progreso',
+  'map.clearing': 'Borrando...',
+  'map.close_dialog': 'Cerrar diálogo',
+  'map.clear_confirm_title': '¿Borrar todo el progreso?',
+  'map.clear_confirm_body': 'Se desmarcarán todos los archivos revisados de esta ejecución del map. Esta acción no se puede deshacer.',
+  'map.section_dependencies': 'Dependencias entre secciones',
+  'map.graph_node_files': '{reviewed}/{total} archivos',
+  'map.open_in_ide': 'Abrir en {ide}',
+  'map.render_diagram_failed': 'No se pudo renderizar el diagrama',
+  'map.render_graph_failed': 'No se pudo renderizar el grafo de dependencias: {error}',
+  'map.view_raw': 'Ver map sin procesar',
+  'map.raw_output_title': 'Salida del map sin procesar',
+  'map.loading_content': 'Cargando contenido del map...',
+  'map.no_content': 'No hay contenido del map disponible.',
+  'map.file_count_one': '{count} archivo',
+  'map.file_count_other': '{count} archivos',
+  'map.open_all_title': 'Abrir los {count} archivos en {ide}',
+  'map.open_all': 'Abrir todos',
+  'map.no_files': 'No hay archivos en esta sección.',
+}
+
+export { map }

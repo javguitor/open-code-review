@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { GitBranch, Map, FileSearch } from 'lucide-react'
 import { StatusBadge } from '../../../components/ui/status-badge'
 import { timeAgo } from '../../../lib/date-utils'
+import { useT } from '../../../lib/i18n'
 import type { SessionSummary } from '../../../lib/api-types'
 
 type RecentSessionsProps = {
@@ -9,10 +10,12 @@ type RecentSessionsProps = {
 }
 
 export function RecentSessions({ sessions }: RecentSessionsProps) {
+  const { t } = useT()
+
   if (sessions.length === 0) {
     return (
       <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        No sessions yet. Run a code review or map to get started.
+        {t('home.empty_sessions')}
       </p>
     )
   }

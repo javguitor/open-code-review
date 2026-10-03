@@ -1,4 +1,5 @@
 import { cn } from '../../../lib/utils'
+import { useT, type MessageKey } from '../../../lib/i18n'
 import type { SessionStatus, WorkflowType } from '../../../lib/api-types'
 
 type SessionFiltersProps = {
@@ -8,16 +9,16 @@ type SessionFiltersProps = {
   onWorkflowChange: (workflow: WorkflowType | 'all') => void
 }
 
-const STATUS_OPTIONS: { value: SessionStatus | 'all'; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'active', label: 'Active' },
-  { value: 'closed', label: 'Closed' },
+const STATUS_OPTIONS: { value: SessionStatus | 'all'; label: MessageKey }[] = [
+  { value: 'all', label: 'sessions.filter_all' },
+  { value: 'active', label: 'status.active' },
+  { value: 'closed', label: 'status.closed' },
 ]
 
-const WORKFLOW_OPTIONS: { value: WorkflowType | 'all'; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'review', label: 'Review' },
-  { value: 'map', label: 'Map' },
+const WORKFLOW_OPTIONS: { value: WorkflowType | 'all'; label: MessageKey }[] = [
+  { value: 'all', label: 'sessions.filter_all' },
+  { value: 'review', label: 'sessions.workflow_review' },
+  { value: 'map', label: 'sessions.workflow_map' },
 ]
 
 function ButtonGroup<T extends string>({
@@ -26,11 +27,12 @@ function ButtonGroup<T extends string>({
   onChange,
   label,
 }: {
-  options: { value: T; label: string }[]
+  options: { value: T; label: MessageKey }[]
   value: T
   onChange: (v: T) => void
   label: string
 }) {
+  const { t } = useT()
   return (
     <div role="group" aria-label={label} className="inline-flex rounded-md border border-zinc-200 dark:border-zinc-700">
       {options.map((option, i) => (
@@ -48,7 +50,7 @@ function ButtonGroup<T extends string>({
               : 'bg-white text-zinc-600 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800',
           )}
         >
-          {option.label}
+          {t(option.label)}
         </button>
       ))}
     </div>
@@ -61,18 +63,19 @@ export function SessionFilters({
   onStatusChange,
   onWorkflowChange,
 }: SessionFiltersProps) {
+  const { t } = useT()
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <span className="text-xs text-zinc-500 dark:text-zinc-400">Status:</span>
+      <span className="text-xs text-zinc-500 dark:text-zinc-400">{t('sessions.filter_status')}</span>
       <ButtonGroup
-        label="Filter by status"
+        label={t('sessions.filter_by_status')}
         options={STATUS_OPTIONS}
         value={statusFilter}
         onChange={onStatusChange}
       />
-      <span className="text-xs text-zinc-500 dark:text-zinc-400">Workflow:</span>
+      <span className="text-xs text-zinc-500 dark:text-zinc-400">{t('sessions.filter_workflow')}</span>
       <ButtonGroup
-        label="Filter by workflow"
+        label={t('sessions.filter_by_workflow')}
         options={WORKFLOW_OPTIONS}
         value={workflowFilter}
         onChange={onWorkflowChange}

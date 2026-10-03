@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { User } from 'lucide-react'
 import type { ReviewerOutput } from '../../../lib/api-types'
 import { REVIEWER_ICONS } from '../constants'
+import { useT } from '../../../lib/i18n'
 
 const REVIEWER_COLORS: Record<string, string> = {
   principal: 'text-violet-600 dark:text-violet-400 bg-violet-500/10 border-violet-500/25',
@@ -17,6 +18,7 @@ type ReviewerCardProps = {
 }
 
 export function ReviewerCard({ sessionId, roundNumber, reviewer }: ReviewerCardProps) {
+  const { t } = useT()
   const Icon = REVIEWER_ICONS[reviewer.reviewer_type] ?? User
   const colorClasses =
     REVIEWER_COLORS[reviewer.reviewer_type] ??
@@ -43,7 +45,9 @@ export function ReviewerCard({ sessionId, roundNumber, reviewer }: ReviewerCardP
             )}
           </div>
           <div className="text-xs text-zinc-500 dark:text-zinc-400">
-            {reviewer.finding_count} finding{reviewer.finding_count !== 1 ? 's' : ''}
+            {t(reviewer.finding_count === 1 ? 'reviews.finding_count_one' : 'reviews.finding_count_other', {
+              count: reviewer.finding_count,
+            })}
           </div>
         </div>
       </div>

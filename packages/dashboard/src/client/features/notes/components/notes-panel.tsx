@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { StickyNote, Plus, X } from 'lucide-react'
 import { useNotes } from '../hooks/use-notes'
+import { useT } from '../../../lib/i18n'
 import { NoteCard } from './note-card'
 
 type NotesPanelProps = {
@@ -9,6 +10,7 @@ type NotesPanelProps = {
 }
 
 export function NotesPanel({ targetType, targetId }: NotesPanelProps) {
+  const { t } = useT()
   const { notes, isLoading, createNote, isCreating, updateNote, deleteNote } = useNotes(
     targetType,
     targetId,
@@ -28,7 +30,7 @@ export function NotesPanel({ targetType, targetId }: NotesPanelProps) {
       <div className="flex items-center justify-between border-b border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
         <div className="flex items-center gap-2">
           <StickyNote className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
-          <span className="text-sm font-medium">Notes</span>
+          <span className="text-sm font-medium">{t('notes.title')}</span>
           {notes.length > 0 && (
             <span className="text-xs text-zinc-400 dark:text-zinc-500">({notes.length})</span>
           )}
@@ -40,7 +42,7 @@ export function NotesPanel({ targetType, targetId }: NotesPanelProps) {
             className="flex items-center gap-1 rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
           >
             <Plus className="h-3 w-3" />
-            Add Note
+            {t('notes.add')}
           </button>
         )}
       </div>
@@ -51,7 +53,7 @@ export function NotesPanel({ targetType, targetId }: NotesPanelProps) {
             <textarea
               value={newContent}
               onChange={(e) => setNewContent(e.target.value)}
-              placeholder="Write a note..."
+              placeholder={t('notes.placeholder')}
               className="w-full resize-none rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-800 dark:placeholder:text-zinc-600"
               rows={3}
               autoFocus
@@ -66,7 +68,7 @@ export function NotesPanel({ targetType, targetId }: NotesPanelProps) {
                 className="flex items-center gap-1 rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
               >
                 <X className="h-3 w-3" />
-                Cancel
+                {t('notes.cancel')}
               </button>
               <button
                 type="button"
@@ -74,17 +76,17 @@ export function NotesPanel({ targetType, targetId }: NotesPanelProps) {
                 onClick={handleCreate}
                 className="rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
               >
-                {isCreating ? 'Saving...' : 'Save'}
+                {isCreating ? t('notes.saving') : t('notes.save')}
               </button>
             </div>
           </div>
         )}
 
         {isLoading ? (
-          <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">Loading notes...</p>
+          <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">{t('notes.loading')}</p>
         ) : notes.length === 0 && !isAdding ? (
           <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
-            No notes yet. Click "Add Note" to get started.
+            {t('notes.empty')}
           </p>
         ) : (
           <div className="space-y-3">

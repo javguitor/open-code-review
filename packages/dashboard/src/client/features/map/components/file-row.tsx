@@ -1,5 +1,6 @@
 import { FileText, Plus, Minus, ExternalLink } from 'lucide-react'
 import { cn, buildIdeLink } from '../../../lib/utils'
+import { useT } from '../../../lib/i18n'
 import { useIdeConfig } from '../../../hooks/use-ide-config'
 import type { MapFile } from '../../../lib/api-types'
 
@@ -10,6 +11,7 @@ type FileRowProps = {
 }
 
 export function FileRow({ file, onToggle, highlighted }: FileRowProps) {
+  const { t } = useT()
   const { data: config } = useIdeConfig()
 
   return (
@@ -41,7 +43,7 @@ export function FileRow({ file, onToggle, highlighted }: FileRowProps) {
                   ? 'text-zinc-400 line-through dark:text-zinc-500'
                   : 'text-zinc-900 dark:text-zinc-100',
               )}
-              title={`Open in ${config.ide}`}
+              title={t('map.open_in_ide', { ide: config.ide })}
             >
               {file.file_path}
             </a>

@@ -1,4 +1,5 @@
 import { createBrowserRouter } from 'react-router-dom'
+import { useT } from './lib/i18n'
 import { RootLayout } from './components/layout/root-layout'
 import { ErrorBoundary, RouteErrorFallback } from './components/error-boundary'
 import { HomePage } from './features/home/home-page'
@@ -12,11 +13,12 @@ import { ReviewerDetailPage } from './features/reviews/reviewer-detail-page'
 import { ReviewsPage } from './features/reviews/reviews-page'
 
 function NotFoundPage() {
+  const { t } = useT()
   return (
     <div className="flex min-h-[400px] items-center justify-center">
       <div className="text-center">
         <h1 className="text-4xl font-semibold text-zinc-900 dark:text-zinc-100">404</h1>
-        <p className="mt-2 text-zinc-500 dark:text-zinc-400">Page not found.</p>
+        <p className="mt-2 text-zinc-500 dark:text-zinc-400">{t('layout.not_found')}</p>
       </div>
     </div>
   )

@@ -4,6 +4,8 @@ import type { Finding, FindingSeverity, FindingTriage } from '../../../lib/api-t
 import { useUpdateFindingStatus } from '../hooks/use-reviews'
 import { FindingRow } from './finding-row'
 import { SortableHeader } from '../../../components/ui/sortable-header'
+import { useT } from '../../../lib/i18n'
+import type { MessageKey } from '../../../lib/i18n'
 
 type SortField = 'severity' | 'title' | 'file_path'
 type SortDir = 'asc' | 'desc'
@@ -27,22 +29,22 @@ function severityRank(severity: string): number {
   return SEVERITY_ORDER[severity as FindingSeverity] ?? UNKNOWN_SEVERITY_RANK
 }
 
-const SEVERITY_FILTER_OPTIONS: { value: FindingSeverity | 'all'; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'critical', label: 'Critical' },
-  { value: 'high', label: 'High' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'low', label: 'Low' },
-  { value: 'info', label: 'Info' },
+const SEVERITY_FILTER_OPTIONS: { value: FindingSeverity | 'all'; labelKey: MessageKey }[] = [
+  { value: 'all', labelKey: 'reviews.all' },
+  { value: 'critical', labelKey: 'status.critical' },
+  { value: 'high', labelKey: 'status.high' },
+  { value: 'medium', labelKey: 'status.medium' },
+  { value: 'low', labelKey: 'status.low' },
+  { value: 'info', labelKey: 'status.info' },
 ]
 
-const TRIAGE_FILTER_OPTIONS: { value: FindingTriage | 'all'; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'unread', label: 'Unread' },
-  { value: 'read', label: 'Read' },
-  { value: 'acknowledged', label: 'Acknowledged' },
-  { value: 'fixed', label: 'Fixed' },
-  { value: 'wont_fix', label: "Won't Fix" },
+const TRIAGE_FILTER_OPTIONS: { value: FindingTriage | 'all'; labelKey: MessageKey }[] = [
+  { value: 'all', labelKey: 'reviews.all' },
+  { value: 'unread', labelKey: 'status.unread' },
+  { value: 'read', labelKey: 'status.read' },
+  { value: 'acknowledged', labelKey: 'status.acknowledged' },
+  { value: 'fixed', labelKey: 'status.fixed' },
+  { value: 'wont_fix', labelKey: 'status.wont_fix' },
 ]
 
 type FindingsTableProps = {
@@ -53,6 +55,7 @@ type FindingsTableProps = {
 }
 
 export function FindingsTable({ findings, isLoading = false }: FindingsTableProps) {
+  const { t } = useT()
   const [sortField, setSortField] = useState<SortField>('severity')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [severityFilter, setSeverityFilter] = useState<FindingSeverity | 'all'>('all')
@@ -115,7 +118,7 @@ export function FindingsTable({ findings, isLoading = false }: FindingsTableProp
   if (isLoading) {
     return (
       <p className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
-        Loading findings…
+        {t('reviews.loading_findings')}
       </p>
     )
   }
@@ -125,7 +128,7 @@ export function FindingsTable({ findings, isLoading = false }: FindingsTableProp
   if (findings.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
-        No findings were recorded for this round.
+        {t('reviews.no_findings_round')}
       </p>
     )
   }
@@ -135,7 +138,7 @@ export function FindingsTable({ findings, isLoading = false }: FindingsTableProp
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Filter className="h-4 w-4 text-zinc-400" />
         <div className="flex items-center gap-2">
-          <span className="text-xs text-zinc-500 dark:text-zinc-400">Severity:</span>
+          <span className="text-xs text-zinc-500 dark:text-zinc-400">{t('reviews.filter_severity')}</span>
           <select
             value={severityFilter}
             onChange={(e) =>
@@ -145,13 +148,13 @@ export function FindingsTable({ findings, isLoading = false }: FindingsTableProp
           >
             {SEVERITY_FILTER_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
-                {opt.label}
+                {t(opt.labelKey)}
               </option>
             ))}
           </select>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-zinc-500 dark:text-zinc-400">Status:</span>
+          <span className="text-xs text-zinc-500 dark:text-zinc-400">{t('reviews.filter_status')}</span>
           <select
             value={triageFilter}
             onChange={(e) =>
@@ -161,26 +164,27 @@ export function FindingsTable({ findings, isLoading = false }: FindingsTableProp
           >
             {TRIAGE_FILTER_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
-                {opt.label}
+                {t(opt.labelKey)}
               </option>
             ))}
           </select>
         </div>
         <span className="text-xs text-zinc-400 dark:text-zinc-500">
-          {sorted.length} of {findings.length} findings
+          {t('reviews.findings_of', { shown: sorted.length, total: findings.length })}
         </span>
       </div>
 
       {degradedCount > 0 && (
         <p className="mb-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-          {degradedCount} finding{degradedCount === 1 ? '' : 's'} have an
-          unrecognized severity and are sorted last.
+          {t(degradedCount === 1 ? 'reviews.degraded_one' : 'reviews.degraded_other', {
+            count: degradedCount,
+          })}
         </p>
       )}
 
       {sorted.length === 0 ? (
         <p className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
-          No findings match your filters.
+          {t('reviews.no_findings_match')}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
@@ -188,34 +192,34 @@ export function FindingsTable({ findings, isLoading = false }: FindingsTableProp
             <thead className="bg-zinc-50 dark:bg-zinc-900">
               <tr>
                 <SortableHeader
-                  label="Severity"
+                  label={t('reviews.col_severity')}
                   field="severity"
                   activeField={sortField}
                   direction={sortDir}
                   onSort={handleSort}
                 />
                 <SortableHeader
-                  label="Title"
+                  label={t('reviews.col_title')}
                   field="title"
                   activeField={sortField}
                   direction={sortDir}
                   onSort={handleSort}
                 />
                 <SortableHeader
-                  label="File"
+                  label={t('reviews.col_file')}
                   field="file_path"
                   activeField={sortField}
                   direction={sortDir}
                   onSort={handleSort}
                 />
                 <th className="border-b border-zinc-200 px-4 py-2 text-left font-medium text-zinc-900 dark:border-zinc-800 dark:text-zinc-100">
-                  Lines
+                  {t('reviews.col_lines')}
                 </th>
                 <th className="border-b border-zinc-200 px-4 py-2 text-left font-medium text-zinc-900 dark:border-zinc-800 dark:text-zinc-100">
-                  Blocker
+                  {t('reviews.col_blocker')}
                 </th>
                 <th className="border-b border-zinc-200 px-4 py-2 text-left font-medium text-zinc-900 dark:border-zinc-800 dark:text-zinc-100">
-                  Status
+                  {t('reviews.col_status')}
                 </th>
               </tr>
             </thead>

@@ -1,6 +1,8 @@
 import { CheckCircle2, XCircle, MessageCircle, HelpCircle, AlertTriangle } from 'lucide-react'
 import { normalizeVerdict, type CanonicalVerdict } from '@open-code-review/platform/verdict'
 import { cn } from '../../lib/utils'
+import { useT } from '../../lib/i18n'
+import type { MessageKey } from '../../lib/i18n'
 
 type VerdictBannerProps = {
   /** Free-form verdict string from the store. Normalized through the shared
@@ -21,6 +23,8 @@ type VerdictConfig = {
   border: string
   text: string
   label: string
+  /** Dictionary key for the UI label; absent when `label` is a raw verdict echo. */
+  labelKey?: MessageKey
 }
 
 /**
@@ -36,6 +40,7 @@ const VERDICT_CONFIG: Record<CanonicalVerdict, VerdictConfig> = {
     border: 'border-emerald-500/30',
     text: 'text-emerald-700 dark:text-emerald-400',
     label: 'Approve',
+    labelKey: 'reviews.verdict_approve',
   },
   'REQUEST CHANGES': {
     icon: XCircle,
@@ -43,6 +48,7 @@ const VERDICT_CONFIG: Record<CanonicalVerdict, VerdictConfig> = {
     border: 'border-red-500/30',
     text: 'text-red-700 dark:text-red-400',
     label: 'Request Changes',
+    labelKey: 'reviews.verdict_request_changes',
   },
   'NEEDS DISCUSSION': {
     icon: MessageCircle,
@@ -50,6 +56,7 @@ const VERDICT_CONFIG: Record<CanonicalVerdict, VerdictConfig> = {
     border: 'border-amber-500/30',
     text: 'text-amber-700 dark:text-amber-400',
     label: 'Needs Discussion',
+    labelKey: 'reviews.verdict_needs_discussion',
   },
 }
 
@@ -59,6 +66,7 @@ const UNKNOWN_VERDICT_CONFIG: VerdictConfig = {
   border: 'border-zinc-500/30',
   text: 'text-zinc-700 dark:text-zinc-300',
   label: 'Verdict',
+  labelKey: 'reviews.verdict_unknown',
 }
 
 /**
@@ -73,7 +81,10 @@ function resolveConfig(verdict: string): VerdictConfig {
   if (canonical) return VERDICT_CONFIG[canonical]
   const trimmed = verdict.trim()
   const label = trimmed.length > 60 ? `${trimmed.slice(0, 60).trim()}…` : trimmed
-  return { ...UNKNOWN_VERDICT_CONFIG, label: label || 'Verdict' }
+  // A raw (model-written) verdict is echoed verbatim; only the blank fallback is localized.
+  return label
+    ? { ...UNKNOWN_VERDICT_CONFIG, label, labelKey: undefined }
+    : UNKNOWN_VERDICT_CONFIG
 }
 
 /**
@@ -100,6 +111,7 @@ export function VerdictBanner({
   shouldFixCount,
   className,
 }: VerdictBannerProps) {
+  const { t } = useT()
   const config = resolveConfig(verdict)
   const Icon = config.icon
   const mismatch = hasVerdictMismatch(verdict, blockerCount)
@@ -117,15 +129,15 @@ export function VerdictBanner({
       <div className="flex items-center gap-3">
         <Icon className={cn('h-6 w-6 shrink-0', config.text)} />
         <span className={cn('text-lg font-semibold', config.text)}>
-          {config.label}
+          {config.labelKey ? t(config.labelKey) : config.label}
         </span>
         {mismatch && (
           <span
             className="flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400"
-            title="This verdict disagrees with the blocker count. It predates the directional verdict gate; the stored value is shown as-is."
+            title={t('reviews.verdict_mismatch_title')}
           >
             <AlertTriangle className="h-3.5 w-3.5" />
-            verdict/finding mismatch
+            {t('reviews.verdict_mismatch')}
           </span>
         )}
       </div>
@@ -156,6 +168,7 @@ function ResidualChip({
   shouldFixCount?: number
   suggestionCount?: number
 }) {
+  const { t } = useT()
   const blockers = blockerCount ?? 0
   const shouldFix = shouldFixCount ?? 0
   const suggestions = suggestionCount ?? 0
@@ -168,7 +181,7 @@ function ResidualChip({
     return (
       <div className="flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400">
         <CheckCircle2 className="h-4 w-4" />
-        <span className="font-medium">Clean</span>
+        <span className="font-medium">{t('reviews.clean')}</span>
       </div>
     )
   }
@@ -176,17 +189,17 @@ function ResidualChip({
   return (
     <div className="flex items-center gap-4 text-sm">
       {blockerCount != null && blockers > 0 && (
-        <Stat label="Blockers" value={blockers} className="text-red-600 dark:text-red-400" />
+        <Stat label={t('reviews.stat_blockers')} value={blockers} className="text-red-600 dark:text-red-400" />
       )}
       {shouldFixCount != null && (
         <Stat
-          label="Follow-ups"
+          label={t('reviews.stat_follow_ups')}
           value={shouldFix}
           className={shouldFix > 0 ? 'text-amber-600 dark:text-amber-400' : undefined}
         />
       )}
       {suggestionCount != null && (
-        <Stat label="Suggestions" value={suggestions} />
+        <Stat label={t('reviews.stat_suggestions')} value={suggestions} />
       )}
     </div>
   )

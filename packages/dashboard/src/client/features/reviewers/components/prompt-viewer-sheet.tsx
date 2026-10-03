@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { useEffect } from 'react'
 import { cn } from '../../../lib/utils'
 import { fetchApi } from '../../../lib/utils'
+import { useT } from '../../../lib/i18n'
 import { MarkdownRenderer } from '../../../components/markdown'
 import { ReviewerIcon } from '../../commands/components/reviewer-icon'
 import type { ReviewerMeta } from '../../commands/hooks/use-reviewers'
@@ -13,6 +14,7 @@ type PromptViewerSheetProps = {
 }
 
 export function PromptViewerSheet({ reviewer, onClose }: PromptViewerSheetProps) {
+  const { t } = useT()
   const { data, isLoading, error } = useQuery<{ id: string; content: string }>({
     queryKey: ['reviewer-prompt', reviewer?.id],
     queryFn: () => fetchApi<{ id: string; content: string }>(`/api/reviewers/${reviewer!.id}/prompt`),
@@ -64,7 +66,7 @@ export function PromptViewerSheet({ reviewer, onClose }: PromptViewerSheetProps)
           <div className="border-b border-zinc-200 px-5 py-3 dark:border-zinc-700">
             {reviewer.known_for && (
               <p className="mb-1.5 text-xs">
-                <span className="font-semibold text-zinc-600 dark:text-zinc-300">Known for: </span>
+                <span className="font-semibold text-zinc-600 dark:text-zinc-300">{t('reviewers.known_for')} </span>
                 <span className="text-zinc-500 dark:text-zinc-400">{reviewer.known_for}</span>
               </p>
             )}
@@ -91,11 +93,11 @@ export function PromptViewerSheet({ reviewer, onClose }: PromptViewerSheetProps)
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-6 py-5">
           {isLoading && (
-            <p className="text-sm text-zinc-400 dark:text-zinc-500">Loading prompt...</p>
+            <p className="text-sm text-zinc-400 dark:text-zinc-500">{t('reviewers.loading_prompt')}</p>
           )}
           {error && (
             <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-600 dark:border-red-800 dark:bg-red-950/30 dark:text-red-400">
-              Prompt file not found. The reviewer may have been removed from disk.
+              {t('reviewers.prompt_not_found')}
             </div>
           )}
           {data?.content && (

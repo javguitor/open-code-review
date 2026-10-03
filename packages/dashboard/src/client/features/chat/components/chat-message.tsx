@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { cn, parseUtcDate } from '../../../lib/utils'
+import { useT } from '../../../lib/i18n'
+import type { MessageKey } from '../../../lib/i18n'
 import { MarkdownRenderer } from '../../../components/markdown/markdown-renderer'
 import { AgentActivity } from './agent-activity'
 import type { ChatMessage as ChatMessageType, ChatToolStatus } from '../../../lib/api-types'
@@ -40,13 +42,13 @@ export function ChatMessage({ message }: ChatMessageProps) {
 
 // ── Streaming / thinking indicator ──
 
-const THINKING_PHRASES = [
-  'Reading the code review artifacts...',
-  'Analyzing the changeset structure...',
-  'Examining file relationships...',
-  'Reviewing the findings...',
-  'Connecting the patterns...',
-  'Preparing a thoughtful response...',
+const THINKING_PHRASES: MessageKey[] = [
+  'chat.thinking_reading',
+  'chat.thinking_analyzing',
+  'chat.thinking_examining',
+  'chat.thinking_reviewing',
+  'chat.thinking_connecting',
+  'chat.thinking_preparing',
 ]
 
 type StreamingMessageProps = {
@@ -56,6 +58,7 @@ type StreamingMessageProps = {
 }
 
 export function StreamingMessage({ content, toolStatus, toolHistory }: StreamingMessageProps) {
+  const { t } = useT()
   const [phraseIndex, setPhraseIndex] = useState(0)
   const hasActivity = toolStatus !== null || toolHistory.length > 0
 
@@ -78,7 +81,7 @@ export function StreamingMessage({ content, toolStatus, toolHistory }: Streaming
         ) : hasActivity ? (
           <AgentActivity currentStatus={toolStatus} history={toolHistory} />
         ) : (
-          <ThinkingIndicator phrase={THINKING_PHRASES[phraseIndex]!} />
+          <ThinkingIndicator phrase={t(THINKING_PHRASES[phraseIndex]!)} />
         )}
 
         {/* Show agent activity below streamed content when both exist */}

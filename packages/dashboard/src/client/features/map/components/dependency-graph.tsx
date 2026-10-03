@@ -1,6 +1,7 @@
 import { lazy, Suspense, useMemo, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { GitBranch } from 'lucide-react'
+import { useT } from '../../../lib/i18n'
 import { useTheme } from '../../../providers/theme-provider'
 import { fetchApi } from '../../../lib/utils'
 import type { MapSection, SectionDependency } from '../../../lib/api-types'
@@ -19,6 +20,7 @@ type DependencyGraphProps = {
 }
 
 export function DependencyGraph({ sessionId, runNumber, sections, onSectionClick }: DependencyGraphProps) {
+  const { t } = useT()
   const { resolved: theme } = useTheme()
 
   const { data, isLoading } = useQuery<GraphResponse | null>({
@@ -37,8 +39,8 @@ export function DependencyGraph({ sessionId, runNumber, sections, onSectionClick
 
   const graphDefinition = useMemo(() => {
     if (!data?.dependencies) return null
-    return buildMermaidGraph(data.dependencies, sections, theme)
-  }, [data?.dependencies, sections, theme])
+    return buildMermaidGraph(data.dependencies, sections, theme, t)
+  }, [data?.dependencies, sections, theme, t])
 
   const handleNodeClick = useCallback(
     (nodeId: string) => {
@@ -60,7 +62,7 @@ export function DependencyGraph({ sessionId, runNumber, sections, onSectionClick
     <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
       <div className="flex items-center gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
         <GitBranch className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
-        <span className="text-sm font-medium">Section Dependencies</span>
+        <span className="text-sm font-medium">{t('map.section_dependencies')}</span>
       </div>
       <div className="p-4">
         <Suspense
@@ -84,6 +86,7 @@ function buildMermaidGraph(
   dependencies: SectionDependency[],
   sections: MapSection[],
   theme: string,
+  t: ReturnType<typeof useT>['t'],
 ): string | null {
   if (sections.length === 0) return null
 
@@ -95,7 +98,7 @@ function buildMermaidGraph(
     const id = sanitizeId(section.title)
     const reviewed = section.reviewed_count
     const total = section.file_count
-    const label = `${section.title}<br/>${reviewed}/${total} files`
+    const label = `${section.title}<br/>${t('map.graph_node_files', { reviewed, total })}`
     lines.push(`  ${id}["${label}"]`)
   }
 

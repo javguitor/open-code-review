@@ -1,4 +1,9 @@
 import { parseUtcDate } from './utils'
+import { translate, type MessageKey, type MessageVars } from './i18n'
+
+type Translate = (key: MessageKey, vars?: MessageVars) => string
+
+const translateEn: Translate = (key, vars) => translate('en', key, vars)
 
 /**
  * Format an ISO/SQLite date string as a full localized date.
@@ -40,19 +45,20 @@ export function formatDateTime(iso: string): string {
 
 /**
  * Return a human-readable relative time string (e.g. "just now", "5m ago").
+ * Pass `t` from `useT()` to localize; it defaults to English.
  *
  * Uses `parseUtcDate` to correctly interpret SQLite timestamps as UTC,
  * avoiding the off-by-timezone bug that occurs with bare `new Date()`.
  */
-export function timeAgo(dateStr: string): string {
+export function timeAgo(dateStr: string, t: Translate = translateEn): string {
   const seconds = Math.floor((Date.now() - parseUtcDate(dateStr).getTime()) / 1000)
-  if (seconds < 60) return 'just now'
+  if (seconds < 60) return t('layout.time_just_now')
   const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
+  if (minutes < 60) return t('layout.time_minutes_ago', { n: minutes })
   const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
+  if (hours < 24) return t('layout.time_hours_ago', { n: hours })
   const days = Math.floor(hours / 24)
-  return `${days}d ago`
+  return t('layout.time_days_ago', { n: days })
 }
 
 /**

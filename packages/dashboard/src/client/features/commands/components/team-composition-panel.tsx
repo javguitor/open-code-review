@@ -9,6 +9,7 @@ import {
   X,
 } from 'lucide-react'
 import { cn } from '../../../lib/utils'
+import { useT } from '../../../lib/i18n'
 import { useAiCli } from '../../../hooks/use-ai-cli'
 import {
   ModelSelect,
@@ -23,8 +24,6 @@ import {
 } from '../hooks/use-team'
 import { useReviewers } from '../hooks/use-reviewers'
 import type { ReviewerInstance } from '../../../lib/api-types'
-
-const DEFAULT_LABEL = '(default)'
 
 type TeamCompositionPanelProps = {
   /** The current resolved override (or null to use disk). Caller controls. */
@@ -56,6 +55,7 @@ export function TeamCompositionPanel({
   onSaveAsDefaultChange,
   className,
 }: TeamCompositionPanelProps) {
+  const { t } = useT()
   const { activeCli } = useAiCli()
   const { data: resolvedFromDisk, isLoading: teamLoading } = useResolvedTeam()
   const { data: modelList, isLoading: modelsLoading } = useAvailableModels(activeCli ?? undefined)
@@ -84,7 +84,7 @@ export function TeamCompositionPanel({
 
   // Effective model list — `(default)` is the synthetic "omit --model flag" entry
   const modelOptions: ModelSelectOption[] = useMemo(() => {
-    const base: ModelSelectOption[] = [{ id: '', label: DEFAULT_LABEL }]
+    const base: ModelSelectOption[] = [{ id: '', label: t('commands.default_label') }]
     if (modelList?.models) {
       for (const m of modelList.models) {
         base.push({
@@ -96,7 +96,7 @@ export function TeamCompositionPanel({
       }
     }
     return base
-  }, [modelList])
+  }, [modelList, t])
 
   const modelListEmpty = !modelsLoading && (modelList?.models?.length ?? 0) === 0
 
@@ -109,7 +109,7 @@ export function TeamCompositionPanel({
     >
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          Team composition
+          {t('commands.team_composition')}
         </h3>
         {hasEdits && (
           <button
@@ -117,16 +117,16 @@ export function TeamCompositionPanel({
             onClick={clearOverride}
             className="text-xs text-zinc-500 underline hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
           >
-            Reset to default
+            {t('commands.reset_to_default')}
           </button>
         )}
       </div>
 
       {isLoading ? (
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">Loading team…</p>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">{t('commands.loading_team')}</p>
       ) : grouped.length === 0 ? (
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          No team configured. Add a reviewer to get started.
+          {t('commands.no_team_configured')}
         </p>
       ) : (
         <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -180,7 +180,7 @@ export function TeamCompositionPanel({
             )}
           >
             <UserPlus className="h-3.5 w-3.5" />
-            Add reviewer
+            {t('commands.add_reviewer')}
           </button>
         ) : (
           <select
@@ -204,7 +204,7 @@ export function TeamCompositionPanel({
             onBlur={() => setAdding(false)}
             className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
           >
-            <option value="">Choose a reviewer…</option>
+            <option value="">{t('commands.choose_reviewer')}</option>
             {addable.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.name}
@@ -223,7 +223,7 @@ export function TeamCompositionPanel({
             onChange={(e) => onSaveAsDefaultChange(e.target.checked)}
             className="h-3.5 w-3.5 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500 dark:border-zinc-700"
           />
-          <span>Save as default for this workspace</span>
+          <span>{t('commands.save_as_default')}</span>
         </label>
         {hasEdits && saveAsDefault && (
           <button
@@ -238,7 +238,7 @@ export function TeamCompositionPanel({
             )}
           >
             <Save className="h-3 w-3" />
-            {setDefault.isPending ? 'Saving…' : 'Save now'}
+            {setDefault.isPending ? t('commands.saving') : t('commands.save_now')}
           </button>
         )}
       </div>
@@ -247,7 +247,7 @@ export function TeamCompositionPanel({
 
       {hasEdits && (
         <p className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-[11px] text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400">
-          {summarizeOverride(grouped, resolvedFromDisk?.team ?? [])}
+          {summarizeOverride(grouped, resolvedFromDisk?.team ?? [], t)}
         </p>
       )}
     </div>
@@ -288,6 +288,7 @@ function PersonaRow({
   onInstanceModelChange,
   onRemove,
 }: PersonaRowProps) {
+  const { t } = useT()
   const count = group.instances.length
   const uniqueModels = new Set(group.instances.map((i) => i.model))
   const isUniform = uniqueModels.size <= 1
@@ -309,7 +310,7 @@ function PersonaRow({
           <button
             type="button"
             onClick={onToggleExpand}
-            aria-label={expanded ? 'Collapse instances' : 'Expand instances'}
+            aria-label={expanded ? t('commands.collapse_instances') : t('commands.expand_instances')}
             className="rounded p-0.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
           >
             {expanded ? (
@@ -337,7 +338,7 @@ function PersonaRow({
           <button
             type="button"
             onClick={() => onCountChange(Math.max(0, count - 1))}
-            aria-label="Decrease count"
+            aria-label={t('commands.decrease_count')}
             className="px-1.5 py-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
           >
             <Minus className="h-3 w-3" />
@@ -348,7 +349,7 @@ function PersonaRow({
           <button
             type="button"
             onClick={() => onCountChange(count + 1)}
-            aria-label="Increase count"
+            aria-label={t('commands.increase_count')}
             className="px-1.5 py-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
           >
             <Plus className="h-3 w-3" />
@@ -364,12 +365,12 @@ function PersonaRow({
                 setMode('uniform')
                 if (!isUniform) onUniformModelChange(sharedModel)
               }}
-              label="Same model"
+              label={t('commands.same_model')}
             />
             <ModeChip
               active={mode === 'per-instance' || !isUniform}
               onClick={() => setMode('per-instance')}
-              label="Per reviewer"
+              label={t('commands.per_reviewer')}
             />
           </div>
         )}
@@ -377,7 +378,7 @@ function PersonaRow({
         <button
           type="button"
           onClick={onRemove}
-          aria-label="Remove reviewer"
+          aria-label={t('commands.remove_reviewer_aria')}
           className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
         >
           <X className="h-3.5 w-3.5" />
@@ -395,7 +396,7 @@ function PersonaRow({
               allowCustom
               onChange={(value) => onUniformModelChange(value || null)}
               className="max-w-md"
-              ariaLabel={`Model for ${group.persona}`}
+              ariaLabel={t('commands.model_for', { name: group.persona })}
             />
           ) : (
             (expanded ? group.instances : []).map((inst) => (
@@ -415,7 +416,7 @@ function PersonaRow({
                     onInstanceModelChange(inst.instance_index, value || null)
                   }
                   className="max-w-md"
-                  ariaLabel={`Model for ${inst.name}`}
+                  ariaLabel={t('commands.model_for', { name: inst.name })}
                 />
               </div>
             ))
@@ -426,7 +427,7 @@ function PersonaRow({
               onClick={onToggleExpand}
               className="text-[11px] text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
             >
-              Show {count} per-reviewer model overrides
+              {t('commands.show_model_overrides', { count })}
             </button>
           )}
         </div>
@@ -513,6 +514,7 @@ function setUniformModel(
 function summarizeOverride(
   current: PersonaGroup[],
   base: ReviewerInstance[],
+  t: ReturnType<typeof useT>['t'],
 ): string {
   const baseGroups = groupByPersona(base)
   const baseMap = new Map(baseGroups.map((g) => [g.persona, g.instances]))
@@ -528,6 +530,6 @@ function summarizeOverride(
   for (const g of baseGroups) {
     if (!current.find((c) => c.persona === g.persona)) differing++
   }
-  if (differing === 0) return 'No effective changes vs. workspace default.'
-  return `${differing} ${differing === 1 ? 'persona' : 'personas'} customized for this run.`
+  if (differing === 0) return t('commands.no_effective_changes')
+  return t(differing === 1 ? 'commands.personas_customized_one' : 'commands.personas_customized_other', { count: differing })
 }

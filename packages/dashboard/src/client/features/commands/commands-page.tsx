@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Terminal } from 'lucide-react'
+import { useT } from '../../lib/i18n'
 import { useSocket, useSocketEvent } from '../../providers/socket-provider'
 import { useCommandState } from '../../providers/command-state-provider'
 import { useAiCli } from '../../hooks/use-ai-cli'
@@ -8,6 +9,7 @@ import { CommandPalette, parseCommandString, type ParsedCommand } from './compon
 import { WorkflowOutput } from './components/workflow-output'
 import { CommandHistory } from './components/command-history'
 import { TabBar } from './components/tab-bar'
+import { RichText } from './components/rich-text'
 
 const CLI_DISPLAY_NAMES: Record<string, string> = {
   claude: 'Claude Code',
@@ -15,6 +17,7 @@ const CLI_DISPLAY_NAMES: Record<string, string> = {
 }
 
 export function CommandsPage() {
+  const { t } = useT()
   const { socket } = useSocket()
   const queryClient = useQueryClient()
   const { isAvailable, activeCli, isDisabledByConfig } = useAiCli()
@@ -68,12 +71,12 @@ export function CommandsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Command Center</h1>
+        <h1 className="text-2xl font-semibold">{t('commands.page_title')}</h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Launch AI-powered code review workflows.
+          {t('commands.page_subtitle')}
           {activeCli && (
             <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2.5 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-              Using {CLI_DISPLAY_NAMES[activeCli] ?? activeCli}
+              {t('commands.using_cli', { cli: CLI_DISPLAY_NAMES[activeCli] ?? activeCli })}
             </span>
           )}
         </p>
@@ -85,22 +88,17 @@ export function CommandsPage() {
             <Terminal className="mt-0.5 h-5 w-5 shrink-0 text-zinc-400" />
             <div>
               <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                {isDisabledByConfig ? 'AI Commands Disabled' : 'AI CLI Required'}
+                {isDisabledByConfig ? t('commands.ai_disabled_title') : t('commands.ai_cli_required_title')}
               </h3>
               <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                 {isDisabledByConfig ? (
-                  <>
-                    AI commands are turned off in your project config.
-                    Set <code className="rounded bg-zinc-200 px-1 py-0.5 text-xs dark:bg-zinc-800">ai_cli</code> to{' '}
-                    <code className="rounded bg-zinc-200 px-1 py-0.5 text-xs dark:bg-zinc-800">auto</code>,{' '}
-                    <code className="rounded bg-zinc-200 px-1 py-0.5 text-xs dark:bg-zinc-800">claude</code>, or{' '}
-                    <code className="rounded bg-zinc-200 px-1 py-0.5 text-xs dark:bg-zinc-800">opencode</code>{' '}
-                    in <code className="rounded bg-zinc-200 px-1 py-0.5 text-xs dark:bg-zinc-800">.ocr/config.yaml</code> to
-                    enable them.
-                  </>
+                  <RichText
+                    text={t('commands.ai_disabled_body')}
+                    codeClassName="rounded bg-zinc-200 px-1 py-0.5 text-xs dark:bg-zinc-800"
+                  />
                 ) : (
                   <>
-                    Install{' '}
+                    {t('commands.install_prefix')}{' '}
                     <a
                       href="https://docs.anthropic.com/en/docs/claude-code/getting-started"
                       target="_blank"
@@ -109,7 +107,7 @@ export function CommandsPage() {
                     >
                       Claude Code
                     </a>
-                    {' '}or{' '}
+                    {' '}{t('commands.install_or')}{' '}
                     <a
                       href="https://opencode.ai"
                       target="_blank"
@@ -118,13 +116,12 @@ export function CommandsPage() {
                     >
                       OpenCode
                     </a>
-                    {' '}to run AI-powered review commands from the dashboard.
+                    {' '}{t('commands.install_suffix')}
                   </>
                 )}
               </p>
               <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">
-                You can still use OCR slash commands directly from your IDE, and browse
-                existing sessions, reviews, and maps below.
+                {t('commands.ai_unavailable_hint')}
               </p>
             </div>
           </div>

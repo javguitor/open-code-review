@@ -1,5 +1,7 @@
 import { X, Settings2, PenLine } from 'lucide-react'
+import { useT } from '../../../lib/i18n'
 import { cn } from '../../../lib/utils'
+import { RichText } from './rich-text'
 import { ReviewerIcon } from './reviewer-icon'
 import type { ReviewerMeta } from '../hooks/use-reviewers'
 
@@ -34,14 +36,15 @@ export function ReviewerDefaults({
   onRemove,
   onCustomize,
 }: ReviewerDefaultsProps) {
+  const { t } = useT()
   if (!isLoaded) {
     return (
       <div className="flex items-center gap-3">
         <label className="w-28 shrink-0 text-right text-xs font-medium text-zinc-500 dark:text-zinc-400">
-          Reviewers
+          {t('commands.reviewers_label')}
         </label>
         <div className="flex h-8 items-center text-xs text-zinc-400 dark:text-zinc-500">
-          Loading...
+          {t('common.loading')}...
         </div>
       </div>
     )
@@ -51,10 +54,10 @@ export function ReviewerDefaults({
     return (
       <div className="flex items-center gap-3">
         <label className="w-28 shrink-0 text-right text-xs font-medium text-zinc-500 dark:text-zinc-400">
-          Reviewers
+          {t('commands.reviewers_label')}
         </label>
         <p className="text-xs text-zinc-400 dark:text-zinc-500">
-          Run <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-800">/ocr:sync-reviewers</code> to customize your review team
+          <RichText text={t('commands.sync_reviewers_hint')} codeClassName="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-800" />
         </p>
       </div>
     )
@@ -75,7 +78,7 @@ export function ReviewerDefaults({
   return (
     <div className="flex items-start gap-3">
       <label className="w-28 shrink-0 pt-1.5 text-right text-xs font-medium text-zinc-500 dark:text-zinc-400">
-        Reviewers
+        {t('commands.reviewers_label')}
       </label>
       <div className="flex flex-1 flex-wrap items-center gap-1.5">
         {selectedReviewers.map((r) => (
@@ -99,7 +102,7 @@ export function ReviewerDefaults({
                 type="button"
                 onClick={() => onRemove(r.id)}
                 className="ml-0.5 rounded-full p-0.5 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:text-zinc-500 dark:hover:bg-zinc-700 dark:hover:text-zinc-300"
-                aria-label={`Remove ${r.name}`}
+                aria-label={t('commands.remove_reviewer', { name: r.name })}
               >
                 <X className="h-2.5 w-2.5" />
               </button>
@@ -129,7 +132,7 @@ export function ReviewerDefaults({
                 type="button"
                 onClick={() => onRemove(s.id)}
                 className="ml-0.5 rounded-full p-0.5 text-amber-400 hover:bg-amber-200 hover:text-amber-600 dark:text-amber-500 dark:hover:bg-amber-800 dark:hover:text-amber-300"
-                aria-label="Remove ephemeral reviewer"
+                aria-label={t('commands.remove_ephemeral_reviewer')}
               >
                 <X className="h-2.5 w-2.5" />
               </button>
@@ -149,7 +152,7 @@ export function ReviewerDefaults({
           )}
         >
           <Settings2 className="h-3 w-3" />
-          Customize...
+          {t('commands.customize')}
         </button>
       </div>
     </div>

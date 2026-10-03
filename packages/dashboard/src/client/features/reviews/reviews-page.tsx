@@ -6,6 +6,8 @@ import { StatusBadge } from '../../components/ui/status-badge'
 import { SortableHeader } from '../../components/ui/sortable-header'
 import { useAllReviews, useUpdateRoundStatus } from './hooks/use-reviews'
 import type { RoundTriage } from '../../lib/api-types'
+import { useT } from '../../lib/i18n'
+import type { MessageKey } from '../../lib/i18n'
 
 type SortField = 'session_id' | 'round_number' | 'verdict' | 'blocker_count' | 'status'
 type SortDir = 'asc' | 'desc'
@@ -18,20 +20,21 @@ const STATUS_ORDER: Record<RoundTriage, number> = {
   dismissed: 4,
 }
 
-const ROUND_STATUS_OPTIONS: { value: RoundTriage; label: string }[] = [
-  { value: 'needs_review', label: 'Needs Review' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'changes_made', label: 'Changes Made' },
-  { value: 'acknowledged', label: 'Acknowledged' },
-  { value: 'dismissed', label: 'Dismissed' },
+const ROUND_STATUS_OPTIONS: { value: RoundTriage; labelKey: MessageKey }[] = [
+  { value: 'needs_review', labelKey: 'status.needs_review' },
+  { value: 'in_progress', labelKey: 'status.in_progress' },
+  { value: 'changes_made', labelKey: 'status.changes_made' },
+  { value: 'acknowledged', labelKey: 'status.acknowledged' },
+  { value: 'dismissed', labelKey: 'status.dismissed' },
 ]
 
-const STATUS_FILTER_OPTIONS: { value: RoundTriage | 'all'; label: string }[] = [
-  { value: 'all', label: 'All Statuses' },
+const STATUS_FILTER_OPTIONS: { value: RoundTriage | 'all'; labelKey: MessageKey }[] = [
+  { value: 'all', labelKey: 'reviews.all_statuses' },
   ...ROUND_STATUS_OPTIONS,
 ]
 
 export function ReviewsPage() {
+  const { t } = useT()
   const { data: rounds, isLoading } = useAllReviews()
   const updateStatus = useUpdateRoundStatus()
   const navigate = useNavigate()
@@ -44,7 +47,7 @@ export function ReviewsPage() {
 
   const verdictOptions = useMemo(() => {
     const seen = new Set<string>()
-    const opts: { value: string; label: string }[] = [{ value: 'all', label: 'All Verdicts' }]
+    const opts: { value: string; label: string }[] = [{ value: 'all', label: t('reviews.all_verdicts') }]
     for (const r of rounds ?? []) {
       if (r.verdict && !seen.has(r.verdict)) {
         seen.add(r.verdict)
@@ -52,7 +55,7 @@ export function ReviewsPage() {
       }
     }
     return opts
-  }, [rounds])
+  }, [rounds, t])
 
   const filtered = useMemo(() => {
     let result = rounds ?? []
@@ -114,7 +117,7 @@ export function ReviewsPage() {
   return (
     <div>
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Reviews</h1>
+        <h1 className="text-2xl font-semibold">{t('reviews.title')}</h1>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowAll(false)}
@@ -125,7 +128,7 @@ export function ReviewsPage() {
                 : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100',
             )}
           >
-            Actionable
+            {t('reviews.actionable')}
           </button>
           <button
             onClick={() => setShowAll(true)}
@@ -136,16 +139,16 @@ export function ReviewsPage() {
                 : 'text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100',
             )}
           >
-            All
+            {t('reviews.all')}
           </button>
         </div>
       </div>
 
       {isLoading ? (
-        <p className="mt-6 text-sm text-zinc-500 dark:text-zinc-400">Loading reviews...</p>
+        <p className="mt-6 text-sm text-zinc-500 dark:text-zinc-400">{t('reviews.loading')}</p>
       ) : !rounds || rounds.length === 0 ? (
         <p className="mt-6 text-sm text-zinc-500 dark:text-zinc-400">
-          No review rounds found. Run <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs dark:bg-zinc-800">ocr review</code> to create one.
+          {t('reviews.none_found_run')} <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs dark:bg-zinc-800">ocr review</code> {t('reviews.none_found_to_create')}
         </p>
       ) : (
         <div className="mt-6">
@@ -154,20 +157,20 @@ export function ReviewsPage() {
             <Filter className="h-4 w-4 text-zinc-400" />
             {showAll && (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-zinc-500 dark:text-zinc-400">Status:</span>
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">{t('reviews.filter_status')}</span>
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value as RoundTriage | 'all')}
                   className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
                 >
                   {STATUS_FILTER_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
                   ))}
                 </select>
               </div>
             )}
             <div className="flex items-center gap-2">
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">Verdict:</span>
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">{t('reviews.filter_verdict')}</span>
               <select
                 value={verdictFilter}
                 onChange={(e) => setVerdictFilter(e.target.value)}
@@ -179,13 +182,13 @@ export function ReviewsPage() {
               </select>
             </div>
             <span className="text-xs text-zinc-400 dark:text-zinc-500">
-              {sorted.length} of {(rounds ?? []).length} reviews
+              {t('reviews.count_of', { shown: sorted.length, total: (rounds ?? []).length })}
             </span>
           </div>
 
           {sorted.length === 0 ? (
             <p className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
-              No reviews match your filters.
+              {t('reviews.no_match')}
             </p>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
@@ -193,38 +196,38 @@ export function ReviewsPage() {
                 <thead className="bg-zinc-50 dark:bg-zinc-900">
                   <tr>
                     <SortableHeader
-                      label="Branch"
+                      label={t('reviews.col_branch')}
                       field="session_id"
                       activeField={sortField}
                       direction={sortDir}
                       onSort={handleSort}
                     />
                     <SortableHeader
-                      label="Round"
+                      label={t('reviews.col_round')}
                       field="round_number"
                       activeField={sortField}
                       direction={sortDir}
                       onSort={handleSort}
                     />
                     <SortableHeader
-                      label="Verdict"
+                      label={t('reviews.col_verdict')}
                       field="verdict"
                       activeField={sortField}
                       direction={sortDir}
                       onSort={handleSort}
                     />
                     <SortableHeader
-                      label="Blockers"
+                      label={t('reviews.col_blockers')}
                       field="blocker_count"
                       activeField={sortField}
                       direction={sortDir}
                       onSort={handleSort}
                     />
                     <th className="border-b border-zinc-200 px-4 py-2 text-left font-medium text-zinc-900 dark:border-zinc-800 dark:text-zinc-100">
-                      Reviewers
+                      {t('reviews.col_reviewers')}
                     </th>
                     <SortableHeader
-                      label="Status"
+                      label={t('reviews.col_status')}
                       field="status"
                       activeField={sortField}
                       direction={sortDir}
@@ -252,7 +255,7 @@ export function ReviewsPage() {
                           </div>
                         </td>
                         <td className="border-b border-zinc-200 px-4 py-2 text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
-                          Round {round.round_number}
+                          {t('reviews.round_n', { number: round.round_number })}
                         </td>
                         <td className="border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
                           {round.verdict ? (
@@ -267,7 +270,7 @@ export function ReviewsPage() {
                               label={round.verdict}
                             />
                           ) : (
-                            <span className="text-xs text-zinc-400">Pending</span>
+                            <span className="text-xs text-zinc-400">{t('reviews.pending')}</span>
                           )}
                         </td>
                         <td className="border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
@@ -292,7 +295,7 @@ export function ReviewsPage() {
                             className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
                           >
                             {ROUND_STATUS_OPTIONS.map((opt) => (
-                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
                             ))}
                           </select>
                         </td>

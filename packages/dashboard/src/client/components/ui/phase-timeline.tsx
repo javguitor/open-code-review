@@ -1,5 +1,6 @@
 import { Check, Circle, Loader2, Minus } from 'lucide-react'
 import { cn } from '../../lib/utils'
+import { useT } from '../../lib/i18n'
 
 export type PhaseStatus = 'pending' | 'active' | 'complete' | 'skipped'
 
@@ -15,8 +16,9 @@ type PhaseTimelineProps = {
 }
 
 export function PhaseTimeline({ phases, className }: PhaseTimelineProps) {
+  const { t } = useT()
   return (
-    <div role="list" aria-label="Phase timeline" className={cn('flex items-center gap-1', className)}>
+    <div role="list" aria-label={t('layout.phase_timeline_label')} className={cn('flex items-center gap-1', className)}>
       {phases.map((phase, i) => (
         <div key={phase.name} className="flex items-center gap-1">
           <PhaseNode phase={phase} />
@@ -37,12 +39,18 @@ export function PhaseTimeline({ phases, className }: PhaseTimelineProps) {
 }
 
 function PhaseNode({ phase }: { phase: Phase }) {
+  const { t } = useT()
+  const status = t(`layout.phase_${phase.status}`)
   return (
     <div className="group relative flex flex-col items-center">
       <div
         tabIndex={0}
         role="listitem"
-        aria-label={`${phase.name}: ${phase.status}${phase.timestamp ? `, ${phase.timestamp}` : ''}`}
+        aria-label={
+          phase.timestamp
+            ? t('layout.phase_label_timestamp', { name: phase.name, status, timestamp: phase.timestamp })
+            : t('layout.phase_label', { name: phase.name, status })
+        }
         className={cn(
           'flex h-6 w-6 items-center justify-center rounded-full border',
           phase.status === 'complete' &&

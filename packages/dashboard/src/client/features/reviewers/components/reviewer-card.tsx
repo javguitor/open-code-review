@@ -1,25 +1,26 @@
 import { FileText } from 'lucide-react'
 import { cn } from '../../../lib/utils'
+import { useT, type MessageKey } from '../../../lib/i18n'
 import { ReviewerIcon } from '../../commands/components/reviewer-icon'
 import type { ReviewerMeta } from '../../commands/hooks/use-reviewers'
 
-const TIER_BADGE: Record<string, { label: string; className: string } | undefined> & {
-  custom: { label: string; className: string }
+const TIER_BADGE: Record<string, { labelKey: MessageKey; className: string } | undefined> & {
+  custom: { labelKey: MessageKey; className: string }
 } = {
   holistic: {
-    label: 'Generalist',
+    labelKey: 'reviewers.tier_holistic',
     className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
   },
   specialist: {
-    label: 'Specialist',
+    labelKey: 'reviewers.tier_specialist',
     className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300',
   },
   persona: {
-    label: 'Persona',
+    labelKey: 'reviewers.tier_persona',
     className: 'bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300',
   },
   custom: {
-    label: 'Custom',
+    labelKey: 'reviewers.tier_custom',
     className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300',
   },
 }
@@ -35,6 +36,7 @@ type ReviewerCardProps = {
 }
 
 export function ReviewerCard({ reviewer, onViewPrompt, inDefaultTeamCount }: ReviewerCardProps) {
+  const { t } = useT()
   const badge = TIER_BADGE[reviewer.tier] ?? TIER_BADGE.custom
   const teamCount = inDefaultTeamCount ?? (reviewer.is_default ? 1 : 0)
 
@@ -54,9 +56,11 @@ export function ReviewerCard({ reviewer, onViewPrompt, inDefaultTeamCount }: Rev
             {teamCount > 0 && (
               <span
                 className="shrink-0 rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300"
-                title="Reviewer is part of the workspace's default team"
+                title={t('reviewers.in_default_team_title')}
               >
-                {teamCount > 1 ? `In default team ×${teamCount}` : 'In default team'}
+                {teamCount > 1
+                  ? t('reviewers.in_default_team_count', { count: teamCount })
+                  : t('reviewers.in_default_team')}
               </span>
             )}
           </div>
@@ -66,7 +70,7 @@ export function ReviewerCard({ reviewer, onViewPrompt, inDefaultTeamCount }: Rev
               badge.className,
             )}
           >
-            {badge.label}
+            {t(badge.labelKey)}
           </span>
         </div>
       </div>
@@ -79,7 +83,7 @@ export function ReviewerCard({ reviewer, onViewPrompt, inDefaultTeamCount }: Rev
       {/* Known for (persona only) */}
       {reviewer.known_for && (
         <p className="mb-2 text-[11px] italic text-zinc-400 dark:text-zinc-500">
-          Known for: {reviewer.known_for}
+          {t('reviewers.known_for')} {reviewer.known_for}
         </p>
       )}
 
@@ -110,7 +114,7 @@ export function ReviewerCard({ reviewer, onViewPrompt, inDefaultTeamCount }: Rev
           className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
         >
           <FileText className="h-3 w-3" />
-          View Prompt
+          {t('reviewers.view_prompt')}
         </button>
       </div>
     </div>

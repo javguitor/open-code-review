@@ -1,10 +1,11 @@
 import type { ReviewerMeta, ReviewerTier } from '../features/commands/hooks/use-reviewers'
+import type { MessageKey } from './i18n'
 
-export const TIER_CONFIG: Record<ReviewerTier, { label: string; order: number }> = {
-  holistic: { label: 'Generalists', order: 0 },
-  specialist: { label: 'Specialists', order: 1 },
-  persona: { label: 'Famous Engineers', order: 2 },
-  custom: { label: 'Custom', order: 3 },
+export const TIER_CONFIG: Record<ReviewerTier, { labelKey: MessageKey; order: number }> = {
+  holistic: { labelKey: 'reviewers.tier_holistic_plural', order: 0 },
+  specialist: { labelKey: 'reviewers.tier_specialist_plural', order: 1 },
+  persona: { labelKey: 'reviewers.tier_persona_plural', order: 2 },
+  custom: { labelKey: 'reviewers.tier_custom_plural', order: 3 },
 }
 
 /**

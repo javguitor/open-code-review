@@ -2,9 +2,11 @@ import { useMemo, useState } from 'react'
 import { useSessions } from './hooks/use-sessions'
 import { SessionFilters } from './components/session-filters'
 import { SessionList } from './components/session-list'
+import { useT } from '../../lib/i18n'
 import type { SessionStatus, WorkflowType } from '../../lib/api-types'
 
 export function SessionsPage() {
+  const { t } = useT()
   const { data: sessions, isLoading } = useSessions()
   const [statusFilter, setStatusFilter] = useState<SessionStatus | 'all'>('all')
   const [workflowFilter, setWorkflowFilter] = useState<WorkflowType | 'all'>('all')
@@ -21,9 +23,9 @@ export function SessionsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Sessions</h1>
+        <h1 className="text-2xl font-semibold">{t('sessions.title')}</h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          All code review and map sessions.
+          {t('sessions.subtitle')}
         </p>
       </div>
 
@@ -35,7 +37,7 @@ export function SessionsPage() {
       />
 
       {isLoading ? (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Loading sessions...</p>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">{t('sessions.loading')}</p>
       ) : (
         <SessionList sessions={filtered} />
       )}
