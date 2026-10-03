@@ -27,6 +27,37 @@ export function toSourceJson(source: RequirementSource, fetchedAt: Date): Source
   };
 }
 
+const ATX_HEADING = /^( {0,3})(#{1,6})(?=[ \t]|$)/;
+const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+
+/**
+ * Pushes every ATX heading in provider-supplied markdown down `by` levels (capped at 6; default 2 so it
+ * can never collide with this file's own `##` sections). Fenced code blocks are left untouched.
+ */
+export function shiftHeadings(markdown: string, by = 2): string {
+  let fence: string | null = null;
+  return markdown
+    .split("\n")
+    .map((line) => {
+      const f = FENCE.exec(line)?.[1];
+      if (fence) {
+        // A closing fence uses the same char, is at least as long, and carries no info string.
+        if (f && f[0] === fence[0] && f.length >= fence.length && line.trim() === f) fence = null;
+        return line;
+      }
+      if (f) {
+        fence = f;
+        return line;
+      }
+      return line.replace(
+        ATX_HEADING,
+        (_m, indent: string, hashes: string) =>
+          `${indent}${"#".repeat(Math.min(hashes.length + by, 6))}`,
+      );
+    })
+    .join("\n");
+}
+
 /** Renders `source.md`: raw content, empty sections omitted (Comments only when requested). */
 export function renderSourceMarkdown(source: RequirementSource): string {
   const out: string[] = [
@@ -37,7 +68,7 @@ export function renderSourceMarkdown(source: RequirementSource): string {
     "",
     "## Description",
     "",
-    source.body.trim() || "_No description._",
+    shiftHeadings(source.body.trim()) || "_No description._",
     "",
   ];
 
@@ -59,7 +90,7 @@ export function renderSourceMarkdown(source: RequirementSource): string {
   if (source.comments) {
     out.push("## Comments", "");
     if (source.comments.length === 0) out.push("_No comments._", "");
-    for (const c of source.comments) out.push(`### ${c.author} — ${c.date}`, "", c.text.trim(), "");
+    for (const c of source.comments) out.push(`### ${c.author} — ${c.date}`, "", shiftHeadings(c.text.trim(), 3), "");
   }
 
   return `${out.join("\n").trimEnd()}\n`;
