@@ -103,8 +103,8 @@ The summary body of the review. Keep it short; the detail lives in the inline co
 
 1. A short overall assessment (1-3 sentences): what the change does well and where it stands.
 2. **What is good**: 1-4 specific bullets.
-3. **Blocks the merge**: ONLY if there are `blocking` findings. One line each, with the location as `` `path/to/file.ts:42` `` so the author can jump to the inline comment. If none, say so plainly ("nothing here blocks the merge").
-4. **Does not block**: the `should_fix`, `optional` and `nit` points, grouped briefly (a few lines or one short list; no per-point essays).
+3. **Blocks the merge**: ONLY if there are `blocking` findings. One line each, with the location as `` `path/to/file.ts:42` `` so the author can jump to the inline comment. If there are none, OMIT this section entirely (no heading followed by "Nothing"/"Nada") and say it once in the opening assessment (e.g. "Nothing here blocks the merge.").
+4. **Does not block**: the `should_fix`, `optional` and `nit` points, grouped briefly (a few lines or one short list; no per-point essays). Group them under the same localized labels as the inline comments (`Importante` / `Opcional` / `Nit`; `Should fix` / `Optional` / `Nit`). Never describe a non-blocking point as something to fix "before merging": only `blocking` findings gate the merge.
 5. A closing line offering a quick sync if something is debatable.
 
 Do not start with "Overall, this is a...". Do not add reviewer tables, headings per reviewer, or consensus sections.
@@ -179,7 +179,8 @@ Buen cambio en general: el cálculo del total queda mucho más claro que antes y
 - `src/orders/total.ts:57`: el caso de pedido vacío lanza un error (detalle en el comentario).
 
 **No bloquea**
-- Una función mezcla descuento y formato de recibo (`src/orders/total.ts:72-80`), y hay un nombre poco descriptivo (`src/orders/format.ts:12`).
+- Opcional: separar el descuento del formato del recibo (`src/orders/total.ts:72-80`).
+- Nit: un nombre poco descriptivo (`src/orders/format.ts:12`).
 
 Si algún punto os parece discutible, lo hablamos en una llamada rápida y lo cerramos.
 ```
