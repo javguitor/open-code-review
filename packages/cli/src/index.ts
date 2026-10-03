@@ -17,6 +17,7 @@ import { reviewersCommand } from "./commands/reviewers";
 import { hostCommand } from "./commands/host";
 import { worktreeCommand } from "./commands/worktree";
 import { requirementsCommand } from "./commands/requirements";
+import { findingCommand } from "./commands/finding";
 import { checkForUpdate, printUpdateNotification } from "./lib/update-check.js";
 import { checkLocalArtifactVersion, printLocalVersionHint } from "./lib/cli-config.js";
 import { CLI_VERSION } from "./lib/version.js";
@@ -50,6 +51,7 @@ program.addCommand(reviewersCommand);
 program.addCommand(hostCommand);
 program.addCommand(worktreeCommand);
 program.addCommand(requirementsCommand);
+program.addCommand(findingCommand);
 
 await program.parseAsync();
 

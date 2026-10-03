@@ -165,6 +165,31 @@ export {
 
 export { runMigrations, MIGRATIONS } from "./migrations.js";
 
+export {
+  FINDING_SEVERITIES,
+  FINDING_CATEGORIES,
+  FINDING_DECISION_STATUSES,
+  FINDING_VERIFICATION_STATUSES,
+  FINDING_REVISION_SOURCES,
+  FindingError,
+  getFinding,
+  getFindingRevisions,
+  reviseFinding,
+  setFindingDecision,
+  recordVerification,
+} from "./findings.js";
+export type {
+  FindingRow,
+  FindingRevisionRow,
+  FindingRevisableField,
+  FindingDecisionStatus,
+  FindingVerificationStatus,
+  FindingRevisionSource,
+  ReviseFindingParams,
+  SetFindingDecisionParams,
+  RecordVerificationParams,
+} from "./findings.js";
+
 export { resultToRows, resultToRow } from "./result-mapper.js";
 
 // `Database` carries no `raw` handle (see engine.ts) — the published

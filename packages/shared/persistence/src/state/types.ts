@@ -76,7 +76,10 @@ export type RoundMetaFinding = {
   line_start?: number;
   line_end?: number;
   summary: string;
+  /** Reviewer ids that independently raised this finding (non-empty strings, max 20). */
   flagged_by?: string[];
+  /** Concrete evidence (trimmed, max 4000 chars). */
+  evidence?: string;
 };
 
 export type RoundMetaReviewer = {
