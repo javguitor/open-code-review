@@ -7,6 +7,7 @@
  * workflows without requiring CLI schema changes.
  */
 
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { Router } from 'express'
 import type { Database } from '@open-code-review/persistence'
@@ -22,7 +23,7 @@ import {
   getReviewerOutputsForRound,
   getRoundProgress,
 } from '../db.js'
-import { getPrHead } from '../services/pr-head.js'
+import { getPrHead, PrHeadLookupError } from '../services/pr-head.js'
 
 // Phase names must match session-detail-page.tsx constants
 const REVIEW_PHASE_NAMES = [
@@ -174,12 +175,14 @@ type PrStale = {
   pr_head_sha: string | null
 }
 
+const NO_STALE: PrStale = { stale: null, pr_head_sha: null }
+
 async function computeStale(
   session: SessionRow,
   getHead: typeof getPrHead,
   force = false,
 ): Promise<PrStale> {
-  if (!session.pr_url || !session.head_sha) return { stale: null, pr_head_sha: null }
+  if (!session.pr_url || !session.head_sha) return NO_STALE
   const current = await getHead(session.pr_url, { force })
   return { stale: current === null ? null : current !== session.head_sha, pr_head_sha: current }
 }
@@ -197,16 +200,29 @@ export function createSessionsRouter(db: Database, deps: SessionsRouterDeps = {}
   const router = Router()
   const getHead = deps.getPrHead ?? getPrHead
 
-  const worktreePath = (s: SessionRow): string | null =>
-    deps.ocrDir && s.pr_number !== null
-      ? join(getWorktreeConfig(deps.ocrDir).dir, `pr-${s.pr_number}`)
-      : null
+  const worktreePath = (s: SessionRow): string | null => {
+    if (!deps.ocrDir || s.pr_number === null) return null
+    const path = join(getWorktreeConfig(deps.ocrDir).dir, `pr-${s.pr_number}`)
+    return existsSync(path) ? path : null
+  }
 
   // GET /api/sessions — List all sessions, sorted by updated_at desc
   router.get('/', async (_req, res) => {
     try {
       const sessions = getAllSessions(db)
-      const stale = await Promise.all(sessions.map((s) => computeStale(s, getHead)))
+      // Spawn `gh` only for sessions whose staleness can matter: active ones and
+      // the most recent session per PR (rows are newest-first, so the first one
+      // seen for a `pr_url`). Older closed rounds/days stay `stale: null`.
+      const seenPrs = new Set<string>()
+      const stale = await Promise.all(
+        sessions.map((s) => {
+          const latest = s.pr_url !== null && !seenPrs.has(s.pr_url)
+          if (s.pr_url) seenPrs.add(s.pr_url)
+          return s.status === 'active' || latest
+            ? computeStale(s, getHead)
+            : NO_STALE
+        }),
+      )
       res.json(sessions.map((s, i) => ({ ...enrichSession(db, s), ...stale[i] })))
     } catch (err) {
       console.error('Failed to fetch sessions:', err)
@@ -243,6 +259,10 @@ export function createSessionsRouter(db: Database, deps: SessionsRouterDeps = {}
       }
       res.json({ head_sha: session.head_sha, ...(await computeStale(session, getHead, true)) })
     } catch (err) {
+      if (err instanceof PrHeadLookupError) {
+        res.status(502).json({ error: err.message })
+        return
+      }
       console.error('Failed to check for updates:', err)
       res.status(500).json({ error: 'Failed to check for updates' })
     }

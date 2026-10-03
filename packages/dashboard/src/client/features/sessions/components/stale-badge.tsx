@@ -24,10 +24,10 @@ export function StaleBadge({ session }: StaleBadgeProps) {
   const check = useCheckUpdates(session.id)
 
   const reReview = useCallback(() => {
-    if (!socket || session.pr_number === null) return
-    socket.emit('command:run', { command: `review pr:${session.pr_number}` })
+    if (!socket || !session.pr_url) return
+    socket.emit('command:run', { command: `review ${session.pr_url}` })
     navigate('/')
-  }, [socket, session.pr_number, navigate])
+  }, [socket, session.pr_url, navigate])
 
   if (!session.pr_url) return null
 

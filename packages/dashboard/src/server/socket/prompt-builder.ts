@@ -107,6 +107,16 @@ export const PR_TARGET_ERROR =
   'Invalid PR target. Use pr:<number> (e.g. pr:123) or https://github.com/<owner>/<repo>/pull/<number>.'
 
 /**
+ * Strips the decorations of a PR URL copied from the browser (`/files`,
+ * `/commits`, `/checks`, `?query`, `#fragment`) so the skill receives the
+ * canonical `…/pull/<n>`. Anything that is not such a URL is returned as is.
+ */
+export function normalizePrTarget(target: string): string {
+  const m = /^(https:\/\/github\.com\/[^/\s?#]+\/[^/\s?#]+\/pull\/[1-9]\d*)(?:\/(?:files|commits|checks)?)?(?:[?#]\S*)?$/.exec(target)
+  return m?.[1] ?? target
+}
+
+/**
  * Shape-only check of a review/map target: returns an error message when it
  * looks like a PR target but is malformed, else null. Anything else (branch,
  * commit range, path, free text) is not this function's business. Never
@@ -223,6 +233,7 @@ export function buildPrompt(opts: BuildPromptOptions): {
       }
     }
 
+    target = normalizePrTarget(target)
     targetError = validatePrTarget(target)
 
     const optionsStr = options.length > 0 ? options.join(' ') : 'none'

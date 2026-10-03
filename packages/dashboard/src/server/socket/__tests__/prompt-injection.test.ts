@@ -21,6 +21,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { buildPrompt, escapeUserHeaders } from '../command-runner.js'
+import { shellSplit } from '../prompt-builder.js'
 
 describe('escapeUserHeaders', () => {
   it('escapes a leading H2 header', () => {
@@ -335,7 +336,7 @@ describe('buildPrompt — PR targets', () => {
       localCli: null,
     })
 
-  it.each(['pr:123', 'https://github.com/o/r/pull/123', 'https://github.com/o/r/pull/123/'])(
+  it.each(['pr:123', 'https://github.com/o/r/pull/123'])(
     'forwards %s verbatim with no error',
     (target) => {
       const { prompt, targetError } = build(target)
@@ -343,6 +344,24 @@ describe('buildPrompt — PR targets', () => {
       expect(prompt).toContain(`Target: ${target}`)
     },
   )
+
+  it.each([
+    'https://github.com/o/r/pull/12/',
+    'https://github.com/o/r/pull/12/files',
+    'https://github.com/o/r/pull/12/commits',
+    'https://github.com/o/r/pull/12/checks?check_run_id=9',
+    'https://github.com/o/r/pull/12/files#diff-x',
+    'https://github.com/o/r/pull/12#issuecomment-5',
+    'https://github.com/o/r/pull/12?foo=1',
+  ])('normalizes %s to the canonical PR URL', (target) => {
+    const { prompt, targetError } = build(target)
+    expect(targetError).toBeNull()
+    expect(prompt).toContain('Target: https://github.com/o/r/pull/12\n')
+  })
+
+  it('keeps a PR URL as one token through shellSplit', () => {
+    expect(shellSplit('review https://github.com/o/r/pull/12')).toEqual(['review', 'https://github.com/o/r/pull/12'])
+  })
 
   it.each(['pr:abc', 'pr:', 'pr:0', 'pr:-1', 'pr:1.5', 'PR:abc', 'https://github.com/o/r/pull/abc'])(
     'rejects malformed PR target %s (also for map)',

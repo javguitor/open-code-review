@@ -17,8 +17,6 @@ import { ChatPanel } from '../chat/components/chat-panel'
 import { PostReviewDialog } from './components/post-review-dialog'
 import { AddressFeedbackPopover } from './components/address-feedback-popover'
 import { TerminalHandoffPanel } from '../sessions/components/terminal-handoff-panel'
-import { StaleBadge } from '../sessions/components/stale-badge'
-import { useSession } from '../sessions/hooks/use-sessions'
 
 const ROUND_STATUS_OPTIONS: { value: RoundTriage; labelKey: MessageKey }[] = [
   { value: 'needs_review', labelKey: 'status.needs_review' },
@@ -47,7 +45,6 @@ export function RoundPage() {
   const { data: discourseArtifact } = useArtifact(sessionId ?? '', 'discourse')
 
   const updateStatus = useUpdateRoundStatus()
-  const { data: session } = useSession(sessionId ?? '')
 
   const [showDiscourse, setShowDiscourse] = useState(false)
   const [chatOpen, setChatOpen] = useState(false)
@@ -85,8 +82,6 @@ export function RoundPage() {
         <ArrowLeft className="h-4 w-4" />
         {t('reviews.back_to_session')}
       </Link>
-
-      {session?.pr_url && <StaleBadge session={session} />}
 
       <div className="flex items-start justify-between gap-4">
         <div>
