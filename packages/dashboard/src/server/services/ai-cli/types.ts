@@ -57,12 +57,13 @@ export type NormalizedEvent =
   /** Vendor session id captured from the stream — used for resume bookmarking. */
   | { type: 'session_id'; id: string }
   /**
-   * The agent's turn loop has finished (vendor emitted its terminal result
-   * line) — work is functionally done, emitted BEFORE the process necessarily
-   * exits. The command-runner uses this as the primary finalize trigger so
-   * finalization no longer hinges on stdio EOF (which a leaked grandchild can
-   * hold open forever). `isError` reflects a failed / `error_max_turns` result. */
-  | { type: 'result'; isError: boolean; subtype?: string; pendingSubagents?: number }
+   * `result` ends a turn; a `--print` run may start more turns (background
+   * sub-agent completions arrive as a burst of results followed by a new turn).
+   * The watchdog arms its post-result grace clock on it and disarms on any later
+   * event, so a wedged `close` (leaked grandchild holding the pipe) is still
+   * finalized once nothing follows the latest `result`. `isError` reflects a
+   * failed / `error_max_turns` result. */
+  | { type: 'result'; isError: boolean; subtype?: string }
 
 // ── Stream Events ──
 // What command-runner persists to JSONL and emits via socket. Adds the

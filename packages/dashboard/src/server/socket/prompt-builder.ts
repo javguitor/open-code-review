@@ -181,10 +181,13 @@ export type BuildPromptOptions = {
   localCli: string | null
   /** `verify` only: session and round of the finding (looked up before spawning). */
   verifyTarget?: { sessionId: string; roundNumber: number }
-  /** `--resume` only: the target the resumed session was started with. Used
-   *  when the args carry no explicit target, so the resumed conversation is not
-   *  told the target is "staged changes". */
-  resumeTarget?: string
+  /** `review`/`map` `--resume <workflow-id>`: maps the id this function parses
+   *  to the target the session was started with (undefined = no such session,
+   *  which becomes a `targetError`). Used when the args carry no explicit
+   *  target, so the resumed conversation is not told the target is "staged
+   *  changes". Injected so `buildPrompt` stays pure and `--resume` has a single
+   *  parser. */
+  resolveResumeTarget?: (workflowId: string) => string | undefined
 }
 
 export function buildPrompt(opts: BuildPromptOptions): {
@@ -199,6 +202,7 @@ export function buildPrompt(opts: BuildPromptOptions): {
   // `--resume`, and the result is read after the if/else.
   let resumeWorkflowId = ''
   let targetError: string | null = null
+  let resumeMissing = false
 
   // Final prompt buffer.
   const promptLines: string[] = []
@@ -269,16 +273,25 @@ export function buildPrompt(opts: BuildPromptOptions): {
       }
     }
 
-    if (resumeWorkflowId && !explicitTarget && opts.resumeTarget) target = opts.resumeTarget
+    if (resumeWorkflowId && opts.resolveResumeTarget) {
+      const recorded = opts.resolveResumeTarget(resumeWorkflowId)
+      if (recorded === undefined) {
+        resumeMissing = true
+      } else if (!explicitTarget) {
+        target = recorded
+      }
+    }
     target = normalizePrTarget(target)
-    targetError = validatePrTarget(target)
+    targetError = resumeMissing
+      ? `Session ${resumeWorkflowId} not found - cannot resume`
+      : validatePrTarget(target)
 
     const optionsStr = options.length > 0 ? options.join(' ') : 'none'
     userContentLines.push(
       `Target: ${escapeUserHeaders(target)}`,
       `Options: ${escapeUserHeaders(optionsStr)}`,
     )
-    if (resumeWorkflowId) {
+    if (resumeWorkflowId && !resumeMissing) {
       userContentLines.push(`Resume session: ${escapeUserHeaders(resumeWorkflowId)}`)
     }
     if (team) {
@@ -303,7 +316,7 @@ export function buildPrompt(opts: BuildPromptOptions): {
     `Follow the instructions below to run the OCR ${baseCommand} workflow.`,
   )
 
-  if (resumeWorkflowId) {
+  if (resumeWorkflowId && !resumeMissing) {
     promptLines.push(
       '',
       'This run RESUMES an existing OCR session (see "Resume session" below). Continue it from its',
