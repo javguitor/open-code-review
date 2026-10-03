@@ -21,8 +21,10 @@ import { AiCliService, formatToolDetail, type NormalizedEvent } from '../service
 import { startTrackedExecution } from './execution-tracker.js'
 import {
   decideSubmitState,
+  NEEDS_RECHECK_ERROR,
   ghReviewArgs,
   resolveOwnership,
+  reviewUrlForViewer,
   reviewsApiPath,
   type PrOwnership,
 } from './post-review-state.js'
@@ -90,6 +92,8 @@ async function findPrForBranch(
   return null
 }
 
+const INVALID_SUBMIT_PAYLOAD = { success: false, code: 'invalid-payload', error: 'Invalid payload' } as const
+
 // ── Active generation processes ──
 
 const activeGenerations = new Map<string, ChildProcess>()
@@ -107,15 +111,19 @@ export function registerPostHandlers(
 ): void {
   const runGh = deps.runGh ?? execBinaryAsync
 
-  // Last ownership + URL resolved by post:check-gh, per PR number, for this
-  // socket. post:submit trusts this (not the client) to decide whether approve /
-  // request-changes is allowed, and targets gh at the URL so a fork's default
-  // repo (the parent) is never picked by accident.
-  const checkedPrs = new Map<number, { ownership: PrOwnership; prUrl: string }>()
+  // Ownership, URL and viewer login resolved by the latest post:check-gh, per
+  // PR number, for this socket. post:submit trusts this (not the client) to
+  // decide the review state, and targets gh at the URL so a fork's default
+  // repo (the parent) is never picked by accident. Each check clears it first.
+  const checkedPrs = new Map<
+    number,
+    { ownership: PrOwnership; prUrl: string; viewerLogin: string | null }
+  >()
 
   // ── Check GitHub CLI auth + find PR ──
   socket.on('post:check-gh', async (payload: { sessionId: string }) => {
     try {
+      checkedPrs.clear()
       const { sessionId } = payload ?? {}
       if (typeof sessionId !== 'string') {
         socket.emit('post:gh-result', {
@@ -176,7 +184,7 @@ export function registerPostHandlers(
           console.error('Error resolving gh viewer login:', err)
         }
         const ownership = resolveOwnership(pr.authorLogin, viewerLogin)
-        checkedPrs.set(pr.prNumber, { ownership, prUrl: pr.prUrl })
+        checkedPrs.set(pr.prNumber, { ownership, prUrl: pr.prUrl, viewerLogin })
         socket.emit('post:gh-result', {
           authenticated: true,
           prNumber: pr.prNumber,
@@ -523,8 +531,8 @@ export function registerPostHandlers(
     async (payload: { prNumber: number; content: string; state?: unknown }) => {
       try {
         const { prNumber, content, state: rawState } = payload ?? {}
-        if (typeof prNumber !== 'number' || typeof content !== 'string') {
-          socket.emit('post:submit-result', { success: false, error: 'Invalid payload' })
+        if (!Number.isInteger(prNumber) || prNumber <= 0 || typeof content !== 'string') {
+          socket.emit('post:submit-result', INVALID_SUBMIT_PAYLOAD)
           return
         }
 
@@ -532,14 +540,19 @@ export function registerPostHandlers(
         const requested: GitHubReviewState | null =
           rawState === undefined ? 'comment' : isGitHubReviewState(rawState) ? rawState : null
         if (requested === null) {
-          socket.emit('post:submit-result', { success: false, error: 'Invalid payload' })
+          socket.emit('post:submit-result', INVALID_SUBMIT_PAYLOAD)
           return
         }
 
         const checked = checkedPrs.get(prNumber)
         const decision = decideSubmitState(requested, checked?.ownership)
-        if (!decision.ok) {
-          socket.emit('post:submit-result', { success: false, error: decision.error })
+        if (!decision.ok || !checked) {
+          socket.emit('post:submit-result', {
+            success: false,
+            code: 'needs-recheck',
+            // `checked` is always set when the decision is ok; the guard narrows it.
+            error: decision.ok ? NEEDS_RECHECK_ERROR : decision.error,
+          })
           return
         }
         const { state, downgraded } = decision
@@ -567,7 +580,7 @@ export function registerPostHandlers(
         try {
           await runGh(
             'gh',
-            ghReviewArgs(checked?.prUrl ?? String(prNumber), state, tmpFile),
+            ghReviewArgs(checked.prUrl, state, tmpFile),
             { env: childEnv().env, cwd: repoRoot, encoding: 'utf-8' },
           )
 
@@ -575,21 +588,20 @@ export function registerPostHandlers(
           // best-effort. A failure here never turns the post into a failure.
           let urlMatch: string | null = null
           try {
-            const apiPath = checked ? reviewsApiPath(checked.prUrl) : null
+            const apiPath = reviewsApiPath(checked.prUrl)
             if (apiPath) {
               const { stdout } = await runGh(
                 'gh',
-                ['api', apiPath, '--jq', '.[-1].html_url'],
+                ['api', '--paginate', '--slurp', apiPath],
                 { env: childEnv().env, cwd: repoRoot, encoding: 'utf-8' },
               )
-              const url = stdout.trim()
-              urlMatch = url.startsWith('https://') ? url : null
+              urlMatch = reviewUrlForViewer(stdout, checked.viewerLogin)
             }
           } catch { /* link is optional */ }
 
           tracker.appendOutput(`✓ Posted to PR #${prNumber}${urlMatch ? ` — ${urlMatch}` : ''}\n`)
           tracker.finish(0)
-          socket.emit('post:submit-result', { success: true, commentUrl: urlMatch })
+          socket.emit('post:submit-result', { success: true, commentUrl: urlMatch, state, downgraded })
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : 'Unknown error'
           tracker.appendOutput(`✗ ${errMsg}\n`)

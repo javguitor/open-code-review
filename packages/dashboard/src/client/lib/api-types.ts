@@ -1,3 +1,4 @@
+import type { GitHubReviewState } from '@open-code-review/platform/verdict'
 import type { SessionStatus, WorkflowType, FindingTriage, FindingSeverity, ChatTargetType, RoundTriage, PostReviewStep } from '../../shared/types'
 
 export type { SessionStatus, WorkflowType, FindingTriage, FindingSeverity, ChatTargetType, RoundTriage, PostReviewStep }
@@ -345,3 +346,7 @@ export type PostCheckResult = {
   ownership: PrOwnership
   error?: string
 }
+
+export type PostSubmitResult =
+  | { success: true; commentUrl: string | null; state: GitHubReviewState; downgraded: boolean }
+  | { success: false; error: string; code?: 'needs-recheck' | 'invalid-payload' }

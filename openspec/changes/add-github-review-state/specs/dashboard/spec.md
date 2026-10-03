@@ -44,6 +44,19 @@ SHALL never post without an explicit confirmation click.
 - **AND** a "Re-check" control re-emits `post:check-gh`
 - **AND** the two states become selectable only after a result with `ownership: "other"`
 
+#### Scenario: Re-check keeps the user's place and selection
+
+- **GIVEN** the dialog is in the `preview` step with a manually selected state
+- **WHEN** the user clicks "Re-check" and `post:gh-result` arrives with ownership `other`
+- **THEN** the dialog stays in `preview` and the selected state is kept
+- **AND** the selected state is reset to the verdict-derived default only when it is no longer selectable under the new ownership
+
+#### Scenario: Needs-recheck error shows Re-check in place
+
+- **GIVEN** `post:submit-result` arrives with `code: "needs-recheck"`
+- **WHEN** the dialog renders
+- **THEN** it stays in its current step, shows the error text, and renders the "Re-check" control regardless of the last known ownership
+
 #### Scenario: Selector resets with the dialog
 
 - **WHEN** the dialog is closed or "Done" is clicked
@@ -82,9 +95,28 @@ round detail page, using the GitHub CLI (`gh pr review`).
 
 #### Scenario: Missing state defaults to comment
 
-- **GIVEN** a `post:submit` payload without a `state` field
+- **GIVEN** a `post:submit` payload without a `state` field for a PR this socket has checked
 - **WHEN** the server handles it
 - **THEN** the review is submitted with `--comment`
+
+#### Scenario: Unchecked PR is rejected for every state
+
+- **GIVEN** a `post:submit` payload for a PR number that this socket has not resolved via `post:check-gh` (never checked, or the socket reconnected)
+- **WHEN** the server handles it, whatever the `state`
+- **THEN** it emits `post:submit-result` with `{ success: false, code: "needs-recheck", error }` and runs no `gh` command
+- **AND** the PR is never targeted by a bare number — only by the URL stored at check time
+
+#### Scenario: PR number must be a positive integer
+
+- **GIVEN** a `post:submit` payload whose `prNumber` is not a positive integer (e.g. `-1`, `1.5`)
+- **WHEN** the server handles it
+- **THEN** it emits `post:submit-result` with `{ success: false, code: "invalid-payload", error: "Invalid payload" }` and runs no `gh` command
+
+#### Scenario: Submit result reports the effective state
+
+- **WHEN** a review is submitted successfully
+- **THEN** `post:submit-result` carries `{ success: true, commentUrl, state, downgraded }` where `state` is the state actually sent and `downgraded` is true when the server replaced the requested state with `comment`
+- **AND** the dialog's success step says "Posted as comment" when `downgraded` is true
 
 #### Scenario: Invalid state is rejected
 
@@ -100,9 +132,14 @@ round detail page, using the GitHub CLI (`gh pr review`).
 
 #### Scenario: Server refuses to approve with unknown ownership
 
-- **GIVEN** the last ownership check for that PR number returned `unknown`, or no check was made
+- **GIVEN** the last ownership check for that PR number returned `unknown`
 - **WHEN** a `post:submit` payload carries `approve` or `request-changes`
-- **THEN** the server emits `post:submit-result` with `success: false` and an error asking to re-check GitHub, and runs no `gh` command
+- **THEN** the server emits `post:submit-result` with `{ success: false, code: "needs-recheck", error }` and runs no `gh` command
+
+#### Scenario: Each check replaces the socket's remembered PRs
+
+- **WHEN** `post:check-gh` runs
+- **THEN** the socket's remembered PR entries are cleared before the new result is stored, so a later check that finds no PR or fails auth leaves nothing to submit against
 
 #### Scenario: Execution tracking records the state
 
@@ -114,6 +151,7 @@ round detail page, using the GitHub CLI (`gh pr review`).
 - **GIVEN** the review was posted successfully
 - **WHEN** the `post:submit-result` event arrives with `success: true`
 - **THEN** the dialog shows a success state with a link to the review when `commentUrl` is present, otherwise to the PR URL
+- **AND** `commentUrl` is the URL of the review the authenticated user just submitted: the server lists the PR's reviews with `gh api --paginate` and takes the last one whose `user.login` equals the viewer login resolved at check time (`null` on any failure)
 
 #### Scenario: GitHub CLI not authenticated
 

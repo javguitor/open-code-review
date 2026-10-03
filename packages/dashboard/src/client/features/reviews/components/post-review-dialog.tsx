@@ -92,6 +92,7 @@ export function PostReviewDialog({
     elapsedSeconds,
     postResult,
     error,
+    needsRecheck,
     reviewState,
     setReviewState,
     recheck,
@@ -167,6 +168,7 @@ export function PostReviewDialog({
   };
 
   const prNumber = checkResult?.prNumber ?? 0;
+  const posted = postResult?.success ? postResult : null;
 
   const ownership = checkResult?.ownership;
   const reason = lockReason(ownership);
@@ -195,12 +197,14 @@ export function PostReviewDialog({
           </button>
         ))}
       </div>
-      {(reason || (verdict && ownership === "other")) && (
+      {(reason || needsRecheck || (verdict && ownership === "other")) && (
         <p className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
           <span>
-            {reason ?? `Suggested from the round verdict: ${verdict}`}
+            {needsRecheck && error
+              ? error
+              : (reason ?? `Suggested from the round verdict: ${verdict}`)}
           </span>
-          {ownership === "unknown" && (
+          {(ownership === "unknown" || needsRecheck) && (
             <button
               type="button"
               onClick={recheck}
@@ -288,7 +292,7 @@ export function PostReviewDialog({
                   <div className="grid gap-3 sm:grid-cols-2">
                     {/* Post team review directly */}
                     <button
-                      onClick={() => submitToGitHub(prNumber, finalContent)}
+                      onClick={() => submitToGitHub(prNumber, finalContent, reviewState)}
                       className="group rounded-lg border border-zinc-200 p-4 text-left transition-colors hover:border-blue-300 hover:bg-blue-50/50 dark:border-zinc-700 dark:hover:border-blue-700 dark:hover:bg-blue-950/20"
                     >
                       <div className="mb-2 flex items-center gap-2">
@@ -501,14 +505,20 @@ export function PostReviewDialog({
                   <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                     Review posted to GitHub
                   </p>
-                  {(postResult?.commentUrl ?? checkResult?.prUrl) && (
+                  {posted?.downgraded && (
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      Posted as comment — GitHub does not allow approving or
+                      requesting changes on your own pull request.
+                    </p>
+                  )}
+                  {(posted?.commentUrl ?? checkResult?.prUrl) && (
                     <a
-                      href={postResult?.commentUrl ?? checkResult?.prUrl ?? undefined}
+                      href={posted?.commentUrl ?? checkResult?.prUrl ?? undefined}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
                     >
-                      {postResult?.commentUrl ? "View review" : "View pull request"}
+                      {posted?.commentUrl ? "View review" : "View pull request"}
                       <ExternalLink className="h-3.5 w-3.5" />
                     </a>
                   )}
@@ -575,7 +585,7 @@ export function PostReviewDialog({
                     onClick={() => {
                       const content = getPostContent();
                       saveDraft(sessionId, roundNumber, content);
-                      submitToGitHub(prNumber, content);
+                      submitToGitHub(prNumber, content, reviewState);
                     }}
                     className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
                   >
