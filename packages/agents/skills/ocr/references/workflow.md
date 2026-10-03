@@ -319,7 +319,7 @@ See `references/context-discovery.md` for detailed algorithm.
    - Staged changes: `git diff --cached`
    - Unstaged changes: `git diff`
    - Commit range: `git diff {range}`
-   - PR (`pr:<n>` or a PR URL): already resolved in Phase 0 (`references/pr-target.md`); `git diff <remote>/<base>...refs/ocr/pr/<n>` — run in the main checkout
+   - PR (`pr:<n>` or a PR URL): already resolved in Phase 0 (`references/pr-target.md`); `git diff origin/<base>...refs/ocr/pr/<n>` — run in the main checkout
 
 2. Gather supporting context:
    ```bash

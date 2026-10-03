@@ -192,7 +192,7 @@ code-review-map:
    | Specific commit | `git diff {commit}^ {commit} --name-only` |
    | Commit range | `git diff {from}..{to} --name-only` |
    | Branch vs main | `git diff main...{branch} --name-only` |
-   | PR (`pr:<n>` or URL) | already resolved in Phase 0 (`references/pr-target.md`); `git diff {remote}/{base}...refs/ocr/pr/{n} --name-only` (session id `{date}-pr-{n}`; pass `{code_root}` to map agents) |
+   | PR (`pr:<n>` or URL) | already resolved in Phase 0 (`references/pr-target.md`); `git diff origin/{base}...refs/ocr/pr/{n} --name-only` (session id `{date}-pr-{n}`; pass `{code_root}` to map agents) |
 
    ```bash
    # Default: staged changes

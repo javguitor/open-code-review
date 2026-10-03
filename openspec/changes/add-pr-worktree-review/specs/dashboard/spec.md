@@ -24,7 +24,8 @@ The dashboard SHALL show when a PR-targeted session no longer matches the PR's c
 
 - **GIVEN** a session with `head_sha` and `pr_url`
 - **WHEN** the PR's current `headRefOid` differs from `head_sha`
-- **THEN** the session card and round page show "Stale — PR moved to <sha7>"
+- **THEN** the session card and session detail show "Stale — PR moved to <sha7>"
+- **AND** round pages show no stale indicator
 
 #### Scenario: Not applicable
 
@@ -36,7 +37,7 @@ The dashboard SHALL show when a PR-targeted session no longer matches the PR's c
 
 - **WHEN** the user clicks "Check for updates"
 - **THEN** the server refreshes the PR head (bypassing its cache) and updates the badge
-- **AND** "Re-review" runs the review command with `pr:<n>`, which creates the next round in the same worktree
+- **AND** "Re-review" runs the review command with the session's stored `pr_url` (never a bare number), which creates the next round in the same worktree
 
 #### Scenario: Decisions survive a re-review
 

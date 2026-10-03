@@ -41,7 +41,7 @@ Trace dependencies for these files:
 
 {code_root} — (Omit this section when the code root is the checkout.)
 
-The code under review lives at `{code_root}`. Trace dependencies by reading files under that path; `cd` there only to run commands.
+The code under review lives at `{code_root}`. Trace dependencies by reading files under that path; `cd` there only to run commands. Run `ocr` commands only from the main checkout, never from the worktree (it carries the PR's own `.ocr/`).
 
 ## Language
 
@@ -139,7 +139,7 @@ When spawning a Requirements Mapper, provide the following context:
 
 {code_root} — (Omit this section when the code root is the checkout.)
 
-The code under review lives at `{code_root}`. Verify coverage claims by reading files under that path.
+The code under review lives at `{code_root}`. Verify coverage claims by reading files under that path. Run `ocr` commands only from the main checkout, never with the working directory in the worktree (it carries the PR's own `.ocr/`).
 
 ## Language
 
