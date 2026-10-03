@@ -180,10 +180,10 @@ const NO_STALE: PrStale = { stale: null, pr_head_sha: null }
 async function computeStale(
   session: SessionRow,
   getHead: typeof getPrHead,
-  force = false,
+  opts: { force?: boolean; cacheOnly?: boolean } = {},
 ): Promise<PrStale> {
   if (!session.pr_url || !session.head_sha) return NO_STALE
-  const current = await getHead(session.pr_url, { force })
+  const current = await getHead(session.pr_url, opts)
   return { stale: current === null ? null : current !== session.head_sha, pr_head_sha: current }
 }
 
@@ -210,18 +210,13 @@ export function createSessionsRouter(db: Database, deps: SessionsRouterDeps = {}
   router.get('/', async (_req, res) => {
     try {
       const sessions = getAllSessions(db)
-      // Spawn `gh` only for sessions whose staleness can matter: active ones and
-      // the most recent session per PR (rows are newest-first, so the first one
-      // seen for a `pr_url`). Older closed rounds/days stay `stale: null`.
-      const seenPrs = new Set<string>()
+      // Spawn `gh` only for active sessions; every other PR session is served
+      // from the cache (possibly stale, possibly absent) so a list render never
+      // fans out one `gh` per historical round.
       const stale = await Promise.all(
-        sessions.map((s) => {
-          const latest = s.pr_url !== null && !seenPrs.has(s.pr_url)
-          if (s.pr_url) seenPrs.add(s.pr_url)
-          return s.status === 'active' || latest
-            ? computeStale(s, getHead)
-            : NO_STALE
-        }),
+        sessions.map((s) =>
+          computeStale(s, getHead, s.status === 'active' ? {} : { cacheOnly: true }),
+        ),
       )
       res.json(sessions.map((s, i) => ({ ...enrichSession(db, s), ...stale[i] })))
     } catch (err) {
@@ -257,7 +252,7 @@ export function createSessionsRouter(db: Database, deps: SessionsRouterDeps = {}
         res.status(404).json({ error: 'Session not found' })
         return
       }
-      res.json({ head_sha: session.head_sha, ...(await computeStale(session, getHead, true)) })
+      res.json({ head_sha: session.head_sha, ...(await computeStale(session, getHead, { force: true })) })
     } catch (err) {
       if (err instanceof PrHeadLookupError) {
         res.status(502).json({ error: err.message })

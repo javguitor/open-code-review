@@ -99,7 +99,8 @@ export function escapeUserHeaders(value: string): string {
 }
 
 /** Accepted PR target forms: `pr:<n>` or `https://github.com/<owner>/<repo>/pull/<n>`. */
-const PR_TARGET_SHAPE = /^(?:pr:[1-9]\d*|https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/[1-9]\d*\/?)$/
+const PR_TARGET_SHAPE = /^(?:pr:[1-9]\d*|https:\/\/github\.com\/[A-Za-z0-9-]+\/[A-Za-z0-9._-]+\/pull\/[1-9]\d*\/?)$/
+/** Intent is deliberately broader than the shape (any charset), so a hostile owner/repo is an error, not free text. */
 /** A target that is *trying* to be a PR target (so a malformed one is an error, not free text). */
 const PR_TARGET_INTENT = /^(?:pr:|https?:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/)/i
 
@@ -112,7 +113,7 @@ export const PR_TARGET_ERROR =
  * canonical `…/pull/<n>`. Anything that is not such a URL is returned as is.
  */
 export function normalizePrTarget(target: string): string {
-  const m = /^(https:\/\/github\.com\/[^/\s?#]+\/[^/\s?#]+\/pull\/[1-9]\d*)(?:\/(?:files|commits|checks)?)?(?:[?#]\S*)?$/.exec(target)
+  const m = /^(https:\/\/github\.com\/[A-Za-z0-9-]+\/[A-Za-z0-9._-]+\/pull\/[1-9]\d*)(?:\/(?:files|commits|checks)?)?(?:[?#]\S*)?$/.exec(target)
   return m?.[1] ?? target
 }
 

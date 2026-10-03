@@ -111,19 +111,32 @@ describe('GET /api/sessions — stale', () => {
 })
 
 describe('GET /api/sessions — which sessions spawn gh', () => {
-  it('looks up active sessions and the latest session per PR, not older closed ones', async () => {
-    insert('old-closed', { pr_url: PR_URL, head_sha: 'a', pr_number: 7, status: 'closed', updated_at: '2026-01-01 00:00:00' })
-    insert('new-closed', { pr_url: PR_URL, head_sha: 'a', pr_number: 7, status: 'closed', updated_at: '2026-01-03 00:00:00' })
-    insert('other-active', { pr_url: 'https://github.com/o/r/pull/9', head_sha: 'a', pr_number: 9, updated_at: '2026-01-02 00:00:00' })
-    heads.set(PR_URL, 'b')
-    heads.set('https://github.com/o/r/pull/9', 'a')
-    const { body } = await api('GET', '')
-    expect(Object.fromEntries(body.map((s: any) => [s.id, s.stale]))).toEqual({
-      'old-closed': null,
-      'new-closed': true,
-      'other-active': false,
-    })
-    expect(headCalls.map((c) => c.url).sort()).toEqual([PR_URL, 'https://github.com/o/r/pull/9'])
+  const ghRunner = (sha: string, calls: string[][]) =>
+    (async (_bin: string, args: string[]) => {
+      calls.push(args)
+      return { stdout: JSON.stringify({ headRefOid: sha }), stderr: '' }
+    }) as unknown as typeof realGh
+
+  it('does not spawn gh for a closed session but serves its stale badge from a primed cache', async () => {
+    insert('closed', { pr_url: PR_URL, head_sha: 'a', pr_number: 7, status: 'closed' })
+    const calls: string[][] = []
+    realGh = ghRunner('b', calls)
+    const cold = (await api('GET', '')).body[0]
+    expect(cold).toMatchObject({ stale: null, pr_head_sha: null })
+    expect(calls).toHaveLength(0)
+    await api('POST', '/closed/check-updates')
+    expect(calls).toHaveLength(1)
+    const warm = (await api('GET', '')).body[0]
+    expect(warm).toMatchObject({ stale: true, pr_head_sha: 'b' })
+    expect(calls).toHaveLength(1)
+  })
+
+  it('spawns gh for an active session', async () => {
+    insert('live', { pr_url: PR_URL, head_sha: 'a', pr_number: 7 })
+    const calls: string[][] = []
+    realGh = ghRunner('b', calls)
+    expect((await api('GET', '')).body[0]).toMatchObject({ stale: true, pr_head_sha: 'b' })
+    expect(calls).toHaveLength(1)
   })
 })
 

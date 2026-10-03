@@ -37,6 +37,8 @@ export class PrHeadLookupError extends Error {
 export type GetPrHeadOptions = {
   /** Bypass (and refresh) the cache; a failed lookup throws `PrHeadLookupError`. */
   force?: boolean
+  /** Never spawn `gh`: return the cached head (however old) or `null`. */
+  cacheOnly?: boolean
   runGh?: RunGh
   /** Clock override for tests. */
   now?: () => number
@@ -56,20 +58,28 @@ async function lookup(prUrl: string, runGh: RunGh, now: number): Promise<string>
   } catch (err) {
     cache.set(prUrl, { sha: cache.get(prUrl)?.sha ?? null, at: now })
     throw new PrHeadLookupError(prUrl, err)
-  } finally {
-    inflight.delete(prUrl)
   }
 }
 
 export async function getPrHead(prUrl: string, opts: GetPrHeadOptions = {}): Promise<string | null> {
   const now = (opts.now ?? Date.now)()
   const hit = cache.get(prUrl)
+  if (opts.cacheOnly) return hit?.sha ?? null
   if (!opts.force && hit && now - hit.at < PR_HEAD_TTL_MS) return hit.sha
 
   let pending = inflight.get(prUrl)
   if (!pending) {
-    pending = lookup(prUrl, opts.runGh ?? execBinaryAsync, now)
-    inflight.set(prUrl, pending)
+    // `lookup` is async, so even a synchronously throwing runner yields a
+    // rejected promise. The registrant owns the cleanup: it must outlive the
+    // `inflight.set` below, or a settled-before-set entry would stick forever.
+    const created: Promise<string> = lookup(prUrl, opts.runGh ?? execBinaryAsync, now)
+    pending = created
+    inflight.set(prUrl, created)
+    created
+      .finally(() => {
+        if (inflight.get(prUrl) === created) inflight.delete(prUrl)
+      })
+      .catch(() => {}) // callers handle the rejection; this chain must not leak it
   }
   try {
     return await pending

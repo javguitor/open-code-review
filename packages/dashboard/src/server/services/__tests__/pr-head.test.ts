@@ -103,4 +103,27 @@ describe('getPrHead', () => {
     expect(await getPrHead(URL_1, opts)).toBe('good')
     expect(gh.calls).toHaveLength(2)
   })
+
+  it('cacheOnly never spawns gh: returns the cached head even past the TTL, else null', async () => {
+    const gh = fakeGh([head('cached')])
+    let t = 1_000
+    expect(await getPrHead(URL_1, { runGh: gh.runGh, cacheOnly: true, now: () => t })).toBeNull()
+    expect(await getPrHead(URL_1, { runGh: gh.runGh, now: () => t })).toBe('cached')
+    t += PR_HEAD_TTL_MS * 10
+    expect(await getPrHead(URL_1, { runGh: gh.runGh, cacheOnly: true, now: () => t })).toBe('cached')
+    expect(gh.calls).toHaveLength(1)
+  })
+
+  it('a synchronously throwing runner does not poison the next call', async () => {
+    let calls = 0
+    const throwing = (() => {
+      calls++
+      throw new Error('spawn blew up')
+    }) as unknown as typeof execBinaryAsync
+    await expect(getPrHead(URL_1, { runGh: throwing, force: true })).rejects.toBeInstanceOf(PrHeadLookupError)
+    await expect(getPrHead(URL_1, { runGh: throwing, force: true })).rejects.toBeInstanceOf(PrHeadLookupError)
+    expect(calls).toBe(2)
+    const gh = fakeGh([head('ok')])
+    expect(await getPrHead(URL_1, { runGh: gh.runGh, force: true })).toBe('ok')
+  })
 })

@@ -371,6 +371,22 @@ describe('buildPrompt — PR targets', () => {
     },
   )
 
+  it.each([
+    'https://github.com/$(touch${IFS}x)/r/pull/1',
+    'https://github.com/o/$(id)/pull/1',
+    'https://github.com/o/`id`/pull/1',
+    'https://github.com/o"x/r/pull/1',
+    "https://github.com/o/r'x/pull/1",
+    'https://github.com/o_x/r/pull/1',
+  ])('rejects shell-metacharacter PR URL %s (also for map)', (target) => {
+    expect(build(target).targetError).toMatch(/pr:<number>/)
+    expect(build(target, 'map').targetError).toMatch(/pr:<number>/)
+  })
+
+  it.each(['https://github.com/my-org/repo.name_x-1/pull/4'])('accepts GitHub-charset PR URL %s', (target) => {
+    expect(build(target).targetError).toBeNull()
+  })
+
   it.each(['staged', 'feat/x', 'main..HEAD', 'src/pr:abc.ts', 'https://github.com/o/r/issues/3', 'review the PR'])(
     'leaves non-PR target %s alone',
     (target) => {
