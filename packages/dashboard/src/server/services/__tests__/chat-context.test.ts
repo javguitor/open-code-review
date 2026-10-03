@@ -57,3 +57,14 @@ describe('buildChatContext proposals', () => {
     expect(buildChatContext(ocrDir, { type: 'review_round', sessionId: 's1', roundNumber: 1 })).not.toContain('ocr-proposal')
   })
 })
+
+describe('buildChatContext synthesized proposals', () => {
+  it('lists synthesized ids with their S-key and tells the model reviewer findings are not addressable', () => {
+    const ctx = buildChatContext('/nonexistent-ocr-dir', { type: 'review_round', sessionId: 's1', roundNumber: 1 }, undefined, [
+      { id: 3, key: 'S1', title: 'Merged\nclaim' },
+    ])
+    expect(ctx).toContain('- 3 (S1): Merged claim')
+    expect(ctx).toContain('SYNTHESIZED findings')
+    expect(ctx).toContain('reviewer findings cannot be proposed on')
+  })
+})

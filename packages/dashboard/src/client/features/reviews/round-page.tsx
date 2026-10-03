@@ -24,6 +24,7 @@ import { takeChatPrefill } from '../chat/prefill'
 import type { ProposalFindingInfo } from '../chat/types'
 import { currentStatus } from './decisions'
 import { isLive, liveCount } from '../../lib/live-findings'
+import { displayCounts, findingsKindOf, showCountedPerRow } from '../../lib/round-kind'
 import { PostReviewDialog } from './components/post-review-dialog'
 import { AddressFeedbackPopover } from './components/address-feedback-popover'
 import { TerminalHandoffPanel } from '../sessions/components/terminal-handoff-panel'
@@ -126,11 +127,7 @@ export function RoundPage() {
 
   // Current (possibly revised) counts; the synthesis columns are the fallback
   // for rounds the server could not recount.
-  const counts = round.current_counts ?? {
-    blockers: round.blocker_count,
-    should_fix: round.should_fix_count,
-    suggestions: round.suggestion_count,
-  }
+  const counts = displayCounts(round)
 
   const showAfterDecisions =
     !!round.verdict_after_decisions &&
@@ -265,10 +262,10 @@ export function RoundPage() {
       )}
       {round.verdict && (
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          {t('reviews.counts_per_row')}
+          {showCountedPerRow(round) && t('reviews.counts_per_row')}
           {round.current_counts && (
             <>
-              {' '}
+              {showCountedPerRow(round) && ' '}
               {t('reviews.synthesis_counts', {
                 blockers: round.blocker_count,
                 should_fix: round.should_fix_count,
@@ -370,6 +367,7 @@ export function RoundPage() {
           onClose={() => setChatOpen(false)}
           initialInput={chatPrefill}
           findings={proposalFindings}
+          findingsKind={findingsKindOf(round)}
         />
       )}
     </div>

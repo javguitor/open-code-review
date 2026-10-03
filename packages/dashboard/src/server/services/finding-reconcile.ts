@@ -10,7 +10,7 @@
  * revisions is retired (`retired_at`), not reassigned.
  */
 
-import type { Database } from '@open-code-review/persistence'
+import type { Database, SynthesisLocation } from '@open-code-review/persistence'
 import { FINAL_DECISIONS } from '@open-code-review/persistence/finding-rules'
 
 export type IncomingFinding = {
@@ -49,7 +49,7 @@ function norm(s: string): string {
 }
 
 /** `./src/a.ts` and `src/a.ts` are the same file. */
-const normPath = (p: string | null): string => (p ?? '').replace(/^(\.\/)+/, '')
+export const normPath = (p: string | null): string => (p ?? '').replace(/^(\.\/)+/, '')
 
 const strongKey = (title: string, file: string | null, line: number | null): string =>
   `${norm(title)}|${normPath(file)}|${line ?? ''}`
@@ -142,9 +142,11 @@ export function reconcileFindings(
   outputId: number,
   incoming: IncomingFinding[],
   sqlNow: string,
-): void {
+): number[] {
   const existing = loadExisting(db, outputId)
   const matches = matchRows(existing, incoming)
+  /** Row id of each incoming finding, by incoming index (synthesized sources point at these). */
+  const ids: number[] = []
 
   incoming.forEach((f, i) => {
     const flagged = f.flaggedBy === undefined ? null : JSON.stringify(f.flaggedBy)
@@ -157,8 +159,10 @@ export function reconcileFindings(
         [outputId, f.title, f.severity, f.category, f.filePath, f.lineStart, f.lineEnd, f.summary,
          f.isBlocker ? 1 : 0, flagged, f.evidence ?? null, sqlNow],
       )
+      ids[i] = lastInsertId(db)
       return
     }
+    ids[i] = row.id
     db.run(
       `UPDATE review_findings SET
          title = ?, file_path = ?, line_start = ?, line_end = ?, summary = ?, parsed_at = ?, retired_at = NULL,
@@ -185,4 +189,142 @@ export function reconcileFindings(
       db.run('DELETE FROM review_findings WHERE id = ?', [e.id])
     }
   }
+  return ids
+}
+
+function lastInsertId(db: Database): number {
+  return db.exec('SELECT last_insert_rowid()')[0]?.values[0]?.[0] as number
+}
+
+// ── Synthesized findings ──
+
+export type IncomingSynthesisFinding = {
+  /** `^S[0-9]+$`, unique within the round. */
+  key: string
+  title: string
+  severity: string
+  category: string | null
+  /** Primary location first; empty when the synthesis gave none. */
+  locations: SynthesisLocation[]
+  summary: string | null
+  flaggedBy?: string[]
+  evidence?: string
+  /** `review_findings.id` of every reviewer finding this one merges. */
+  sourceFindingIds: number[]
+}
+
+type ExistingSynthesis = {
+  id: number
+  key: string
+  filePath: string | null
+  revisedSeverity: boolean
+  revisedCategory: boolean
+  /** Same rule as `ExistingRow.hasHistory`, over the synthesis decision / revision tables. */
+  hasHistory: boolean
+}
+
+function loadExistingSynthesis(db: Database, roundId: number): ExistingSynthesis[] {
+  const res = db.exec(
+    `SELECT sf.id, sf.key, sf.file_path,
+            EXISTS (SELECT 1 FROM synthesis_finding_revisions r WHERE r.synthesis_finding_id = sf.id AND r.field = 'severity'),
+            EXISTS (SELECT 1 FROM synthesis_finding_revisions r WHERE r.synthesis_finding_id = sf.id AND r.field = 'category'),
+            EXISTS (SELECT 1 FROM synthesis_finding_revisions r WHERE r.synthesis_finding_id = sf.id AND r.field != 'status')
+              OR EXISTS (SELECT 1 FROM synthesis_finding_decisions d
+                         WHERE d.synthesis_finding_id = sf.id AND d.status IN (${FINAL_DECISIONS.map(() => '?').join(', ')}))
+     FROM synthesis_findings sf WHERE sf.round_id = ? AND sf.retired_at IS NULL ORDER BY sf.id`,
+    [...FINAL_DECISIONS, roundId],
+  )
+  return (res[0]?.values ?? []).map((r) => ({
+    id: r[0] as number,
+    key: r[1] as string,
+    filePath: r[2] as string | null,
+    revisedSeverity: r[3] === 1,
+    revisedCategory: r[4] === 1,
+    hasHistory: r[5] === 1,
+  }))
+}
+
+/**
+ * Bring the synthesized findings of `roundId` in line with `incoming`, with the
+ * same invariant as `reconcileFindings`: human state never moves to another
+ * finding. Identity is `key` + normalized primary file, over LIVE rows only (a
+ * re-synthesis that renumbers `S2`/`S3` matches nothing, so no decision follows
+ * the number). Matched rows are updated in place; unmatched live rows are retired
+ * when they carry a final decision or non-status revisions, deleted otherwise;
+ * unmatched incoming rows are inserted. Retire/delete runs BEFORE the inserts so a
+ * reused `key` never meets its predecessor in the live-key unique index. Source
+ * links are derived data: rebuilt for every kept row, dropped for retired ones.
+ */
+export function reconcileSynthesisFindings(
+  db: Database,
+  roundId: number,
+  incoming: IncomingSynthesisFinding[],
+  sqlNow: string,
+): void {
+  const existing = loadExistingSynthesis(db, roundId)
+  const identity = (key: string, file: string | null): string => `${key}|${normPath(file)}`
+  const byIdentity = new Map(existing.map((e) => [identity(e.key, e.filePath), e]))
+  const matches = new Map<number, ExistingSynthesis>()
+  incoming.forEach((f, i) => {
+    const row = byIdentity.get(identity(f.key, f.locations[0]?.file_path ?? null))
+    if (row) matches.set(i, row)
+  })
+
+  const kept = new Set([...matches.values()].map((r) => r.id))
+  for (const e of existing) {
+    if (kept.has(e.id)) continue
+    db.run('DELETE FROM synthesis_finding_sources WHERE synthesis_finding_id = ?', [e.id])
+    if (e.hasHistory) {
+      db.run('UPDATE synthesis_findings SET retired_at = COALESCE(retired_at, ?) WHERE id = ?', [sqlNow, e.id])
+    } else {
+      db.run('DELETE FROM synthesis_findings WHERE id = ?', [e.id])
+    }
+  }
+
+  incoming.forEach((f, i) => {
+    let rowId: number
+    const primary = f.locations[0]
+    const locations = f.locations.length > 0 ? JSON.stringify(f.locations) : null
+    const flagged = f.flaggedBy === undefined ? null : JSON.stringify(f.flaggedBy)
+    const row = matches.get(i)
+    if (!row) {
+      db.run(
+        `INSERT INTO synthesis_findings
+           (round_id, key, title, severity, category, file_path, line_start, line_end, locations_json,
+            summary, evidence, flagged_by, is_blocker, parsed_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [roundId, f.key, f.title, f.severity, f.category, primary?.file_path ?? null, primary?.line_start ?? null,
+         primary?.line_end ?? null, locations, f.summary, f.evidence ?? null, flagged,
+         f.category === 'blocker' ? 1 : 0, sqlNow],
+      )
+      rowId = lastInsertId(db)
+    } else {
+      rowId = row.id
+      // A revised severity / category (and the is_blocker it implies) is the user's current value: kept.
+      db.run(
+        `UPDATE synthesis_findings SET
+           title = ?, file_path = ?, line_start = ?, line_end = ?, locations_json = ?, summary = ?,
+           parsed_at = ?,
+           severity = CASE WHEN ? THEN severity ELSE ? END,
+           category = CASE WHEN ? OR ? IS NULL THEN category ELSE ? END,
+           is_blocker = CASE WHEN ? THEN is_blocker ELSE ? END,
+           flagged_by = COALESCE(?, flagged_by),
+           evidence = COALESCE(?, evidence)
+         WHERE id = ?`,
+        [f.title, primary?.file_path ?? null, primary?.line_start ?? null, primary?.line_end ?? null, locations,
+         f.summary, sqlNow,
+         row.revisedSeverity ? 1 : 0, f.severity,
+         row.revisedCategory ? 1 : 0, f.category, f.category,
+         row.revisedCategory ? 1 : 0, f.category === 'blocker' ? 1 : 0,
+         flagged, f.evidence ?? null, row.id],
+      )
+    }
+    db.run('DELETE FROM synthesis_finding_sources WHERE synthesis_finding_id = ?', [rowId])
+    for (const findingId of new Set(f.sourceFindingIds)) {
+      db.run(
+        'INSERT OR IGNORE INTO synthesis_finding_sources (synthesis_finding_id, finding_id) VALUES (?, ?)',
+        [rowId, findingId],
+      )
+    }
+  })
 }

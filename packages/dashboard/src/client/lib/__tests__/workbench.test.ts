@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { DiffFile, DiffLine, FindingView } from '../api-types'
+import type { DiffFile, DiffLine, FindingView, ReviewerFindingView } from '../api-types'
 import {
   GENERAL_KEY,
   buildFileEntries,
@@ -17,8 +17,9 @@ import {
   worstDecisionState,
 } from '../workbench'
 
-function finding(over: Partial<FindingView> & { id: number }): FindingView {
+function finding(over: Partial<ReviewerFindingView> & { id: number }): ReviewerFindingView {
   return {
+    kind: 'reviewer',
     reviewer_output_id: 1,
     title: `f${over.id}`,
     severity: 'medium',

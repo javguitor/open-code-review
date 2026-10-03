@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, User } from 'lucide-react'
-import { useReviewerDetail } from './hooks/use-reviews'
+import { useReviewerDetail, useRound } from './hooks/use-reviews'
 import { MarkdownRenderer } from '../../components/markdown/markdown-renderer'
 import { FindingsTable } from './components/findings-table'
 import { useQuery } from '@tanstack/react-query'
@@ -9,6 +9,8 @@ import { fetchApi } from '../../lib/utils'
 import { REVIEWER_ICONS } from './constants'
 import { useT } from '../../lib/i18n'
 import { liveCount } from '../../lib/live-findings'
+import { usesSynthesis } from '../../lib/round-kind'
+import { synthesizedFindingHref } from '../../lib/workbench'
 
 export function ReviewerDetailPage() {
   const { t } = useT()
@@ -35,6 +37,11 @@ export function ReviewerDetailPage() {
   // The reviewer output has a file_path; we load it as an artifact-like content
   // Since reviewer outputs are stored as individual files, we read via a dedicated endpoint
   // For now, we use the reviewer output content from the detail response if available
+  // In a synthesized round the reviewer's rows are provenance: each links to the
+  // synthesized finding that merged it, where the decision is made.
+  const { data: round } = useRound(sessionId ?? '', roundNumber)
+  const provenance = usesSynthesis(round)
+
   const contentQuery = useQuery<string>({
     queryKey: ['reviewer-content', sessionId, roundNumber, reviewerId],
     queryFn: async () => {
@@ -115,9 +122,19 @@ export function ReviewerDetailPage() {
       {reviewer.findings.length > 0 && (
         <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-4 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            {t('reviews.findings_count', { count: liveCount(reviewer.findings) })}
+            {t(provenance ? 'reviews.reviewer_own_findings_count' : 'reviews.findings_count', {
+              count: liveCount(reviewer.findings),
+            })}
           </h2>
-          <FindingsTable findings={reviewer.findings} />
+          {provenance && (
+            <p className="-mt-2 mb-3 text-xs text-zinc-500 dark:text-zinc-400">{t('reviews.reviewer_provenance_note')}</p>
+          )}
+          <FindingsTable
+            findings={reviewer.findings}
+            synthesizedHref={
+              provenance ? (id) => synthesizedFindingHref(sessionId ?? '', roundNumber, id) : undefined
+            }
+          />
         </div>
       )}
     </div>

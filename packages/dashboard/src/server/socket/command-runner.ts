@@ -31,6 +31,9 @@ import {
   appendCommandLog,
   getFinding,
   getSession,
+  getSynthesisFinding,
+  isSynthesizedProvenance,
+  type FindingRow,
 } from '@open-code-review/persistence'
 import { getWorkflowHardDeadlineMs } from '@open-code-review/config/runtime-config'
 import {
@@ -38,6 +41,7 @@ import {
   buildPrompt,
   extractPerInstanceModels,
   validateVerifyArgs,
+  parseVerifyArgs,
 } from './prompt-builder.js'
 import {
   MAX_CONCURRENT,
@@ -129,12 +133,18 @@ export function registerCommandHandlers(
       const parts = shellSplit(normalized)
       const baseCommand = parts[0] ?? ''
       const subArgs = parts.slice(1)
-      // A refused `verify <id>` names its finding so the workbench can release
-      // exactly that request (refusals happen before an execution id exists).
-      const verifyFindingId =
-        baseCommand === 'verify' && /^[1-9]\d*$/.test(subArgs[0] ?? '') ? Number(subArgs[0]) : undefined
+      // A refused `verify` names its finding so the workbench can release exactly that
+      // request (refusals happen before an execution id exists). The two id spaces
+      // collide, so a synthesized finding is named by `synthesis_id`, never `finding_id`.
+      const verifyTarget = baseCommand === 'verify' ? parseVerifyArgs(subArgs) : null
       const emitError = (body: Record<string, unknown>): void => {
-        socket.emit('command:error', verifyFindingId === undefined ? body : { ...body, finding_id: verifyFindingId })
+        const named =
+          verifyTarget === null
+            ? body
+            : verifyTarget.kind === 'synthesis'
+              ? { ...body, synthesis_id: verifyTarget.id }
+              : { ...body, finding_id: verifyTarget.id }
+        socket.emit('command:error', named)
       }
 
       // Validate base command against whitelist (utility + AI)
@@ -146,34 +156,47 @@ export function registerCommandHandlers(
         return
       }
 
-      // `verify` takes exactly one finding id (positive integer) and nothing else.
+      // `verify` takes exactly one finding id (positive integer), or `--synthesis <id>`, and nothing else.
       const verifyError = baseCommand === 'verify' ? validateVerifyArgs(subArgs) : null
       if (verifyError) {
         emitError({ error: verifyError })
         return
       }
 
-      // Unknown finding id: refuse before an execution row exists.
-      if (baseCommand === 'verify') {
-        const target = getFinding(db, Number(subArgs[0]))
+      // Unknown or retired finding: refuse before an execution row exists.
+      if (verifyTarget) {
+        const isSynthesis = verifyTarget.kind === 'synthesis'
+        const label = isSynthesis ? 'Synthesized finding' : 'Finding'
+        const target = isSynthesis ? getSynthesisFinding(db, verifyTarget.id) : getFinding(db, verifyTarget.id)
         if (!target) {
-          emitError({ error: `Finding ${subArgs[0]} not found` })
+          emitError({ error: `${label} ${verifyTarget.id} not found` })
           return
         }
         if (!isActionable(target)) {
-          emitError({ error: `Finding ${subArgs[0]} is retired and cannot be verified` })
+          emitError({ error: `${label} ${verifyTarget.id} is retired and cannot be verified` })
+          return
+        }
+        // Reviewer rows of a synthesized round are read-only provenance (persistence would refuse the write
+        // after the agent had spent a run): point at the synthesized finding instead.
+        if (!isSynthesis && isSynthesizedProvenance(db, target as FindingRow)) {
+          emitError({
+            error: `Finding ${verifyTarget.id} belongs to a round triaged on synthesized findings; verify the synthesized finding with "verify --synthesis <id>"`,
+          })
           return
         }
       }
 
       // One verification per finding at a time: a second agent would write the same verification file.
-      if (baseCommand === 'verify') {
+      // Compared by the full argument list, so `verify 3` and `verify --synthesis 3` do not collide.
+      if (verifyTarget) {
         const running = [...activeCommands.values()].some((e) => {
           const [cmd, ...args] = shellSplit(e.commandStr.replace(/^ocr\s+/, ''))
-          return cmd === 'verify' && args[0] === subArgs[0]
+          return cmd === 'verify' && args.join(' ') === subArgs.join(' ')
         })
         if (running) {
-          emitError({ error: `A verification of finding ${subArgs[0]} is already running` })
+          emitError({
+            error: `A verification of ${verifyTarget.kind === 'synthesis' ? 'synthesized finding' : 'finding'} ${verifyTarget.id} is already running`,
+          })
           return
         }
       }
@@ -401,13 +424,15 @@ function spawnCliCommand(
 // ── AI workflow command spawn (adapter strategy) ──
 
 /** Session/round of the finding a `verify` run targets (undefined for other commands / unknown ids). */
-function verifyTargetOf(
+export function verifyTargetOf(
   db: Database,
   baseCommand: string,
   subArgs: string[],
 ): { sessionId: string; roundNumber: number } | undefined {
   if (baseCommand !== 'verify') return undefined
-  const finding = getFinding(db, Number(subArgs[0]))
+  const target = parseVerifyArgs(subArgs)
+  if (!target) return undefined
+  const finding = target.kind === 'synthesis' ? getSynthesisFinding(db, target.id) : getFinding(db, target.id)
   return finding ? { sessionId: finding.session_id, roundNumber: finding.round_number } : undefined
 }
 

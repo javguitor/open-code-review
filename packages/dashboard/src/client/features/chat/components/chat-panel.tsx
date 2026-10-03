@@ -8,7 +8,7 @@ import { useAiCli } from '../../../hooks/use-ai-cli'
 import { ChatMessage, StreamingMessage } from './chat-message'
 import { ChatInput } from './chat-input'
 import { useApplyProposal } from '../hooks/use-apply-proposal'
-import type { ChatTargetType } from '../../../lib/api-types'
+import type { ChatTargetType, FindingKind } from '../../../lib/api-types'
 import type { ProposalFindingInfo } from '../types'
 
 type ChatPanelProps = {
@@ -20,9 +20,11 @@ type ChatPanelProps = {
   initialInput?: string
   /** Round findings, so proposal cards can show a title and old -> new values. */
   findings?: ProposalFindingInfo[]
+  /** What `findings` (and a proposal's finding id) are; drives which route Apply calls. */
+  findingsKind?: FindingKind
 }
 
-export function ChatPanel({ sessionId, targetType, targetId, onClose, initialInput, findings }: ChatPanelProps) {
+export function ChatPanel({ sessionId, targetType, targetId, onClose, initialInput, findings, findingsKind }: ChatPanelProps) {
   const { t } = useT()
   const { isAvailable, isDisabledByConfig } = useAiCli()
   const {
@@ -37,7 +39,7 @@ export function ChatPanel({ sessionId, targetType, targetId, onClose, initialInp
     worktreeNotice,
   } = useChat(sessionId, targetType, targetId)
 
-  const applyProposal = useApplyProposal(sessionId, conversationId)
+  const applyProposal = useApplyProposal(sessionId, conversationId, findingsKind)
   const findingsById = useMemo(() => new Map((findings ?? []).map((f) => [f.id, f])), [findings])
 
   const scrollRef = useRef<HTMLDivElement>(null)

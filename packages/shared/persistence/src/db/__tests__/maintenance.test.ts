@@ -403,3 +403,50 @@ describe("pruneDb", () => {
     expect(count("SELECT COUNT(*) FROM review_rounds WHERE session_id='active-old'")).toBe(1);
   });
 });
+
+describe("synthesized findings tables", () => {
+  function seedSynthesis(sessionId: string): void {
+    db.run("INSERT INTO review_rounds (session_id, round_number) VALUES (?, 1)", [sessionId]);
+    const roundId = Number(db.exec("SELECT MAX(id) FROM review_rounds")[0]!.values[0]![0]);
+    db.run(
+      "INSERT INTO synthesis_findings (round_id, key, title, severity) VALUES (?, 'S1', 'a synthesized finding', 'high')",
+      [roundId],
+    );
+    const sfId = Number(db.exec("SELECT MAX(id) FROM synthesis_findings")[0]!.values[0]![0]);
+    db.run("INSERT INTO synthesis_finding_decisions (synthesis_finding_id, status) VALUES (?, 'read')", [sfId]);
+    db.run("INSERT INTO synthesis_finding_revisions (synthesis_finding_id, field, source) VALUES (?, 'severity', 'user')", [sfId]);
+  }
+
+  it("fixDb sweeps orphaned synthesized rows but keeps rows whose parents exist", () => {
+    seedSession("s1");
+    seedSynthesis("s1");
+    withForeignKeysOff(() => {
+      db.run("INSERT INTO synthesis_findings (round_id, key, title, severity) VALUES (999, 'S1', 'orphaned finding', 'low')");
+      db.run("INSERT INTO synthesis_finding_decisions (synthesis_finding_id, status) VALUES (998, 'read')");
+      db.run("INSERT INTO synthesis_finding_revisions (synthesis_finding_id, field, source) VALUES (998, 'severity', 'user')");
+      db.run("INSERT INTO synthesis_finding_sources (synthesis_finding_id, finding_id) VALUES (998, 997)");
+    });
+    expect(collectDbHealth(db, dbPath).fkViolations.map((g) => g.table).sort()).toEqual([
+      "synthesis_finding_decisions",
+      "synthesis_finding_revisions",
+      "synthesis_finding_sources",
+      "synthesis_findings",
+    ]);
+    const result = fixDb(db, dbPath, { snapshot: false, vacuum: false });
+    expect(result.fkViolationsAfter).toBe(0);
+    expect(count("SELECT COUNT(*) FROM synthesis_findings")).toBe(1);
+    expect(count("SELECT COUNT(*) FROM synthesis_finding_decisions")).toBe(1);
+    expect(count("SELECT COUNT(*) FROM synthesis_finding_revisions")).toBe(1);
+  });
+
+  it("pruneDb counts synthesized rows and removes them with the round, never directly", () => {
+    seedSession("s1");
+    seedSynthesis("s1");
+    const dry = pruneDb(db, dbPath, { keepSessions: 0, dryRun: true });
+    expect(dry.prunedSessions[0]?.artifactRows).toBe(2); // the round + the synthesized finding
+    pruneDb(db, dbPath, { keepSessions: 0 });
+    expect(count("SELECT COUNT(*) FROM synthesis_findings")).toBe(0);
+    expect(count("SELECT COUNT(*) FROM synthesis_finding_decisions")).toBe(0);
+    expect(count("SELECT COUNT(*) FROM sessions")).toBe(1);
+  });
+});

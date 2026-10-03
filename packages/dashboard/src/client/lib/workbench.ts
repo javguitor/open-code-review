@@ -4,7 +4,10 @@ import type {
   DecisionStatus,
   DiffFile,
   DiffFileStatus,
+  FindingLocation,
   FindingView,
+  ReviewerFindingView,
+  SynthesisSource,
 } from './api-types'
 
 /** Key of the pseudo-file that groups findings without a `file_path`. */
@@ -247,7 +250,7 @@ export function chatPrefillKey(sessionId: string, round: number): string {
 export const ALSO_REPORTED_MIN_SIMILARITY = HINT_MIN_SIMILARITY
 export { titleSimilarity }
 
-type AlsoRow = Pick<FindingView, 'id' | 'title' | 'file_path' | 'line_start' | 'line_end' | 'reviewer_output_id'> & {
+type AlsoRow = Pick<ReviewerFindingView, 'id' | 'title' | 'file_path' | 'line_start' | 'line_end' | 'reviewer_output_id'> & {
   retired_at?: string | null
 }
 
@@ -282,4 +285,59 @@ export function alsoReportedBy(
 /** `@principal-1` style handle of the reviewer that produced a row. */
 export function reviewerHandle(output: { reviewer_type: string; instance_number: number }): string {
   return `@${output.reviewer_type}-${output.instance_number}`
+}
+
+/**
+ * "Also reported by" links for the selected finding. Only legacy rounds have
+ * them: a synthesized finding already merges the copies (they are listed in its
+ * read-only "Merged from" section), so a title/line heuristic on top would
+ * only point at unrelated rows.
+ */
+export function alsoReportedList(
+  selected: FindingView,
+  all: ReadonlyArray<FindingView>,
+  handles: ReadonlyMap<number, string>,
+): { id: number; handle: string }[] {
+  if (selected.kind === 'synthesis') return []
+  const reviewerRows = all.filter((f): f is ReviewerFindingView => f.kind === 'reviewer')
+  return alsoReportedBy(selected, reviewerRows).map((f) => ({
+    id: f.id,
+    handle: handles.get(f.reviewer_output_id) ?? '?',
+  }))
+}
+
+/**
+ * Locations of a synthesized finding besides the primary one (`locations[0]`,
+ * which is the diff marker). Listed in the panel; never marked in the diff.
+ */
+export function otherLocations(finding: FindingView): FindingLocation[] {
+  return finding.kind === 'synthesis' ? (finding.locations ?? []).slice(1) : []
+}
+
+/** `file:start-end` for a location, or just `file`. */
+export function formatLocation(loc: { file_path: string | null; line_start?: number | null; line_end?: number | null }): string {
+  if (!loc.file_path) return ''
+  if (loc.line_start == null) return loc.file_path
+  const end = loc.line_end != null && loc.line_end !== loc.line_start ? `-${loc.line_end}` : ''
+  return `${loc.file_path}:${loc.line_start}${end}`
+}
+
+/** Sources decided before the round gained synthesized findings: shown as a hint, never adopted. */
+export function sourcesDecidedEarlier(sources: ReadonlyArray<SynthesisSource>): SynthesisSource[] {
+  return sources.filter((s) => s.earlier_decision !== null)
+}
+
+/** Workbench URL that opens with a synthesized finding selected (ids are unique within a round's kind). */
+export function synthesizedFindingHref(sessionId: string, roundNumber: number, findingId: number): string {
+  return `/sessions/${sessionId}/reviews/${roundNumber}/workbench?finding=${findingId}`
+}
+
+/** The `?finding=` value of the workbench URL as a finding id; null when absent or not a positive integer. */
+export function findingIdFromSearch(value: string | null): number | null {
+  return value !== null && /^[1-9]\d*$/.test(value) ? Number(value) : null
+}
+
+/** `@principal-1` handle of a merged source (the API gives `principal-1`, no `@`). */
+export function sourceHandle(source: Pick<SynthesisSource, 'reviewer'>): string {
+  return source.reviewer.startsWith('@') ? source.reviewer : `@${source.reviewer}`
 }

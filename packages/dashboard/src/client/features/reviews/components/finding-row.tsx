@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import type { KeyboardEvent } from 'react'
 import { ChevronRight, ExternalLink } from 'lucide-react'
 import { cn, buildIdeLink } from '../../../lib/utils'
@@ -11,10 +12,17 @@ import { DECISION_STATUSES, type DecisionStatus, type RoundFinding } from '../ty
 import { isActionable, MIN_DECISION_REASON_LENGTH, requiresReason } from '@open-code-review/persistence/finding-rules'
 import { currentStatus, reasonMessageKey, synthesisNote } from '../decisions'
 import { CATEGORY_LABEL_KEY, DECISION_LABEL_KEY, SEVERITY_LABEL_KEY } from '../labels'
+import { findingRef, type FindingRef } from '../../../lib/finding-ref'
 
 type FindingRowProps = {
   finding: RoundFinding
-  onTriageChange: (findingId: number, status: DecisionStatus, reason?: string) => void
+  onTriageChange: (ref: FindingRef, status: DecisionStatus, reason?: string) => void
+  /**
+   * Where a synthesized finding is decided. Used for reviewer findings of a
+   * synthesized round, which are read-only provenance: the cell links there
+   * instead of offering a decision.
+   */
+  synthesizedHref?: (synthesizedId: number) => string
 }
 
 function labelOf(map: Record<string, MessageKey>, value: string, t: (k: MessageKey) => string): string {
@@ -22,7 +30,7 @@ function labelOf(map: Record<string, MessageKey>, value: string, t: (k: MessageK
   return key ? t(key) : value
 }
 
-export function FindingRow({ finding, onTriageChange }: FindingRowProps) {
+export function FindingRow({ finding, onTriageChange, synthesizedHref }: FindingRowProps) {
   const { t } = useT()
   const [expanded, setExpanded] = useState(false)
   // A status that needs a reason waits here until the user types one.
@@ -48,17 +56,19 @@ export function FindingRow({ finding, onTriageChange }: FindingRowProps) {
       setReason(finding.decision?.reason ?? '')
     } else {
       setPending(null)
-      onTriageChange(finding.id, status)
+      onTriageChange(findingRef(finding), status)
     }
   }
 
   const submitPending = () => {
     if (!pending || reasonMessageKey(pending, reason)) return
-    onTriageChange(finding.id, pending, reason)
+    onTriageChange(findingRef(finding), pending, reason)
     setPending(null)
     setReason('')
   }
 
+  // `synthesized_by` exists only in a synthesized round: there the row is provenance, decided through its synthesized finding.
+  const provenance = finding.synthesized_by !== undefined
   const reasonKey = pending ? reasonMessageKey(pending, reason) : null
   const severityNote = synthesisNote(finding.severity, finding.synthesis_severity)
   const categoryNote = synthesisNote(finding.category, finding.synthesis_category)
@@ -164,6 +174,28 @@ export function FindingRow({ finding, onTriageChange }: FindingRowProps) {
           className="border-b border-zinc-200 px-4 py-2 dark:border-zinc-800"
           onClick={(e) => e.stopPropagation()}
         >
+          {provenance ? (
+            finding.synthesized_by ? (
+              <div className="flex flex-col items-start gap-0.5 text-xs">
+                <StatusBadge variant="default" label={t(DECISION_LABEL_KEY[finding.synthesized_by.decision_status ?? 'unread'])} />
+                {synthesizedHref ? (
+                  <Link
+                    to={synthesizedHref(finding.synthesized_by.id)}
+                    className="text-indigo-600 hover:underline dark:text-indigo-400"
+                    title={finding.synthesized_by.title}
+                  >
+                    {t('reviews.merged_into', { key: finding.synthesized_by.key })}
+                  </Link>
+                ) : (
+                  <span className="text-zinc-500 dark:text-zinc-400">
+                    {t('reviews.merged_into', { key: finding.synthesized_by.key })}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span className="text-xs text-zinc-400">{t('reviews.not_merged')}</span>
+            )
+          ) : (
           <select
             value={pending ?? currentStatus(finding)}
             onChange={(e) => handleStatusChange(e.target.value as DecisionStatus)}
@@ -179,6 +211,7 @@ export function FindingRow({ finding, onTriageChange }: FindingRowProps) {
               </option>
             ))}
           </select>
+          )}
         </td>
       </tr>
       {pending && (

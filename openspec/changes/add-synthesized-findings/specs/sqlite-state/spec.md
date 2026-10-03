@@ -2,14 +2,14 @@
 
 ### Requirement: Synthesized Findings Storage
 
-The database SHALL store the deduplicated findings emitted by the synthesis as first-class rows, linked to the reviewer findings they merge, with their own decisions, verification and revision log (migration 19). The migration SHALL be additive: it SHALL NOT alter or rebuild any existing table.
+The database SHALL store the deduplicated findings emitted by the synthesis as first-class rows, linked to the reviewer findings they merge, with their own decisions, verification and revision log (migration 21). The migration SHALL be additive: it SHALL NOT alter or rebuild any existing table.
 
 A round SHALL be considered to use synthesis if and only if it has at least one live (not retired) `synthesis_findings` row. Rounds without such rows SHALL keep every existing per-reviewer-row behaviour.
 
 #### Scenario: Migration is additive
 
 - **GIVEN** a version 18 database with reviewer findings, decisions and revisions
-- **WHEN** migration 19 runs
+- **WHEN** migration 21 runs
 - **THEN** `synthesis_findings`, `synthesis_finding_sources`, `synthesis_finding_decisions` and `synthesis_finding_revisions` exist and are empty
 - **AND** every row of `review_findings`, `user_finding_progress` and `finding_revisions` is unchanged
 

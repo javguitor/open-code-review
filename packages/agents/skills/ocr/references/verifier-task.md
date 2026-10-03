@@ -1,10 +1,11 @@
 # Verifier Task
 
-Run by `/ocr:verify <finding-id>`. Decide, with evidence, whether **one** review finding is real. You are a skeptic with both hands open: look for evidence that the finding is right **and** evidence that it is wrong, then report what you found. Do not defend the reviewer and do not defend the author.
+Run by `/ocr:verify <finding-id>` (a reviewer finding) or `/ocr:verify --synthesis <id>` (a synthesized finding). Decide, with evidence, whether **one** review finding is real. You are a skeptic with both hands open: look for evidence that the finding is right **and** evidence that it is wrong, then report what you found. Do not defend the reviewer and do not defend the author.
 
 ## Inputs
 
 1. **The finding** — `ocr finding show --id <id> --json`. It returns the finding (`title`, `severity`, `category`, `file_path`, `line_start`, `line_end`, `summary`, `flagged_by`, `evidence`), its verification fields and its `revisions`. It also returns `session_id` and `round_number`: the round directory is `.ocr/sessions/<session_id>/rounds/round-<round_number>/`. Never guess the session; always take it from this output.
+   **Synthesized input** (`--synthesis <id>`): run `ocr finding show --synthesis-id <id> --json` instead. It returns the synthesized finding (`key`, `title`, `severity`, `category`, every entry of `locations`, `summary`, `flagged_by`, `evidence`), its verification fields and `revisions`, plus `sources`: the original reviewer findings it merges (reviewer handle, original `title`, `severity`, `category`, location, `summary`, `evidence`). The synthesized text is the **merged claim**; each source's original text is what that reviewer actually asserted. Verify the merged claim **and** check each source: the verdict must cover what every reviewer asserted, so if the sources describe different problems, or one of them is wrong, say so in `## Verdict` and `## Evidence against`. Read the hunk(s) around **every** location, not only the first. The `session_id` and `round_number` come from the same output.
 2. **The change** — `.ocr/sessions/<session_id>/rounds/round-<round_number>/diff.patch` (and the session's `context.md`), both in the **main checkout**. Read the hunk(s) around `file_path:line_start-line_end`, not the whole file. If `diff.patch` is missing (a round from before it was saved), say so in `## What I ran` and work from the code root alone.
 3. **The code root** — where the reviewed code lives:
    - PR sessions: the session's worktree, the `Code root` line of the session's `context.md` (see `references/pr-target.md`). Read and run things there, never in the main checkout.
@@ -56,6 +57,8 @@ Write `.ocr/sessions/<session_id>/rounds/round-<round_number>/verifications/find
 {Every command executed, in the code root, with the relevant part of its output. "Nothing executed; inspection only." if empty.}
 ```
 
+For a synthesized finding the file is `.../verifications/synthesis-<id>.md`, with the same four headings; where useful, name the source (`principal-1[0]`) next to each item of evidence.
+
 Cite as `path/to/file.ts:42`. Paths, commands, code and quoted output stay verbatim.
 
 ## Status meanings
@@ -75,6 +78,12 @@ Run **exactly one** command, after the file is written:
 
 ```bash
 ocr finding verify --id <id> --status <pending|reproduced|supported|dismissed> --note "<one line>" --file ".ocr/sessions/<session_id>/rounds/round-<round_number>/verifications/finding-<id>.md"
+```
+
+For a synthesized finding the command is:
+
+```bash
+ocr finding verify --synthesis-id <id> --status <pending|reproduced|supported|dismissed> --note "<one line>" --file ".ocr/sessions/<session_id>/rounds/round-<round_number>/verifications/synthesis-<id>.md"
 ```
 
 The note is one line in `{language}` summarising the verdict. Do not call `ocr finding verify` more than once, and do not run `ocr finding revise` or change severity/category: this task records evidence, a human decides what to do with it.

@@ -2,7 +2,7 @@
 
 Today the unit of triage is `review_findings`: one row per entry of `reviewers[].findings[]` (`packages/shared/persistence/src/state/round-meta.ts`), ingested per reviewer output by `packages/dashboard/src/server/services/finding-reconcile.ts`. Decisions (`user_finding_progress`), revisions (`finding_revisions`), verification columns, chat proposals and the `verify <finding-id>` command all hang off `review_findings.id`. Round counts and the verdict after decisions are computed per row (`routes/reviews.ts` `summarizeRound`); `alsoReportedBy` (`client/lib/workbench.ts`) is a title/line heuristic that only links the copies.
 
-The Tech Lead already produces the deduplicated view in Phase 7 (`final.md`, `synthesis_counts`) but does not record which reviewer findings each item merges. Latest migration is 18 (`migrations.ts`), so this change is migration 19.
+The Tech Lead already produces the deduplicated view in Phase 7 (`final.md`, `synthesis_counts`) but does not record which reviewer findings each item merges. Latest migration is 20 (`migrations.ts`), so this change is migration 21.
 
 ## Goals / Non-Goals
 
@@ -80,10 +80,11 @@ A round "uses synthesis" iff it has at least one live row in `synthesis_findings
 
 `processRoundMeta` reconciles reviewer rows first (they stay as provenance; `reconcileFindings` now returns row ids by incoming index), then reconciles synthesized findings:
 
-- Match an incoming item to an existing row by `key` **and** normalized primary file path. Anything else is a different finding.
-- Matched: update in place, clear `retired_at`, rebuild source links. Links are derived data, not human state.
+- Match an incoming item to an existing row by `key` **and** normalized primary file path, over **live** rows only. Anything else is a different finding.
+- Matched: update in place and rebuild source links. Links are derived data, not human state. A retired row never revives: it is not a candidate, so an incoming item with the same key and file inserts a new row (this is what the `sqlite-state` spec requires).
 - Unmatched existing row: retired if it has a final decision or revisions (retire rules identical to today), deleted otherwise. A retired row's source links are dropped; its own columns are the snapshot.
 - Unmatched incoming item: new row.
+- Before reconciling, the ingest re-validates only the `synthesis_findings` block (the same partition/key/source checks as `complete-round`). If it fails, the round is ingested as legacy (reviewer rows only, stale synthesized rows retired or deleted by the rules above) and the reason is logged; the rest of the file is not re-validated, so older rounds stay visible.
 
 This keeps the invariant of `finding-reconcile.ts`: human state never moves to another finding by position or key reuse. Alternative rejected: matching by key alone, because a re-synthesis that renumbers `S2` and `S3` would silently move decisions.
 
@@ -109,7 +110,7 @@ For a synthesized finding in round N+1: candidates are the decided synthesized f
 
 ### 9. Skill
 
-- `final-template.md`: each numbered item under `## Blockers` and `## Should Fix` carries `**ID**: S<n>`; each bullet under `## Suggestions` is prefixed `[S<n>]`. Every item in `final.md` is therefore one synthesized finding, and `synthesis_counts` equals the number of tagged items.
+- `final-template.md`: each numbered item under `## Blockers` and `## Should Fix` carries `**ID**: S<n>`; each bullet under `## Suggestions` is prefixed `[S<n>]`. Every item in `final.md` is therefore one synthesized finding, and `synthesis_counts` (optional once `synthesis_findings` is present) equals the number of synthesized findings per category: `suggestions` counts only `category: "suggestion"`; `style` items keep their `[S<n>]` tag under `### Style` but are counted separately, as in `counts.ts`.
 - `workflow.md` Phase 7 step 7: assign keys, emit `synthesis_findings`, document the new exit-7 causes (orphan source, duplicated source, unknown reviewer or index, count mismatch). Step 8 writes the same keys into `final.md`.
 - `language-policy.md`: `ID` is added to the English-literal field labels, and the `[S<n>]` marker and `S<n>` keys to the literal tokens. `title`, `summary` and `evidence` of synthesized findings are prose in `{language}`, like the reviewer findings'.
 
@@ -123,7 +124,7 @@ For a synthesized finding in round N+1: candidates are the decided synthesized f
 
 ## Migration Plan
 
-1. Ship migration 19 and the validator together; payloads without `synthesis_findings` behave exactly as today.
+1. Ship migration 21 and the validator together; payloads without `synthesis_findings` behave exactly as today.
 2. Ship the skill change; new reviews start emitting `synthesis_findings`.
 3. Rollback: stop emitting `synthesis_findings` from the skill. Existing synthesized rows stay readable; rounds without them are unaffected. The tables are additive, so dropping them is safe if ever needed.
 
@@ -131,7 +132,7 @@ For a synthesized finding in round N+1: candidates are the decided synthesized f
 
 1. Reviewer reference format. Proposed: `<type>-<instance>` plus 0-based `index`, matching `reviewers[]`; a leading `@` is stripped.
 2. Should uncovered reviewer findings be tolerated? Proposed: no (strict partition, see decision 2), because a mixed round needs two counting rules.
-3. Are `Suggestions` bullets synthesized findings? Proposed: yes, each bullet gets a `[S<n>]` id so it is decidable like any other; this also makes `synthesis_counts.suggestions` exactly the number of tagged bullets.
+3. Are `Suggestions` bullets synthesized findings? Proposed: yes, each bullet gets a `[S<n>]` id so it is decidable like any other; this also makes `synthesis_counts.suggestions` the number of tagged bullets with `category: "suggestion"` (`style` bullets are tagged too but counted separately).
 4. Should the panel offer "adopt the earlier decision" for sources decided before? Proposed: no in this change, hint only; add later if users ask for it.
 5. Diff markers for secondary locations? Proposed: primary only; secondary locations listed in the panel.
 6. Should old rounds be re-synthesized to gain `synthesis_findings`? Proposed: no; a re-run of the review is the way, and legacy rounds keep working.

@@ -145,7 +145,12 @@ export type ReviewRound = {
   open_counts?: RoundCounts
   /** Verdict recomputed from `open_counts`; null when the round has no verdict. */
   verdict_after_decisions?: string | null
+  /** What the round's findings are; absent on payloads from older servers (reads as `reviewer`). */
+  findings_kind?: FindingKind
 }
+
+/** Which table a finding lives in. Ids of the two kinds collide numerically. */
+export type FindingKind = 'reviewer' | 'synthesis'
 
 export type RoundCounts = { blockers: number; should_fix: number; suggestions: number }
 
@@ -314,9 +319,21 @@ export type ModelListResponse = {
   nativeUnavailableReason?: string
 }
 
+/** The synthesized finding that merged a reviewer finding (synthesized rounds only). */
+export type SynthesizedBy = {
+  id: number
+  key: string
+  title: string
+  /** null while the synthesized finding has no decision. */
+  decision_status: DecisionStatus | null
+}
+
 export type ReviewerOutputDetail = ReviewerOutput & {
-  /** Rows carry `retired_at` (server `buildFindingViews`); retired ones are not counted. */
-  findings: Array<Finding & { retired_at?: string | null }>
+  /**
+   * Rows carry `retired_at` (server `buildFindingViews`); retired ones are not counted.
+   * `synthesized_by` is present only in a synthesized round (null: merged into nothing live).
+   */
+  findings: Array<Finding & { retired_at?: string | null; synthesized_by?: SynthesizedBy | null }>
 }
 
 export type Artifact = {
@@ -603,6 +620,8 @@ export type FindingDecision = {
 }
 
 export type PreviousRoundDecision = {
+  /** Kind of the earlier finding; absent on payloads from older servers. */
+  kind?: FindingKind
   finding_id: number
   round_number: number
   status: DecisionStatus
@@ -610,15 +629,41 @@ export type PreviousRoundDecision = {
   decided_at: string
 }
 
-/** One row of `GET /api/sessions/:id/rounds/:n/findings` (current values + provenance). */
-export type FindingView = {
-  id: number
+export type SourceEarlierDecision = {
+  status: DecisionStatus
+  reason: string | null
+  decided_at: string | null
+}
+
+/** A reviewer finding merged into a synthesized one (read-only provenance). */
+export type SynthesisSource = {
+  finding_id: number
   reviewer_output_id: number
+  /** `principal-1` style, no `@`. */
+  reviewer: string
+  reviewer_type: string
+  instance_number: number
+  title: string
+  severity: FindingSeverity
+  category: string | null
+  file_path: string | null
+  line_start: number | null
+  line_end: number | null
+  summary: string | null
+  /** Decision made on this copy before the round gained synthesized findings. */
+  earlier_decision: SourceEarlierDecision | null
+}
+
+export type FindingLocation = { file_path: string; line_start?: number | null; line_end?: number | null }
+
+type FindingViewCommon = {
+  id: number
   title: string
   severity: FindingSeverity
   category: string | null
   synthesis_severity: FindingSeverity
   synthesis_category: string | null
+  /** Primary location for a synthesized finding. */
   file_path: string | null
   line_start: number | null
   line_end: number | null
@@ -639,8 +684,26 @@ export type FindingView = {
   retired_at: string | null
 }
 
+export type ReviewerFindingView = FindingViewCommon & {
+  kind: 'reviewer'
+  reviewer_output_id: number
+}
+
+export type SynthesizedFindingView = FindingViewCommon & {
+  kind: 'synthesis'
+  /** `S1`-style key assigned by the Tech Lead. */
+  key: string
+  /** Every location; `[0]` is the primary one. */
+  locations: FindingLocation[] | null
+  sources: SynthesisSource[]
+}
+
+/** One row of `GET /api/sessions/:id/rounds/:n/findings` (current values + provenance). */
+export type FindingView = ReviewerFindingView | SynthesizedFindingView
+
 export type FindingRevision = {
   id: number
+  /** Id in the table of the finding's kind. */
   finding_id: number
   field: 'severity' | 'category' | 'status' | 'verification_status'
   old_value: string | null

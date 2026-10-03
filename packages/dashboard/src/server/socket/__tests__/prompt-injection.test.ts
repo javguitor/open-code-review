@@ -21,7 +21,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { buildPrompt, escapeUserHeaders } from '../command-runner.js'
-import { shellSplit, validateVerifyArgs, VERIFY_ARGS_ERROR } from '../prompt-builder.js'
+import { parseVerifyArgs, shellSplit, validateVerifyArgs, VERIFY_ARGS_ERROR } from '../prompt-builder.js'
 
 describe('escapeUserHeaders', () => {
   it('escapes a leading H2 header', () => {
@@ -438,7 +438,7 @@ describe('buildPrompt — verify', () => {
     expect(prompt).not.toContain('## Dashboard Linkage (REQUIRED for terminal handoff)')
   })
 
-  it.each([[[]], [['0']], [['-3']], [['4.5']], [['abc']], [['1', '2']], [['1; rm -rf /']]])(
+  it.each([[[]], [['0']], [['-3']], [['4.5']], [['abc']], [['1', '2']], [['1; rm -rf /']], [['--synthesis']], [['--synthesis', '0']], [['--synthesis', 'x']], [['--synthesis', '1', '2']], [['--synthesis', '1', '--synthesis', '1']], [['1', '--synthesis', '1']], [['--other', '1']]])(
     'rejects %j',
     (subArgs) => {
       expect(validateVerifyArgs(subArgs as string[])).toBe(VERIFY_ARGS_ERROR)
@@ -454,5 +454,27 @@ describe('buildPrompt — verify', () => {
 
   it('accepts a positive integer', () => {
     expect(validateVerifyArgs(['7'])).toBeNull()
+  })
+
+  it('parses both forms with their kind', () => {
+    expect(parseVerifyArgs(['7'])).toEqual({ kind: 'reviewer', id: 7 })
+    expect(parseVerifyArgs(['--synthesis', '7'])).toEqual({ kind: 'synthesis', id: 7 })
+    expect(validateVerifyArgs(['--synthesis', '7'])).toBeNull()
+  })
+
+  it('builds the synthesized prompt: merged claim plus sources, the id as a validated integer', () => {
+    const { prompt, targetError } = buildPrompt({ ...base, baseCommand: 'verify', subArgs: ['--synthesis', '7'], verifyTarget })
+    expect(targetError).toBeNull()
+    expect(prompt).toContain('Synthesized finding ID: 7')
+    expect(prompt).toContain("merged claim and every source's original text")
+    expect(prompt).toContain('ocr finding show --synthesis-id 7 --json')
+    expect(prompt).toContain('Session: 2026-10-03-pr-16')
+    expect(prompt).not.toContain('Finding ID: ')
+  })
+
+  it('reports an unknown synthesized finding as a target error', () => {
+    expect(buildPrompt({ ...base, baseCommand: 'verify', subArgs: ['--synthesis', '7'] }).targetError).toBe(
+      'Synthesized finding 7 not found',
+    )
   })
 })

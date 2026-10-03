@@ -10,10 +10,8 @@ import type { ChildProcess } from 'node:child_process'
 import { dirname } from 'node:path'
 import type { Server as SocketIOServer, Socket } from 'socket.io'
 import type { Database } from '@open-code-review/persistence'
-import { isActionable } from '@open-code-review/persistence/finding-rules'
 import {
   getConversation,
-  getFindingsForRound,
   getMessages,
   getRound,
   getSession,
@@ -23,7 +21,8 @@ import {
   updateConversationStatus,
   type ChatConversationRow,
 } from '../db.js'
-import { buildChatContext, type ChatTarget } from '../services/chat-context.js'
+import { buildChatContext, type ChatContextFinding, type ChatTarget } from '../services/chat-context.js'
+import { roundChatSubjects } from '../services/chat-subjects.js'
 import { extractProposals, type Proposal } from '../services/proposals.js'
 import { codeRootForSession, contextRecordedWorktree, type RunCli } from '../services/worktrees.js'
 import { AiCliService, formatToolDetail } from '../services/ai-cli/index.js'
@@ -90,10 +89,12 @@ function resetIdleTimer(
   }
 }
 
-/** Finding ids + titles of a review round (empty for map runs or unknown rounds). */
-function roundFindings(db: Database, sessionId: string, roundNumber: number): { id: number; title: string }[] {
+/**
+ * Findings a chat about a review round may address (empty for map runs or unknown rounds):
+ * the synthesized ones when the round uses synthesis, else the reviewer ones. */
+function roundFindings(db: Database, sessionId: string, roundNumber: number): ChatContextFinding[] {
   const round = getRound(db, sessionId, roundNumber)
-  return round ? getFindingsForRound(db, round.id).filter(isActionable).map((f) => ({ id: f.id, title: f.title })) : []
+  return round ? roundChatSubjects(db, round.id).findings : []
 }
 
 /**

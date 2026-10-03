@@ -67,6 +67,8 @@ export type CountableSynthesisCounts = {
 export type CountableRoundMeta = {
   reviewers?: Array<{ findings?: CountableFinding[] | null } | null> | null;
   synthesis_counts?: CountableSynthesisCounts | null;
+  /** Deduplicated findings from the synthesis; when present (even an empty array: a synthesis of zero findings) they win over everything else. */
+  synthesis_findings?: CountableFinding[] | null;
 };
 
 /** The resolved per-round counts every consumer needs. `blocker/should_fix/
@@ -129,10 +131,15 @@ function preferred(scValue: number | undefined, derivedValue: number): number {
 }
 
 /**
- * Resolve the per-round counts under the one canonical rule: **prefer the
- * deduplicated `synthesis_counts` when present; otherwise derive the
- * per-category tally from `findings[].category`.** `reviewerCount` and
- * `totalFindingCount` are always derived from the data.
+ * Resolve the per-round counts under the one canonical rule, in order of
+ * precedence: **when `synthesis_findings` is present, tally their `category`;
+ * otherwise prefer the deduplicated `synthesis_counts`; otherwise derive the
+ * per-category tally from the reviewers' `findings[].category`.**
+ * `reviewerCount` is always derived from `reviewers[]`; `totalFindingCount` is
+ * the number of synthesized findings when present, else of reviewer findings.
+ *
+ * "Present" means the array exists (an empty `synthesis_findings` is a valid
+ * synthesis of zero findings: its tally is zero, not the reviewer tally).
  *
  * `style` is counted by {@link deriveCounts} and included in
  * `totalFindingCount`, but is intentionally not broken out as its own resolved
@@ -141,6 +148,16 @@ function preferred(scValue: number | undefined, derivedValue: number): number {
 export function resolveRoundCounts(
   meta: CountableRoundMeta,
 ): ResolvedRoundCounts {
+  if (Array.isArray(meta.synthesis_findings)) {
+    const synthesized = deriveCounts(meta.synthesis_findings);
+    return {
+      blockerCount: synthesized.blocker,
+      shouldFixCount: synthesized.should_fix,
+      suggestionCount: synthesized.suggestion,
+      reviewerCount: (meta.reviewers ?? []).length,
+      totalFindingCount: meta.synthesis_findings.length,
+    };
+  }
   const allFindings = collectFindings(meta);
   const derived = deriveCounts(allFindings);
   const sc = meta.synthesis_counts ?? undefined;

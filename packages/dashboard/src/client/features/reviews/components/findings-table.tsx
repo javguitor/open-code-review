@@ -10,6 +10,7 @@ import { FindingRow } from './finding-row'
 import { SortableHeader } from '../../../components/ui/sortable-header'
 import { useT } from '../../../lib/i18n'
 import { liveCount, liveFirst } from '../../../lib/live-findings'
+import { findingRef, refKey, type FindingRef } from '../../../lib/finding-ref'
 import type { MessageKey } from '../../../lib/i18n'
 
 type SortField = 'severity' | 'title' | 'file_path'
@@ -53,9 +54,13 @@ type FindingsTableProps = {
   /** While the findings query is in flight, render a loading affordance instead
    *  of an ambiguous "no findings" empty state. */
   isLoading?: boolean
+  /** See `FindingRow`: set on the reviewer page of a synthesized round. */
+  synthesizedHref?: (synthesizedId: number) => string
 }
 
-export function FindingsTable({ findings, isLoading = false }: FindingsTableProps) {
+const findingKey = (f: RoundFinding) => refKey(findingRef(f))
+
+export function FindingsTable({ findings, isLoading = false, synthesizedHref }: FindingsTableProps) {
   const { t } = useT()
   const [sortField, setSortField] = useState<SortField>('severity')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
@@ -110,8 +115,8 @@ export function FindingsTable({ findings, isLoading = false }: FindingsTableProp
     [findings],
   )
 
-  function handleTriageChange(findingId: number, status: DecisionStatus, reason?: string) {
-    updateStatus.mutate({ findingId, status, reason })
+  function handleTriageChange(ref: FindingRef, status: DecisionStatus, reason?: string) {
+    updateStatus.mutate({ ref, status, reason })
   }
 
   // Loading: the query is still in flight. Distinct from a genuinely empty round.
@@ -237,9 +242,10 @@ export function FindingsTable({ findings, isLoading = false }: FindingsTableProp
             <tbody>
               {sorted.map((finding) => (
                 <FindingRow
-                  key={finding.id}
+                  key={findingKey(finding)}
                   finding={finding}
                   onTriageChange={handleTriageChange}
+                  synthesizedHref={synthesizedHref}
                 />
               ))}
             </tbody>

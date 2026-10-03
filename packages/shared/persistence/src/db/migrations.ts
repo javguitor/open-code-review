@@ -639,6 +639,75 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 21,
+    description:
+      "Add synthesis_findings (+ sources, decisions, revisions): deduplicated findings as the unit of triage",
+    // Purely additive: four new tables, no ALTER and no rebuild of any existing
+    // table (user_finding_progress.finding_id is NOT NULL UNIQUE and cannot be
+    // relaxed without the rebuild migration 17 already paid once). Decisions
+    // and revisions mirror user_finding_progress / finding_revisions column for
+    // column, with the same status/source vocabularies.
+    run: (db) => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS synthesis_findings (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          round_id INTEGER NOT NULL REFERENCES review_rounds(id) ON DELETE CASCADE,
+          key TEXT NOT NULL,
+          title TEXT NOT NULL,
+          severity TEXT NOT NULL CHECK(severity IN ('critical', 'high', 'medium', 'low', 'info')),
+          category TEXT,
+          file_path TEXT,
+          line_start INTEGER,
+          line_end INTEGER,
+          locations_json TEXT,
+          summary TEXT,
+          evidence TEXT,
+          flagged_by TEXT,
+          is_blocker INTEGER NOT NULL DEFAULT 0,
+          verification_status TEXT CHECK (verification_status IS NULL OR verification_status IN ('pending','reproduced','supported','dismissed')),
+          verification_note TEXT,
+          verified_at TEXT,
+          verification_file TEXT,
+          retired_at TEXT,
+          parsed_at TEXT
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_synthesis_findings_live_key
+          ON synthesis_findings(round_id, key) WHERE retired_at IS NULL;
+        CREATE INDEX IF NOT EXISTS idx_synthesis_findings_round ON synthesis_findings(round_id);
+
+        CREATE TABLE IF NOT EXISTS synthesis_finding_sources (
+          synthesis_finding_id INTEGER NOT NULL REFERENCES synthesis_findings(id) ON DELETE CASCADE,
+          finding_id INTEGER NOT NULL REFERENCES review_findings(id) ON DELETE CASCADE,
+          PRIMARY KEY (synthesis_finding_id, finding_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_synthesis_sources_finding ON synthesis_finding_sources(finding_id);
+
+        CREATE TABLE IF NOT EXISTS synthesis_finding_decisions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          synthesis_finding_id INTEGER NOT NULL REFERENCES synthesis_findings(id) ON DELETE CASCADE,
+          status TEXT NOT NULL DEFAULT 'unread' CHECK(status IN ('unread', 'read', 'acknowledged', 'confirmed', 'dismissed', 'fixed', 'wont_fix')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          reason TEXT,
+          decided_at TEXT,
+          UNIQUE(synthesis_finding_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS synthesis_finding_revisions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          synthesis_finding_id INTEGER NOT NULL REFERENCES synthesis_findings(id) ON DELETE CASCADE,
+          field TEXT NOT NULL,
+          old_value TEXT,
+          new_value TEXT,
+          reason TEXT,
+          source TEXT NOT NULL CHECK(source IN ('user', 'chat', 'verifier')),
+          conversation_id TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_synthesis_revisions_finding ON synthesis_finding_revisions(synthesis_finding_id);
+      `);
+    },
+  },
 ];
 
 /** Whether `table` currently has a column named `column` (for idempotent DDL). */

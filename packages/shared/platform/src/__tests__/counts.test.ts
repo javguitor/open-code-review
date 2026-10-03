@@ -152,3 +152,43 @@ describe("resolveRoundCounts", () => {
     expect(resolveRoundCounts(meta)).toEqual(resolveRoundCounts(meta));
   });
 });
+
+describe("resolveRoundCounts - synthesis_findings precedence", () => {
+  const reviewers: CountableRoundMeta["reviewers"] = [
+    { findings: [{ category: "blocker" }, { category: "blocker" }, { category: "should_fix" }] },
+    { findings: [{ category: "blocker" }, { category: "should_fix" }, { category: "suggestion" }] },
+  ];
+
+  it("tallies the synthesized findings over synthesis_counts and the reviewer tally", () => {
+    const counts = resolveRoundCounts({
+      reviewers,
+      synthesis_counts: { blockers: 3, should_fix: 2, suggestions: 1 },
+      synthesis_findings: [{ category: "blocker" }, { category: "should_fix" }, { category: "should_fix" }, { category: "should_fix" }],
+    });
+    expect(counts).toEqual({
+      blockerCount: 1,
+      shouldFixCount: 3,
+      suggestionCount: 0,
+      reviewerCount: 2,
+      totalFindingCount: 4,
+    });
+  });
+
+  it("treats an empty synthesis_findings as a synthesis of zero findings", () => {
+    expect(resolveRoundCounts({ reviewers, synthesis_findings: [] })).toEqual({
+      blockerCount: 0,
+      shouldFixCount: 0,
+      suggestionCount: 0,
+      reviewerCount: 2,
+      totalFindingCount: 0,
+    });
+  });
+
+  it("falls back to synthesis_counts, then to the reviewer tally, when absent or null", () => {
+    expect(resolveRoundCounts({ reviewers, synthesis_findings: null }).blockerCount).toBe(3);
+    expect(
+      resolveRoundCounts({ reviewers, synthesis_findings: null, synthesis_counts: { blockers: 1, should_fix: 1, suggestions: 1 } })
+        .blockerCount,
+    ).toBe(1);
+  });
+});

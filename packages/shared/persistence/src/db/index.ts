@@ -176,10 +176,21 @@ export {
   FindingError,
   getFinding,
   getFindingRevisions,
+  getSynthesisFinding,
+  listSynthesisFindings,
+  roundUsesSynthesis,
+  roundUsesSynthesisSql,
+  isSynthesizedProvenance,
+  getSources,
+  getSubjectRevisions,
   reviseFinding,
+  reviseSubject,
   setFindingDecision,
+  setSubjectDecision,
   recordVerification,
+  recordSubjectVerification,
   applyProposal,
+  applySubjectProposal,
 } from "./findings.js";
 export type {
   FindingRow,
@@ -192,6 +203,15 @@ export type {
   SetFindingDecisionParams,
   RecordVerificationParams,
   ApplyProposalParams,
+  FindingSubject,
+  SubjectRow,
+  SynthesisFindingRow,
+  SynthesisSourceRow,
+  SynthesisLocation,
+  ReviseSubjectParams,
+  SetSubjectDecisionParams,
+  RecordSubjectVerificationParams,
+  ApplySubjectProposalParams,
 } from "./findings.js";
 
 export { resultToRows, resultToRow } from "./result-mapper.js";
