@@ -7,9 +7,25 @@
  */
 import { describe, expect, it } from 'vitest'
 import { decideWatchdogTick, trackResultEvent } from '../watchdog'
+import { pendingSubagents } from '../../services/ai-cli/claude-adapter'
 import { buildPrompt } from '../prompt-builder'
 
 describe('trackResultEvent', () => {
+  it('does not arm while background sub-agents are still running', () => {
+    const entry: { resultSeenAt?: number; resultIsError?: boolean } = {}
+    trackResultEvent(entry, { type: 'result', isError: false, pendingSubagents: 4 }, 1_000)
+    expect(entry.resultSeenAt).toBeUndefined()
+    trackResultEvent(entry, { type: 'result', isError: false, pendingSubagents: 0 }, 2_000)
+    expect(entry.resultSeenAt).toBe(2_000)
+  })
+
+  it('counts pending sub-agents from the stream-json subagent_stats', () => {
+    // Shape of a real result event (dashboard run ce80933b): 4 spawned in background.
+    expect(pendingSubagents({ spawned: 4, completed: 0, failed: 0, killed: { parent: 0, user: 0, system: 0 } })).toBe(4)
+    expect(pendingSubagents({ spawned: 4, completed: 3, failed: 0, killed: { parent: 0, user: 1, system: 0 } })).toBe(0)
+    expect(pendingSubagents(undefined)).toBeUndefined()
+  })
+
   it('arms on result and disarms on any later event', () => {
     const entry: { resultSeenAt?: number; resultIsError?: boolean } = {}
     trackResultEvent(entry, { type: 'result', isError: false }, 1_000)

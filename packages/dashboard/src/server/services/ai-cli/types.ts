@@ -62,7 +62,7 @@ export type NormalizedEvent =
    * exits. The command-runner uses this as the primary finalize trigger so
    * finalization no longer hinges on stdio EOF (which a leaked grandchild can
    * hold open forever). `isError` reflects a failed / `error_max_turns` result. */
-  | { type: 'result'; isError: boolean; subtype?: string }
+  | { type: 'result'; isError: boolean; subtype?: string; pendingSubagents?: number }
 
 // ── Stream Events ──
 // What command-runner persists to JSONL and emits via socket. Adds the

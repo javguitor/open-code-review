@@ -117,10 +117,18 @@ export function decideWatchdogTick(i: WatchdogTickInput): WatchdogTickDecision {
  */
 export function trackResultEvent(
   entry: Pick<ProcessEntry, 'resultSeenAt' | 'resultIsError'>,
-  evt: { type: string; isError?: boolean },
+  evt: { type: string; isError?: boolean; pendingSubagents?: number },
   nowMs: number,
 ): void {
   if (evt.type === 'result') {
+    // A turn that ends while background sub-agents still run is not the end of
+    // the process: their completion arrives as a new turn, possibly minutes
+    // later. Don't arm the post-result grace clock then.
+    if ((evt.pendingSubagents ?? 0) > 0) {
+      entry.resultSeenAt = undefined
+      entry.resultIsError = undefined
+      return
+    }
     entry.resultSeenAt = nowMs
     entry.resultIsError = evt.isError === true
     return

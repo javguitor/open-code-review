@@ -351,6 +351,7 @@ class ClaudeLineParser implements LineParser {
         type: 'result',
         isError: parsed['is_error'] === true,
         subtype: typeof parsed['subtype'] === 'string' ? (parsed['subtype'] as string) : undefined,
+        pendingSubagents: pendingSubagents(parsed['subagent_stats']),
       })
     }
 
@@ -375,4 +376,21 @@ function extractToolResultOutput(content: unknown): string {
     return out
   }
   return ''
+}
+
+/**
+ * Sub-agents still running when a `result` is emitted: spawned minus those that
+ * completed, failed or were killed. A turn can end while background sub-agents
+ * work; their completion arrives later as a new turn. Undefined when the event
+ * carries no stats (older CLIs).
+ */
+export function pendingSubagents(stats: unknown): number | undefined {
+  if (typeof stats !== 'object' || stats === null) return undefined
+  const s = stats as Record<string, unknown>
+  const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
+  const killed =
+    typeof s['killed'] === 'object' && s['killed'] !== null
+      ? Object.values(s['killed'] as Record<string, unknown>).reduce<number>((a, v) => a + num(v), 0)
+      : 0
+  return Math.max(0, num(s['spawned']) - num(s['completed']) - num(s['failed']) - killed)
 }
