@@ -525,6 +525,94 @@ export class FilesystemSync {
 
   // ── 6.2: Map Parser Integration ──
 
+  /**
+   * Reconcile a map run's sections and files in place. Rows are keyed by their
+   * natural unique keys (section_number, file_path) and updated with ON CONFLICT,
+   * so ids — and everything keyed on them (user_file_progress, notes, chat
+   * targets) — survive re-parses. Only sections/files that disappeared from the
+   * source are deleted. A file that merely moved between sections keeps its
+   * review progress (carried over by path).
+   */
+  private syncMapChildren(
+    mapRunId: number,
+    sections: Array<{
+      sectionNumber: number
+      title: string
+      description: string | null
+      files: Array<{ filePath: string; role: string | null; linesAdded: number; linesDeleted: number }>
+    }>,
+  ): void {
+    const wantedSections = new Set(sections.map((s) => s.sectionNumber))
+    const wantedFiles = new Set(
+      sections.flatMap((s) => s.files.map((f) => `${s.sectionNumber}\u0000${f.filePath}`)),
+    )
+
+    // Existing files that are about to be dropped: stash their progress by path
+    // so a file moved to another section keeps its reviewed state.
+    const stashed = new Map<string, { isReviewed: number; reviewedAt: string | null }>()
+    const existing = this.db.exec(
+      `SELECT mf.id, ms.id, ms.section_number, mf.file_path, ufp.is_reviewed, ufp.reviewed_at
+       FROM map_files mf
+       JOIN map_sections ms ON ms.id = mf.section_id
+       LEFT JOIN user_file_progress ufp ON ufp.map_file_id = mf.id
+       WHERE ms.map_run_id = ?`,
+      [mapRunId],
+    )
+    for (const row of existing[0]?.values ?? []) {
+      const sectionNumber = row[2] as number
+      const fp = row[3] as string
+      if (wantedFiles.has(`${sectionNumber}\u0000${fp}`)) continue
+      if (row[4] !== null) stashed.set(fp, { isReviewed: row[4] as number, reviewedAt: row[5] as string | null })
+      this.db.run('DELETE FROM map_files WHERE id = ?', [row[0] as number])
+    }
+    const oldSections = this.db.exec('SELECT id, section_number FROM map_sections WHERE map_run_id = ?', [mapRunId])
+    for (const row of oldSections[0]?.values ?? []) {
+      if (!wantedSections.has(row[1] as number)) this.db.run('DELETE FROM map_sections WHERE id = ?', [row[0] as number])
+    }
+
+    for (const section of sections) {
+      this.db.run(
+        `INSERT INTO map_sections (map_run_id, section_number, title, description, file_count, display_order)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(map_run_id, section_number) DO UPDATE SET
+           title = excluded.title, description = excluded.description,
+           file_count = excluded.file_count, display_order = excluded.display_order`,
+        [mapRunId, section.sectionNumber, section.title, section.description, section.files.length, section.sectionNumber],
+      )
+      const sectionId = queryFirst(
+        this.db,
+        'SELECT id FROM map_sections WHERE map_run_id = ? AND section_number = ?',
+        [mapRunId, section.sectionNumber],
+      )?.['id'] as number | undefined
+      if (!sectionId) continue
+
+      section.files.forEach((file, fi) => {
+        this.db.run(
+          `INSERT INTO map_files (section_id, file_path, role, lines_added, lines_deleted, display_order)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(section_id, file_path) DO UPDATE SET
+             role = excluded.role, lines_added = excluded.lines_added,
+             lines_deleted = excluded.lines_deleted, display_order = excluded.display_order`,
+          [sectionId, file.filePath, file.role, file.linesAdded, file.linesDeleted, fi],
+        )
+        const carried = stashed.get(file.filePath)
+        if (!carried) return
+        const fileId = queryFirst(
+          this.db,
+          'SELECT id FROM map_files WHERE section_id = ? AND file_path = ?',
+          [sectionId, file.filePath],
+        )?.['id'] as number | undefined
+        if (fileId) {
+          this.db.run(
+            `INSERT INTO user_file_progress (map_file_id, is_reviewed, reviewed_at) VALUES (?, ?, ?)
+             ON CONFLICT(map_file_id) DO NOTHING`,
+            [fileId, carried.isReviewed, carried.reviewedAt],
+          )
+        }
+      })
+    }
+  }
+
   private processMapMd(
     sessionId: string,
     runNumber: number,
@@ -550,10 +638,14 @@ export class FilesystemSync {
     const content = readFileSync(filePath, 'utf-8')
     const parsed = parseMapMd(content)
 
-    // Upsert map_run
+    // Upsert map_run in place: INSERT OR REPLACE would delete the row (foreign_keys=ON)
+    // and cascade away every section/file/progress row hanging off it.
     this.db.run(
-      `INSERT OR REPLACE INTO map_runs (session_id, run_number, file_count, map_md_path, parsed_at, source)
-       VALUES (?, ?, ?, ?, ?, 'parser')`,
+      `INSERT INTO map_runs (session_id, run_number, file_count, map_md_path, parsed_at, source)
+       VALUES (?, ?, ?, ?, ?, 'parser')
+       ON CONFLICT(session_id, run_number) DO UPDATE SET
+         file_count = excluded.file_count, map_md_path = excluded.map_md_path,
+         parsed_at = excluded.parsed_at, source = excluded.source`,
       [sessionId, runNumber, parsed.sections.reduce((sum, s) => sum + s.files.length, 0), filePath, sqlNow()],
     )
 
@@ -566,81 +658,7 @@ export class FilesystemSync {
     const mapRunId = runRow?.['id'] as number | undefined
     if (!mapRunId) return
 
-    // Stash user progress before delete (cascade will destroy it)
-    const stashedFileProgress = new Map<string, { isReviewed: number; reviewedAt: string | null }>()
-    const progressResult = this.db.exec(
-      `SELECT mf.file_path, ufp.is_reviewed, ufp.reviewed_at
-       FROM user_file_progress ufp
-       JOIN map_files mf ON mf.id = ufp.map_file_id
-       JOIN map_sections ms ON ms.id = mf.section_id
-       WHERE ms.map_run_id = ?`,
-      [mapRunId],
-    )
-    if (progressResult[0]) {
-      for (const row of progressResult[0].values) {
-        const fp = row[0] as string
-        stashedFileProgress.set(fp, {
-          isReviewed: row[1] as number,
-          reviewedAt: row[2] as string | null,
-        })
-      }
-    }
-
-    // Clean old sections/files for this run (parser may have changed)
-    const oldSections = this.db.exec(
-      'SELECT id FROM map_sections WHERE map_run_id = ?',
-      [mapRunId],
-    )
-    if (oldSections[0]) {
-      for (const row of oldSections[0].values) {
-        this.db.run('DELETE FROM map_files WHERE section_id = ?', [row[0] as number])
-      }
-    }
-    this.db.run('DELETE FROM map_sections WHERE map_run_id = ?', [mapRunId])
-
-    // Insert sections and files
-    for (const section of parsed.sections) {
-      this.db.run(
-        `INSERT OR REPLACE INTO map_sections (map_run_id, section_number, title, description, file_count, display_order)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [mapRunId, section.sectionNumber, section.title, section.description, section.files.length, section.sectionNumber],
-      )
-
-      const sectionRow = queryFirst(
-        this.db,
-        'SELECT id FROM map_sections WHERE map_run_id = ? AND section_number = ?',
-        [mapRunId, section.sectionNumber],
-      )
-      const sectionId = sectionRow?.['id'] as number | undefined
-      if (!sectionId) continue
-
-      for (let fi = 0; fi < section.files.length; fi++) {
-        const file = section.files[fi]
-        if (!file) continue
-        this.db.run(
-          `INSERT OR REPLACE INTO map_files (section_id, file_path, role, lines_added, lines_deleted, display_order)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [sectionId, file.filePath, file.role, file.linesAdded, file.linesDeleted, fi],
-        )
-
-        // Restore stashed user progress for this file
-        const stashed = stashedFileProgress.get(file.filePath)
-        if (stashed) {
-          const newFileRow = queryFirst(
-            this.db,
-            'SELECT id FROM map_files WHERE section_id = ? AND file_path = ?',
-            [sectionId, file.filePath],
-          )
-          if (newFileRow) {
-            this.db.run(
-              `INSERT OR REPLACE INTO user_file_progress (map_file_id, is_reviewed, reviewed_at)
-               VALUES (?, ?, ?)`,
-              [newFileRow['id'] as number, stashed.isReviewed, stashed.reviewedAt],
-            )
-          }
-        }
-      }
-    }
+    this.syncMapChildren(mapRunId, parsed.sections)
 
     // Safety net: recover a map session whose CLI finalize landed the terminal
     // `map_completed` event but crashed before the close ran. Closes ONLY when
@@ -1052,86 +1070,20 @@ export class FilesystemSync {
         return
       }
 
-      // Stash user progress before delete (cascade will destroy it)
-      const stashedFileProgress = new Map<string, { isReviewed: number; reviewedAt: string | null }>()
-      const progressResult = this.db.exec(
-        `SELECT mf.file_path, ufp.is_reviewed, ufp.reviewed_at
-         FROM user_file_progress ufp
-         JOIN map_files mf ON mf.id = ufp.map_file_id
-         JOIN map_sections ms ON ms.id = mf.section_id
-         WHERE ms.map_run_id = ?`,
-        [mapRunId],
+      this.syncMapChildren(
+        mapRunId,
+        meta.sections.map((section) => ({
+          sectionNumber: section.section_number ?? 0,
+          title: section.title ?? 'Untitled',
+          description: section.description ?? null,
+          files: (section.files ?? []).map((file) => ({
+            filePath: file.file_path ?? '',
+            role: file.role ?? null,
+            linesAdded: file.lines_added ?? 0,
+            linesDeleted: file.lines_deleted ?? 0,
+          })),
+        })),
       )
-      if (progressResult[0]) {
-        for (const row of progressResult[0].values) {
-          const fp = row[0] as string
-          stashedFileProgress.set(fp, {
-            isReviewed: row[1] as number,
-            reviewedAt: row[2] as string | null,
-          })
-        }
-      }
-
-      // Clean old sections/files for this run
-      const oldSections = this.db.exec(
-        'SELECT id FROM map_sections WHERE map_run_id = ?',
-        [mapRunId],
-      )
-      if (oldSections[0]) {
-        for (const row of oldSections[0].values) {
-          this.db.run('DELETE FROM map_files WHERE section_id = ?', [row[0] as number])
-        }
-      }
-      this.db.run('DELETE FROM map_sections WHERE map_run_id = ?', [mapRunId])
-
-      // Insert sections and files from structured data
-      for (const section of meta.sections) {
-        const sectionNumber = section.section_number ?? 0
-        const title = section.title ?? 'Untitled'
-        const description = section.description ?? null
-        const files = section.files ?? []
-
-        this.db.run(
-          `INSERT OR REPLACE INTO map_sections (map_run_id, section_number, title, description, file_count, display_order)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [mapRunId, sectionNumber, title, description, files.length, sectionNumber],
-        )
-
-        const sectionRow = queryFirst(
-          this.db,
-          'SELECT id FROM map_sections WHERE map_run_id = ? AND section_number = ?',
-          [mapRunId, sectionNumber],
-        )
-        const sectionId = sectionRow?.['id'] as number | undefined
-        if (!sectionId) continue
-
-        for (let fi = 0; fi < files.length; fi++) {
-          const file = files[fi]
-          if (!file) continue
-          this.db.run(
-            `INSERT OR REPLACE INTO map_files (section_id, file_path, role, lines_added, lines_deleted, display_order)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [sectionId, file.file_path ?? '', file.role ?? null, file.lines_added ?? 0, file.lines_deleted ?? 0, fi],
-          )
-
-          // Restore stashed user progress for this file
-          const stashed = stashedFileProgress.get(file.file_path ?? '')
-          if (stashed) {
-            const newFileRow = queryFirst(
-              this.db,
-              'SELECT id FROM map_files WHERE section_id = ? AND file_path = ?',
-              [sectionId, file.file_path ?? ''],
-            )
-            if (newFileRow) {
-              this.db.run(
-                `INSERT OR REPLACE INTO user_file_progress (map_file_id, is_reviewed, reviewed_at)
-                 VALUES (?, ?, ?)`,
-                [newFileRow['id'] as number, stashed.isReviewed, stashed.reviewedAt],
-              )
-            }
-          }
-        }
-      }
 
       this.db.run('COMMIT')
     } catch (err) {
