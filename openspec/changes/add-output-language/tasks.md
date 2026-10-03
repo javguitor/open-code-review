@@ -33,11 +33,11 @@
 
 ## 6. Fixes from the Spanish acceptance review (should-fix 1–3, suggestions 1–2)
 
-- [ ] 6.1 Drift test: `language-config.test.ts` reads `packages/agents/skills/ocr/references/language-policy.md` via `readFileSync` and asserts its `## Output Language` block equals `languagePolicy('{language}')`.
-- [ ] 6.2 Extend the token list in BOTH copies: `**Blockers**: N` / `**Should Fix**: N` / `**Suggestions**: N` bold counts; map `## Section N:`, table columns `Done` / `File` / `Role` / `Type` / `Description`, `**Files**`, `**The Story**:`.
-- [ ] 6.3 Delete `prompts/human-review.ts` and its test (dead code; spec scenario now points at the command).
-- [ ] 6.4 `languagePolicy` returns `null` for tags that fail `LANGUAGE_TAG`.
-- [ ] 6.5 Placeholder consistency in agent docs: `OUTPUT_LANGUAGE` only where defined (`workflow.md` Phase 1); `{language}` elsewhere; rename "1a-bis" to a plain sub-step. `nx run cli:update`.
+- [x] 6.1 Drift test: `language-config.test.ts` reads `packages/agents/skills/ocr/references/language-policy.md` via `readFileSync` and asserts its `## Output Language` block equals `languagePolicy('{language}')`.
+- [x] 6.2 Extend the token list in BOTH copies: `**Blockers**: N` / `**Should Fix**: N` / `**Suggestions**: N` bold counts; map `## Section N:`, table columns `Done` / `File` / `Role` / `Type` / `Description`, `**Files**`, `**The Story**:`.
+- [x] 6.3 Delete `prompts/human-review.ts` and its test (dead code; spec scenario now points at the command).
+- [x] 6.4 `languagePolicy` returns `null` for tags that fail `LANGUAGE_TAG`.
+- [x] 6.5 Placeholder consistency in agent docs: `OUTPUT_LANGUAGE` only where defined (`workflow.md` Phase 1); `{language}` elsewhere; rename "1a-bis" to a plain sub-step. `nx run cli:update`.
 
 ## Findings
 
