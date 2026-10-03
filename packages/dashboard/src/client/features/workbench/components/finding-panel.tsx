@@ -35,13 +35,26 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function RevisionItem({ revision }: { revision: FindingRevision }) {
   const { t } = useT()
   const none = t('workbench.revision_empty_value')
+  // status / verification_status values are enums with their own labels;
+  // severity and category values are shown as stored.
+  const fieldKey =
+    revision.field === 'severity' ? 'workbench.revision_severity'
+    : revision.field === 'category' ? 'workbench.revision_category'
+    : revision.field === 'status' ? 'workbench.decision'
+    : 'workbench.verification'
+  const valueLabel = (value: string | null): string => {
+    if (value === null) return none
+    if (revision.field === 'status') return t(`workbench.decision_${value}` as Parameters<typeof t>[0])
+    if (revision.field === 'verification_status') return t(`workbench.verification_${value}` as Parameters<typeof t>[0])
+    return value
+  }
   return (
     <li className="rounded-md border border-zinc-200 p-2 text-xs dark:border-zinc-800">
       <p className="font-medium text-zinc-900 dark:text-zinc-100">
         {t('workbench.revision_change', {
-          field: t(revision.field === 'severity' ? 'workbench.revision_severity' : 'workbench.revision_category'),
-          from: revision.old_value ?? none,
-          to: revision.new_value ?? none,
+          field: t(fieldKey),
+          from: valueLabel(revision.old_value),
+          to: valueLabel(revision.new_value),
         })}
       </p>
       <p className="text-zinc-500 dark:text-zinc-400">

@@ -591,7 +591,7 @@ export type FindingView = {
 export type FindingRevision = {
   id: number
   finding_id: number
-  field: 'severity' | 'category'
+  field: 'severity' | 'category' | 'status' | 'verification_status'
   old_value: string | null
   new_value: string | null
   reason: string
