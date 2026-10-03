@@ -30,6 +30,10 @@ This synthesis process is designed to mirror how high-performing engineering tea
 
 ## Synthesis Process
 
+### Language
+
+Synthesis prose follows `OUTPUT_LANGUAGE` (see `references/language-policy.md`; omitted when `en`). Every heading, label, verdict value and category in the template is literal English. `round-meta.json` values are unaffected.
+
 ### Step 1: Gather All Feedback
 
 Collect without filtering (see `references/session-files.md` for file names):

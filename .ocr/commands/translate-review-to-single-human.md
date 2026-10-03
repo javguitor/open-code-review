@@ -105,6 +105,8 @@ Every technical finding must include a severity label:
 
 ## Output Format
 
+Write the comment in the `language` set in `.ocr/config.yaml` (default `en`), using that language's natural human register.
+
 Write ONLY the review comment in GitHub-flavored markdown. Jump straight into the review -- no meta-preamble, no explanation of what you're doing, no wrapper text.
 
 The output goes directly into `final-human.md` and will be posted as-is to a GitHub PR.

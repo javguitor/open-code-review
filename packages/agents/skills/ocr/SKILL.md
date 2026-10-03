@@ -157,6 +157,7 @@ Review `.ocr/config.yaml` for:
 - `context_discovery`: OpenSpec integration and reference files to discover
 - `rules`: Per-severity review rules (critical, important, consider)
 - `default_team`: Reviewer team composition
+- `language`: Output language for review prose (default `en`); headings, labels and verdicts stay English
 
 ## Workflow Summary
 

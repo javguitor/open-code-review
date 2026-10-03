@@ -70,6 +70,10 @@ For each reviewer, spawn a discourse task:
 
 You previously reviewed this code. Now review what OTHER reviewers found.
 
+## Language
+
+Follow `references/language-policy.md` with language = `{language}`. (Omit this section when the language is `en`.) `AGREE`/`CHALLENGE`/`CONNECT`/`SURFACE` stay English.
+
 ## Your Original Findings
 {their findings}
 

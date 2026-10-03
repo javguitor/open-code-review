@@ -214,6 +214,10 @@ Extract:
 - `context_discovery.references` — Files to discover
 - `rules:` — Per-severity review rules
 
+**1a-bis. Read the Output Language**
+
+Read the top-level `language` key from `.ocr/config.yaml` (default `en`) and store it as `OUTPUT_LANGUAGE`. See `references/language-policy.md`.
+
 **1b. Pull OpenSpec Context (if enabled)**
 
 If `context_discovery.openspec.enabled: true`:
@@ -281,6 +285,8 @@ If requirements provided, save to `requirements.md` in session directory.
 
 ## Review Rules
 [rules from .ocr/config.yaml]
+
+## Output Language: {language}
 ```
 
 See `references/context-discovery.md` for detailed algorithm.
@@ -633,6 +639,7 @@ instantiation strategy your host CLI supports (parallel sub-agents or sequential
    - Tech Lead guidance (including requirements assessment)
    - The diff to review
    - **Instruction to explore codebase with full agency**
+   - The output language policy (`references/language-policy.md` with `{language}` = `OUTPUT_LANGUAGE`) — omitted when `en`
 
 7. Save each review to `.ocr/sessions/{id}/rounds/round-{current_round}/reviews/{type}-{n}.md`.
 
@@ -721,6 +728,8 @@ echo "OK Found $REVIEWER_COUNT reviewer files"
 
 3. Save discourse to `.ocr/sessions/{id}/rounds/round-{current_round}/discourse.md`.
 
+Discourse prose follows `OUTPUT_LANGUAGE`; the `AGREE`/`CHALLENGE`/`CONNECT`/`SURFACE` verbs and headings stay English (see `references/language-policy.md`).
+
 See `references/discourse.md` for detailed instructions.
 
 ### Phase 6 Checkpoint
@@ -741,6 +750,8 @@ See `references/discourse.md` for detailed instructions.
 > **File**: `rounds/round-{n}/final.md`
 > **Template**: See `references/final-template.md` for format
 > **Manifest**: See `references/session-files.md` for authoritative file names
+
+Synthesis prose follows `OUTPUT_LANGUAGE`; headings, labels, verdicts and categories stay English (see `references/language-policy.md`).
 
 ### Steps
 
@@ -946,7 +957,7 @@ fi
 
 | Phase | Command/Action | Output |
 |-------|---------------|--------|
-| 1 | `ocr state begin` + search for context files | `discovered-standards.md` |
+| 1 | `ocr state begin` + search for context files, read `language` | `discovered-standards.md` |
 | 2 | git diff, create session, `ocr state advance` | `context.md`, `rounds/round-1/reviews/` |
 | 3 | Analyze, select reviewers, `ocr state advance` | guidance in `context.md` |
 | 4 | Spawn reviewer tasks, `ocr state advance` | `rounds/round-{n}/reviews/*.md` |

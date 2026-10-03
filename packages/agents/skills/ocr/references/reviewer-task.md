@@ -34,6 +34,10 @@ code on its merits.
 
 {tech lead analysis including requirements assessment and focus points}
 
+## Language
+
+Follow `references/language-policy.md` with language = `{language}`. (Omit this section when the language is `en`.)
+
 ## Code to Review
 
 ```diff
@@ -66,6 +70,8 @@ findings in Phase 5.
 ### Output Format
 
 Structure your review as follows:
+
+Headings and labels below are literal and stay English in every language; bodies follow the configured language.
 
 ```markdown
 # {Reviewer Name} Review
@@ -198,6 +204,10 @@ while maintaining the same structure as library reviewer personas.}
 
 ## Tech Lead Guidance
 {same as library reviewers}
+
+## Language
+
+Follow `references/language-policy.md` with language = `{language}`. (Omit this section when the language is `en`.)
 
 ## Code to Review
 {same as library reviewers}
