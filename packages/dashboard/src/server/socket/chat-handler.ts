@@ -175,7 +175,9 @@ export function registerChatHandlers(
         prompt,
         cwd: codeRoot.path,
         mode: 'query',
-        maxTurns: 1,
+        // Each Read/Grep/Glob call consumes a turn: with 1, the first file
+        // lookup ended the process with "max turns" (exit 1) before answering.
+        maxTurns: 10,
         allowedTools: ['Read', 'Grep', 'Glob'],
         resumeSessionId: resumeId,
       })
