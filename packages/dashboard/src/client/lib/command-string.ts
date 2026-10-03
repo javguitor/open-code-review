@@ -43,3 +43,15 @@ export function requirementsArgs(requirements: unknown, withComments: boolean): 
   if (typeof requirements !== 'string' || !requirements.trim()) return []
   return [...(withComments ? ['--with-comments'] : []), '--requirements', quoteArg(requirements.trim())]
 }
+
+/** `ocr address <final.md> [--requirements "<notes>"]`; notes are quoted so they stay one token. */
+export function buildAddressCommand(finalPath: string, notes: string): string {
+  const parts = ['ocr address', finalPath]
+  if (notes.trim()) parts.push('--requirements', quoteArg(notes.trim()))
+  return parts.join(' ')
+}
+
+/** `create-reviewer <slug> --focus "<focus>"` with the focus quoted for `shellSplit`. */
+export function buildCreateReviewerCommand(slug: string, focus: string): string {
+  return `create-reviewer ${slug} --focus ${quoteArg(focus)}`
+}

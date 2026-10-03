@@ -71,6 +71,9 @@ export function RequirementsBlock({ session }: { session: SessionSummary }) {
       {checkError && (
         <p className="text-[11px] text-red-600 dark:text-red-400">{t('requirements.check_error', { error: checkError })}</p>
       )}
+      {!session.pr_url && check.isError && (
+        <p className="text-[11px] text-red-600 dark:text-red-400">{t('sessions.check_updates_error_generic')}</p>
+      )}
       <RequirementsPanel sessionId={session.id} updatedAt={session.requirements_updated_at} />
     </div>
   )

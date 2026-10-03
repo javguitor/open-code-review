@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractQuotedFlag, quoteArg, requirementsArgs } from '../command-string'
+import { buildAddressCommand, buildCreateReviewerCommand, extractQuotedFlag, quoteArg, requirementsArgs } from '../command-string'
 // Pure server helpers: the palette's output is parsed by exactly these.
 import { buildPrompt, shellSplit } from '../../../server/socket/prompt-builder'
 
@@ -33,6 +33,33 @@ describe('palette command string -> shellSplit -> buildPrompt', () => {
   it('survives quotes and backslashes in the text', () => {
     const tricky = 'say "hi" and use C:\\temp\\ then \\"x\\"'
     expect(shellSplit(`--requirements ${quoteArg(tricky)} --fresh`)).toEqual(['--requirements', tricky, '--fresh'])
+  })
+})
+
+describe('address and create-reviewer builders', () => {
+  it('address notes with spaces keep the final.md target and the full notes', () => {
+    const finalPath = '.ocr/sessions/s1/rounds/round-1/final.md'
+    const notes = 'focus on the auth changes only'
+    const [, , ...subArgs] = shellSplit(buildAddressCommand(finalPath, notes))
+    expect(subArgs).toEqual([finalPath, '--requirements', notes])
+    const { prompt } = buildPrompt({
+      baseCommand: 'address',
+      subArgs,
+      commandContent: '# address',
+      executionUid: 'uid',
+      localCli: '/abs/cli.js',
+    })
+    expect(prompt).toContain(`Target: ${finalPath}`)
+    expect(prompt).toContain(`Requirements: ${notes}`)
+  })
+
+  it('address without notes adds no flag', () => {
+    expect(buildAddressCommand('a/final.md', '  ')).toBe('ocr address a/final.md')
+  })
+
+  it('create-reviewer focus ending in a backslash survives shellSplit', () => {
+    const focus = 'paths like C:\\temp\\ and "quotes"\\'
+    expect(shellSplit(buildCreateReviewerCommand('my-rev', focus))).toEqual(['create-reviewer', 'my-rev', '--focus', focus])
   })
 })
 
