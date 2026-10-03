@@ -9,6 +9,8 @@ export function useSessions() {
   const query = useQuery<SessionSummary[]>({
     queryKey: ['sessions'],
     queryFn: () => fetchApi<SessionSummary[]>('/api/sessions'),
+    // The global default is off; a missed socket event would otherwise never be repaired.
+    refetchOnWindowFocus: true,
   })
 
   useSocketEvent('session:created', () => {
@@ -29,6 +31,7 @@ export function useSession(id: string) {
     queryKey: ['sessions', id],
     queryFn: () => fetchApi<SessionSummary>(`/api/sessions/${id}`),
     enabled: !!id,
+    refetchOnWindowFocus: true,
   })
 
   useSocketEvent('session:updated', () => {

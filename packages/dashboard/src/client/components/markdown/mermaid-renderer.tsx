@@ -1,18 +1,28 @@
 import { useEffect, useRef, useState, useId } from 'react'
 import mermaid from 'mermaid'
-import { useT } from '../../../lib/i18n'
-import { useTheme } from '../../../providers/theme-provider'
+import { useT } from '../../lib/i18n'
+import { useTheme } from '../../providers/theme-provider'
 
 type MermaidRendererProps = {
   definition: string
   onNodeClick?: (nodeId: string) => void
+  /**
+   * Mermaid security level. `'loose'` enables click handlers and HTML labels
+   * (the review map needs them); `'strict'` sanitizes the diagram and disables
+   * click directives — use it for any content derived from untrusted text.
+   */
+  securityLevel?: 'strict' | 'loose'
 }
 
 /**
  * Renders a Mermaid definition string as SVG.
  * This component must be lazy-loaded via React.lazy() since mermaid is ~2MB.
  */
-export default function MermaidRenderer({ definition, onNodeClick }: MermaidRendererProps) {
+export default function MermaidRenderer({
+  definition,
+  onNodeClick,
+  securityLevel = 'strict',
+}: MermaidRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [error, setError] = useState<string | null>(null)
   const { t } = useT()
@@ -24,14 +34,14 @@ export default function MermaidRenderer({ definition, onNodeClick }: MermaidRend
     mermaid.initialize({
       startOnLoad: false,
       theme: theme === 'dark' ? 'dark' : 'default',
-      securityLevel: 'loose',
+      securityLevel,
       flowchart: {
         useMaxWidth: true,
         htmlLabels: true,
         curve: 'basis',
       },
     })
-  }, [theme])
+  }, [theme, securityLevel])
 
   useEffect(() => {
     if (!definition || !containerRef.current) return
@@ -89,8 +99,14 @@ export default function MermaidRenderer({ definition, onNodeClick }: MermaidRend
 
   if (error) {
     return (
-      <div className="rounded-lg border border-red-500/25 bg-red-500/5 p-4 text-sm text-red-600 dark:text-red-400">
-        {t('map.render_graph_failed', { error })}
+      <div className="space-y-2">
+        <div className="rounded-lg border border-red-500/25 bg-red-500/5 p-4 text-sm text-red-600 dark:text-red-400">
+          {t('common.diagram_render_failed', { error })}
+        </div>
+        {/* Keep the source visible so a broken diagram never hides content. */}
+        <pre className="overflow-x-auto rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <code>{definition}</code>
+        </pre>
       </div>
     )
   }

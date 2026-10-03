@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { PrAuthor } from '../sessions/components/pr-author'
+import { PostedBadge } from '../sessions/components/posted-badge'
 import { useNavigate } from 'react-router-dom'
 import { Filter, FileText } from 'lucide-react'
 import { cn } from '../../lib/utils'
@@ -256,6 +257,7 @@ export function ReviewsPage() {
                             <span className="truncate text-zinc-900 dark:text-zinc-100" title={round.session_id}>
                               {branch}
                             </span>
+                            <PostedBadge postedAt={round.posted_at} postedUrl={round.posted_url} />
                           </div>
                         </td>
                         <td className="border-b border-zinc-200 px-4 py-2 text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">

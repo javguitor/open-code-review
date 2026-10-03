@@ -14,7 +14,6 @@ const map = {
   'map.graph_node_files': '{reviewed}/{total} files',
   'map.open_in_ide': 'Open in {ide}',
   'map.render_diagram_failed': 'Failed to render diagram',
-  'map.render_graph_failed': 'Failed to render dependency graph: {error}',
   'map.view_raw': 'View Raw Map',
   'map.raw_output_title': 'Raw Map Output',
   'map.loading_content': 'Loading map content...',

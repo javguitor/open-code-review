@@ -93,6 +93,7 @@ The text that gets posted must NEVER contain:
 - any mention of AI, agents, LLMs, automated analysis, reviewers (personas or handles such as `principal-1`, `quality-2`), "the team", rounds, sessions, consensus, OCR, or any tooling;
 - file paths under `.ocr/`, session ids, or the names of these output files;
 - reviewer tables, "Individual Reviews", consensus/dissent sections, or verdict banners from `final.md`;
+- the `## What This Change Does` section of `final.md` and any `mermaid` diagram: they are internal explanations for the team and are NOT carried into `final-human.md` or into any comment;
 - a mention that the text was translated or rewritten.
 
 ---

@@ -14,7 +14,6 @@ const map = {
   'map.graph_node_files': '{reviewed}/{total} archivos',
   'map.open_in_ide': 'Abrir en {ide}',
   'map.render_diagram_failed': 'No se pudo renderizar el diagrama',
-  'map.render_graph_failed': 'No se pudo renderizar el grafo de dependencias: {error}',
   'map.view_raw': 'Ver map sin procesar',
   'map.raw_output_title': 'Salida del map sin procesar',
   'map.loading_content': 'Cargando contenido del map...',

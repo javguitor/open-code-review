@@ -9,6 +9,7 @@ import { PhaseTimeline, type Phase } from '../../components/ui/phase-timeline'
 import { SessionTabs } from './components/session-tabs'
 import { LivenessHeader } from './components/liveness-header'
 import { ResumeCard } from './components/resume-card'
+import { PostedBadge } from './components/posted-badge'
 import { StaleBadge } from './components/stale-badge'
 import { PrAuthor } from './components/pr-author'
 import { WorktreePanel } from './components/worktree-panel'
@@ -180,7 +181,10 @@ export function SessionDetailPage() {
               </span>
             </div>
           </div>
-          <StatusBadge variant={session.status} />
+          <div className="flex items-center gap-2">
+            <PostedBadge postedAt={session.latest_posted_at} postedUrl={session.latest_posted_url} />
+            <StatusBadge variant={session.status} />
+          </div>
         </div>
 
         {session.pr_url && (

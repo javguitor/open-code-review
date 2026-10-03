@@ -1,4 +1,5 @@
 const common = {
+  'common.diagram_render_failed': 'No se pudo renderizar el diagrama: {error}',
   'common.loading': 'Cargando',
   'common.cancel': 'Cancelar',
   'common.done': 'Hecho',

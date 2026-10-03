@@ -93,6 +93,10 @@ export type ReviewRoundRow = {
   source: string | null
   reviewer_count: number
   total_finding_count: number
+  /** Set once the round was posted to GitHub (null = never posted). */
+  posted_at: string | null
+  posted_url: string | null
+  posted_state: string | null
 }
 
 export type ReviewerOutputRow = {

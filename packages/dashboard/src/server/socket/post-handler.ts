@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { join, dirname, isAbsolute } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { Server as SocketIOServer, Socket } from 'socket.io'
-import type { Database } from '@open-code-review/persistence'
+import { markRoundPosted, type Database } from '@open-code-review/persistence'
 import { execBinaryAsync, isGitHubReviewState, type GitHubReviewState } from '@open-code-review/platform'
 import { getWorktreeConfig } from '@open-code-review/config/worktree-config'
 import { getPostingLanguage } from '@open-code-review/config/language-config'
@@ -238,6 +238,29 @@ export function registerPostHandlers(
     const files = readRoundPost(roundDirFor(session, p.sessionId, p.roundNumber as number, ocrDir))
     const preview = buildPreview(files, getPostingLanguage(ocrDir), { inline: p.inline !== false })
     return preview.hasHuman ? preview : null
+  }
+
+  /**
+   * Persists "this round was posted" and tells every open list to refetch
+   * (`session:updated`). Never fails the post: the review is already on GitHub.
+   */
+  function recordPosted(p: { sessionId?: unknown; roundNumber?: unknown }, url: string | null, state: GitHubReviewState): void {
+    if (typeof p.sessionId !== 'string' || !Number.isInteger(p.roundNumber)) return
+    try {
+      if (!markRoundPosted(db, p.sessionId, p.roundNumber as number, { url, state })) {
+        console.warn(`[post] no review round ${p.roundNumber} for session ${p.sessionId}; posted state not recorded`)
+        return
+      }
+      const session = getSession(db, p.sessionId)
+      io.emit('session:updated', {
+        id: p.sessionId,
+        status: session?.status,
+        current_phase: session?.current_phase,
+        phase_number: session?.phase_number,
+      })
+    } catch (err) {
+      console.warn('[post] failed to record posted state:', err)
+    }
   }
 
   // ── Check GitHub CLI auth + find PR ──
@@ -795,6 +818,7 @@ export function registerPostHandlers(
             tracker.appendOutput(`▸ Worktree: ${worktree}${worktreeError ? ` (${worktreeError})` : ''}\n`)
           }
           tracker.finish(0)
+          recordPosted(payload, urlMatch, state)
           socket.emit('post:submit-result', {
             success: true, commentUrl: urlMatch, state, downgraded, worktree,
             ...(inlineComments.length > 0 ? { inlineCount: inlineComments.length } : {}),

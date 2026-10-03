@@ -117,6 +117,7 @@ export {
   getEventsForSession,
   getLatestEventId,
   commitReasonClose,
+  markRoundPosted,
 } from "./queries.js";
 
 export {

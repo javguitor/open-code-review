@@ -65,6 +65,8 @@ type EnrichedSession = SessionRow & {
   latest_verdict: string | null
   latest_blocker_count: number
   latest_round_status: string | null
+  latest_posted_at: string | null
+  latest_posted_url: string | null
 }
 
 /**
@@ -170,6 +172,8 @@ function enrichSession(db: Database, session: SessionRow): EnrichedSession {
     latest_verdict: latestVerdict,
     latest_blocker_count: latestBlockerCount,
     latest_round_status: latestRoundStatus,
+    latest_posted_at: latestRound?.posted_at ?? null,
+    latest_posted_url: latestRound?.posted_url ?? null,
   }
 }
 

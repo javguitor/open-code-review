@@ -199,3 +199,32 @@ export function commitReasonClose(
     updateSession(db, sessionId, projectionUpdates);
   });
 }
+
+// ── Posted rounds ──
+
+/**
+ * Records that a review round was posted to GitHub. `state` is the state
+ * actually sent (after any own-PR downgrade); `url` is the review's html_url
+ * when known. Re-posting overwrites the previous record (latest post wins).
+ * Returns whether a round row matched.
+ */
+export function markRoundPosted(
+  db: Database,
+  sessionId: string,
+  roundNumber: number,
+  posted: { url: string | null; state: string },
+): boolean {
+  db.run(
+    `UPDATE review_rounds
+        SET posted_at = datetime('now'), posted_url = ?, posted_state = ?
+      WHERE session_id = ? AND round_number = ?`,
+    [posted.url, posted.state, sessionId, roundNumber],
+  );
+  const row = resultToRow<{ posted_at: string | null }>(
+    db.exec(
+      "SELECT posted_at FROM review_rounds WHERE session_id = ? AND round_number = ?",
+      [sessionId, roundNumber],
+    ),
+  );
+  return row !== undefined;
+}
