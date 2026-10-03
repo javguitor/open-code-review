@@ -220,7 +220,20 @@ Before the verdict, `final.md` opens with `## What This Change Does`: a short se
 
 - **`**What the task asks**`** — from `requirements.md` or the card when present. With no requirements, say what the change is for, inferred from the PR description.
 - **`**What the PR implements**`** — the behaviour change in plain words. Few technical terms; no file-by-file walk.
-- **One ` ```mermaid ` diagram** — `sequenceDiagram` when the change is about components or services talking over time, `flowchart` for a decision or workflow. At most ~12 nodes or messages; plain-word labels, double-quoted when they contain punctuation; no HTML and no `click` directives. Add a second "before → after" diagram only when the change alters an existing flow.
+- **One ` ```mermaid ` diagram** — `sequenceDiagram` when the change is about components or services talking over time, `flowchart` for a decision or workflow. At most ~12 nodes or messages; plain-word labels, double-quoted when they contain punctuation; no HTML and no `click` directives. Add a second "before → after" diagram only when the change alters an existing flow. Draw it as ONE `flowchart LR` with two subgraphs with ASCII ids and quoted titles, `direction TB` inside each, and an invisible link between them so Mermaid keeps the order (without it, unconnected subgraphs can come out stacked and reversed):
+
+  ```
+  flowchart LR
+      subgraph before["Before"]
+          direction TB
+          A1["..."] --> A2["..."]
+      end
+      subgraph after["After"]
+          direction TB
+          B1["..."] --> B2["..."]
+      end
+      before ~~~ after
+  ```
 - Keep the whole section under ~25 lines. The two bold labels are prose and follow the configured language; the heading stays in English.
 
 ---
