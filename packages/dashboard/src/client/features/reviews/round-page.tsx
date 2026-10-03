@@ -126,6 +126,14 @@ export function RoundPage() {
     ? parseDiscourseContent(discourseArtifact.content)
     : []
 
+  // Current (possibly revised) counts; the synthesis columns are the fallback
+  // for rounds the server could not recount.
+  const counts = round.current_counts ?? {
+    blockers: round.blocker_count,
+    should_fix: round.should_fix_count,
+    suggestions: round.suggestion_count,
+  }
+
   const showAfterDecisions =
     !!round.verdict_after_decisions &&
     (normalizeVerdict(round.verdict_after_decisions) ?? round.verdict_after_decisions) !==
@@ -252,10 +260,25 @@ export function RoundPage() {
       {round.verdict && (
         <VerdictBanner
           verdict={round.verdict}
-          blockerCount={round.blocker_count}
-          suggestionCount={round.suggestion_count}
-          shouldFixCount={round.should_fix_count}
+          blockerCount={counts.blockers}
+          suggestionCount={counts.suggestions}
+          shouldFixCount={counts.should_fix}
         />
+      )}
+      {round.verdict && (
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          {t('reviews.counts_per_row')}
+          {round.current_counts && (
+            <>
+              {' '}
+              {t('reviews.synthesis_counts', {
+                blockers: round.blocker_count,
+                should_fix: round.should_fix_count,
+                suggestions: round.suggestion_count,
+              })}
+            </>
+          )}
+        </p>
       )}
 
       {/* Same gate recomputed on the user's decisions; only shown when it differs. */}

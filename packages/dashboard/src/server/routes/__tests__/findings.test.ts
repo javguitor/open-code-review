@@ -115,4 +115,38 @@ describe('findings routes', () => {
     expect((await api('GET', '/findings/99')).status).toBe(404)
     expect((await api('GET', '/findings/99/revisions')).status).toBe(404)
   })
+
+  it('POST apply-proposal: applies severity + status atomically as source chat and emits round:updated', async () => {
+    const r = await api('POST', '/findings/1/apply-proposal', {
+      severity: 'low', status: 'dismissed', reason: 'guarded upstream by the gateway', conversation_id: 'c1',
+    })
+    expect(r.status).toBe(200)
+    expect(r.body).toMatchObject({ severity: 'low', decision: { status: 'dismissed' } })
+    expect(r.body.revisions.map((x: any) => [x.field, x.source, x.conversation_id])).toEqual([
+      ['severity', 'chat', 'c1'],
+      ['status', 'chat', 'c1'],
+    ])
+    expect(emitted).toEqual([
+      { room: 'session:s1', event: 'round:updated', payload: { sessionId: 's1', roundNumber: 2 } },
+    ])
+  })
+
+  it('POST apply-proposal: validates before writing anything', async () => {
+    const base = { reason: 'because of the gateway', conversation_id: 'c1' }
+    const bad = await api('POST', '/findings/1/apply-proposal', { ...base, severity: 'low', category: 'nope' })
+    expect(bad.status).toBe(400)
+    expect(bad.body.code).toBe('invalid-value')
+    expect((await api('POST', '/findings/1/apply-proposal', base)).status).toBe(400)
+    expect((await api('POST', '/findings/1/apply-proposal', { severity: 'low', conversation_id: 'c1' })).status).toBe(400)
+    expect((await api('POST', '/findings/1/apply-proposal', { severity: 'low', reason: 'x' })).status).toBe(400)
+    expect((await api('POST', '/findings/99/apply-proposal', { ...base, severity: 'low' })).status).toBe(404)
+    expect((await api('GET', '/findings/1')).body).toMatchObject({ severity: 'high', revisions: [] })
+    expect(emitted).toEqual([])
+  })
+
+  it('PATCH decision: a too-short reason is rejected with reason-too-short', async () => {
+    const r = await api('PATCH', '/findings/1/decision', { status: 'dismissed', reason: 'x' })
+    expect(r.status).toBe(400)
+    expect(r.body.code).toBe('reason-too-short')
+  })
 })

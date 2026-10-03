@@ -8,6 +8,8 @@ const workbench = {
   'workbench.open_blockers': 'Bloqueantes abiertos: {count}',
   'workbench.open_should_fix': 'Por corregir abiertos: {count}',
   'workbench.open_suggestions': 'Sugerencias abiertas: {count}',
+  'workbench.counted_per_row': 'contado por fila de revisor',
+  'workbench.also_reported_by': 'También reportado por',
   'workbench.files': 'Archivos',
   'workbench.general': 'General',
   'workbench.file_findings_one': '{count} hallazgo',

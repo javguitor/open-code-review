@@ -179,6 +179,8 @@ export type BuildPromptOptions = {
    *  outside the monorepo. Drives both "CLI Resolution" and
    *  "Dashboard Linkage" trusted-block emission. */
   localCli: string | null
+  /** `verify` only: session and round of the finding (looked up before spawning). */
+  verifyTarget?: { sessionId: string; roundNumber: number }
 }
 
 export function buildPrompt(opts: BuildPromptOptions): {
@@ -204,7 +206,12 @@ export function buildPrompt(opts: BuildPromptOptions): {
   if (baseCommand === 'verify') {
     // Validated upstream (validateVerifyArgs); re-checked so a bad id can never reach the prompt.
     targetError = validateVerifyArgs(subArgs)
+    if (!targetError && !opts.verifyTarget) targetError = `Finding ${subArgs[0]} not found`
     userContentLines.push(`Finding ID: ${escapeUserHeaders(subArgs[0] ?? '')}`)
+    if (opts.verifyTarget) {
+      userContentLines.push(`Session: ${escapeUserHeaders(opts.verifyTarget.sessionId)}`)
+      userContentLines.push(`Round: ${opts.verifyTarget.roundNumber}`)
+    }
   } else if (baseCommand === 'create-reviewer' || baseCommand === 'sync-reviewers') {
     const argsStr = subArgs.length > 0 ? subArgs.join(' ') : 'none'
     userContentLines.push(`Arguments: ${escapeUserHeaders(argsStr)}`)

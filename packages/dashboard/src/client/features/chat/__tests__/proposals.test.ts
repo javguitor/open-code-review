@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseProposals, proposalChanges, proposalKey, proposalToCalls, remainingCalls, toChatEntry } from '../proposals'
+import { parseProposals, applyProposalBody, proposalChanges, toChatEntry } from '../proposals'
 import { chatPrefillKey, takeChatPrefill } from '../prefill'
 
 describe('parseProposals', () => {
@@ -44,50 +44,28 @@ describe('toChatEntry', () => {
   })
 })
 
-describe('proposalToCalls', () => {
-  it('maps severity and category to /revise (source chat) and status to /decision, in that order', () => {
-    const calls = proposalToCalls(
-      { finding_id: 7, severity: 'low', category: 'suggestion', status: 'wont_fix', reason: 'why' },
-      'chat-s-review_round-1',
-    )
-    expect(calls).toEqual([
-      { kind: 'revise', body: { field: 'severity', value: 'low', reason: 'why', source: 'chat', conversation_id: 'chat-s-review_round-1' } },
-      { kind: 'revise', body: { field: 'category', value: 'suggestion', reason: 'why', source: 'chat', conversation_id: 'chat-s-review_round-1' } },
-      { kind: 'decision', body: { status: 'wont_fix', reason: 'why' } },
-    ])
+describe('applyProposalBody', () => {
+  it('carries every proposed change plus the reason and conversation id', () => {
+    expect(
+      applyProposalBody(
+        { finding_id: 7, severity: 'low', category: 'suggestion', status: 'wont_fix', reason: 'why' },
+        'chat-s-review_round-1',
+      ),
+    ).toEqual({
+      severity: 'low',
+      category: 'suggestion',
+      status: 'wont_fix',
+      reason: 'why',
+      conversation_id: 'chat-s-review_round-1',
+    })
   })
 
-  it('emits only the calls the proposal asks for', () => {
-    expect(proposalToCalls({ finding_id: 1, status: 'confirmed', reason: 'r' }, 'c')).toEqual([
-      { kind: 'decision', body: { status: 'confirmed', reason: 'r' } },
-    ])
-  })
-})
-
-describe('remainingCalls', () => {
-  const calls = proposalToCalls({ finding_id: 7, severity: 'low', category: 'suggestion', status: 'wont_fix', reason: 'why' }, 'c')
-
-  it('returns every call, with its index, when none completed', () => {
-    expect(remainingCalls(calls, new Set()).map((r) => r.index)).toEqual([0, 1, 2])
-  })
-
-  it('skips completed indices and keeps the original indices', () => {
-    const rest = remainingCalls(calls, new Set([0, 1]))
-    expect(rest).toEqual([{ index: 2, call: calls[2] }])
-  })
-
-  it('returns [] when all completed', () => {
-    expect(remainingCalls(calls, new Set([0, 1, 2]))).toEqual([])
-  })
-})
-
-describe('proposalKey', () => {
-  it('differs by finding, change and conversation', () => {
-    const p = { finding_id: 1, severity: 'low' as const, reason: 'r' }
-    expect(proposalKey(p, 'c')).toBe(proposalKey({ ...p }, 'c'))
-    expect(proposalKey(p, 'c')).not.toBe(proposalKey(p, 'd'))
-    expect(proposalKey(p, 'c')).not.toBe(proposalKey({ ...p, finding_id: 2 }, 'c'))
-    expect(proposalKey(p, 'c')).not.toBe(proposalKey({ ...p, severity: 'high' }, 'c'))
+  it('omits the fields the proposal does not set', () => {
+    expect(applyProposalBody({ finding_id: 1, status: 'confirmed', reason: 'r' }, 'c')).toEqual({
+      status: 'confirmed',
+      reason: 'r',
+      conversation_id: 'c',
+    })
   })
 })
 

@@ -1,22 +1,35 @@
 import { describe, it, expect } from 'vitest'
-import { currentStatus, decisionBody, isDecisionComplete, requiresReason, synthesisNote } from '../decisions'
+import { MIN_DECISION_REASON_LENGTH } from '@open-code-review/persistence/finding-rules'
+import { currentStatus, decisionBody, reasonMessageKey, synthesisNote } from '../decisions'
 import { DECISION_STATUSES } from '../types'
 import { DECISION_LABEL_KEY } from '../labels'
 import { en } from '../../../lib/i18n/en'
 import { es } from '../../../lib/i18n/es'
 import type { RoundFinding } from '../types'
 
-describe('requiresReason', () => {
-  it('requires one for confirmed, dismissed and wont_fix only', () => {
-    expect(DECISION_STATUSES.filter(requiresReason)).toEqual(['confirmed', 'dismissed', 'wont_fix'])
+describe('reasonMessageKey', () => {
+  it('asks for a reason where the shared rule requires one', () => {
+    expect(reasonMessageKey('dismissed', '   ')).toBe('reviews.decision_reason_required')
+    expect(reasonMessageKey('wont_fix', undefined)).toBe('reviews.decision_reason_required')
   })
 
-  it('isDecisionComplete rejects a blank reason only where one is required', () => {
-    expect(isDecisionComplete('dismissed', '   ')).toBe(false)
-    expect(isDecisionComplete('wont_fix', undefined)).toBe(false)
-    expect(isDecisionComplete('dismissed', 'dup of #2')).toBe(true)
-    expect(isDecisionComplete('read', undefined)).toBe(true)
-    expect(isDecisionComplete('acknowledged', '')).toBe(true)
+  it('enforces the minimum length', () => {
+    expect(reasonMessageKey('dismissed', 'x')).toBe('reviews.decision_reason_too_short')
+    expect(reasonMessageKey('dismissed', 'a'.repeat(MIN_DECISION_REASON_LENGTH - 1))).toBe('reviews.decision_reason_too_short')
+    expect(reasonMessageKey('dismissed', 'a'.repeat(MIN_DECISION_REASON_LENGTH))).toBeNull()
+  })
+
+  it('does not require a reason for the other statuses (confirmed included)', () => {
+    for (const s of ['unread', 'read', 'acknowledged', 'confirmed', 'fixed'] as const) {
+      expect(reasonMessageKey(s, undefined)).toBeNull()
+    }
+  })
+
+  it('has en and es texts for every message key', () => {
+    for (const key of ['reviews.decision_reason_required', 'reviews.decision_reason_too_short'] as const) {
+      expect(en[key]).toBeTruthy()
+      expect((es as Record<string, string>)[key]).toBeTruthy()
+    }
   })
 })
 

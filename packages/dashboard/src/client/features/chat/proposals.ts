@@ -5,7 +5,7 @@ import {
   type ChatMessageRow,
   type ChatEntry,
   type Proposal,
-  type ProposalCall,
+  type ApplyProposalBody,
   type ProposalChange,
   type ProposalFindingInfo,
 } from './types'
@@ -51,36 +51,18 @@ export function toChatEntry(row: ChatMessageRow): ChatEntry {
 }
 
 /**
- * The HTTP calls that applying a proposal performs, in order: one `/revise` per
- * severity/category change, then a `/decision` for a status change. Always
- * `source: 'chat'` so the revision log shows where the change came from.
+ * Body of `POST /api/findings/:id/apply-proposal`: the server applies every
+ * change in one transaction, as revisions with `source: 'chat'` and this
+ * conversation id.
  */
-export function proposalToCalls(p: Proposal, conversationId: string): ProposalCall[] {
-  const calls: ProposalCall[] = []
-  for (const field of ['severity', 'category'] as const) {
-    const value = p[field]
-    if (value) {
-      calls.push({
-        kind: 'revise',
-        body: { field, value, reason: p.reason, source: 'chat', conversation_id: conversationId },
-      })
-    }
+export function applyProposalBody(p: Proposal, conversationId: string): ApplyProposalBody {
+  return {
+    ...(p.severity && { severity: p.severity }),
+    ...(p.category && { category: p.category }),
+    ...(p.status && { status: p.status }),
+    reason: p.reason,
+    conversation_id: conversationId,
   }
-  if (p.status) calls.push({ kind: 'decision', body: { status: p.status, reason: p.reason } })
-  return calls
-}
-
-/** Stable identity of a proposal, to remember which of its calls already succeeded. */
-export function proposalKey(p: Proposal, conversationId: string): string {
-  return JSON.stringify([conversationId, p.finding_id, p.severity, p.category, p.status, p.reason])
-}
-
-/** The planned calls not yet completed, with their original index (the key of `done`). */
-export function remainingCalls(
-  calls: readonly ProposalCall[],
-  done: ReadonlySet<number>,
-): { index: number; call: ProposalCall }[] {
-  return calls.flatMap((call, index) => (done.has(index) ? [] : [{ index, call }]))
 }
 
 /** old -> new pairs for the card; a field proposed at its current value is not a change. */

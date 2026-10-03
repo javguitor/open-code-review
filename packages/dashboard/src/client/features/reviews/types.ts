@@ -1,15 +1,7 @@
 import type { Finding, ReviewRound } from '../../lib/api-types'
 
-export const DECISION_STATUSES = [
-  'unread',
-  'read',
-  'acknowledged',
-  'confirmed',
-  'dismissed',
-  'fixed',
-  'wont_fix',
-] as const
-export type DecisionStatus = (typeof DECISION_STATUSES)[number]
+export { DECISION_STATUSES, type DecisionStatus } from '@open-code-review/persistence/finding-rules'
+import type { DecisionStatus } from '@open-code-review/persistence/finding-rules'
 
 export type FindingDecision = { status: DecisionStatus; reason: string | null; decided_at: string | null }
 

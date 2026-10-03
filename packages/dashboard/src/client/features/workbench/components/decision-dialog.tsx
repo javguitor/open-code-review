@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useT } from '../../../lib/i18n'
 import type { DecisionStatus } from '../../../lib/api-types'
-import { isDecisionSubmittable } from '../../../lib/workbench'
+import { MIN_DECISION_REASON_LENGTH } from '@open-code-review/persistence/finding-rules'
+import { reasonMessageKey } from '../../reviews/decisions'
 
 type DecisionDialogProps = {
   /** The status being set; only statuses that require a reason open this dialog. */
@@ -17,7 +18,8 @@ export function DecisionDialog({ status, findingTitle, isSaving, error, onSubmit
   const { t } = useT()
   const [reason, setReason] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const canSubmit = isDecisionSubmittable(status, reason) && !isSaving
+  const problem = reasonMessageKey(status, reason)
+  const canSubmit = !problem && !isSaving
 
   useEffect(() => {
     textareaRef.current?.focus()
@@ -58,6 +60,9 @@ export function DecisionDialog({ status, findingTitle, isSaving, error, onSubmit
             className="mt-1 w-full rounded-md border border-zinc-300 bg-white p-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
           />
         </label>
+        {problem && reason.trim() !== '' && (
+          <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">{t(problem, { min: MIN_DECISION_REASON_LENGTH })}</p>
+        )}
         {error && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{t('workbench.decision_error', { error })}</p>}
         <div className="mt-4 flex justify-end gap-2">
           <button

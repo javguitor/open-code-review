@@ -34,6 +34,8 @@ export function ProposalCard({ proposal, finding, onApply }: ProposalCardProps) 
 
   if (state.phase === 'discarded') return null
 
+  const busy = state.phase === 'applying'
+  const done = state.phase === 'applied'
   const changes = proposalChanges(proposal, finding)
   const label = (field: ProposalChange['field'], value: string | null) => {
     if (value === null) return '-'
@@ -51,9 +53,6 @@ export function ProposalCard({ proposal, finding, onApply }: ProposalCardProps) 
     }
   }
 
-  const busy = state.phase === 'applying'
-  const done = state.phase === 'applied'
-
   return (
     <div className="max-w-[95%] rounded-lg border border-indigo-200 bg-indigo-50/60 p-3 text-sm dark:border-indigo-900 dark:bg-indigo-950/30">
       <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">
@@ -63,7 +62,7 @@ export function ProposalCard({ proposal, finding, onApply }: ProposalCardProps) 
         {finding?.title ?? t('chat.proposal_unknown_finding')}
       </p>
 
-      {changes.length === 0 ? (
+      {done ? null : changes.length === 0 ? (
         <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{t('chat.proposal_no_changes')}</p>
       ) : (
         <ul className="mt-2 space-y-1">

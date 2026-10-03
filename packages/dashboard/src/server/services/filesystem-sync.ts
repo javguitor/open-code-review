@@ -19,6 +19,7 @@ import { parseMapMd } from './parsers/map-parser.js'
 import { parseReviewerOutput } from './parsers/reviewer-parser.js'
 import { parseFinalMd } from './parsers/final-parser.js'
 import { reconcileFindings } from './finding-reconcile.js'
+import { emitRoundUpdated } from './round-events.js'
 
 // ── Types ──
 
@@ -1287,15 +1288,18 @@ export class FilesystemSync {
     if (!m) return
     const findingId = parseInt(m[1] ?? '0', 10)
     const stored = join(basename(dirname(this.sessionsDir)), 'sessions', relative(this.sessionsDir, filePath))
-    this.db.run(
-      `UPDATE review_findings SET verification_file = ?
-       WHERE id = ? AND verification_file IS NULL
-         AND reviewer_output_id IN (
-           SELECT ro.id FROM reviewer_outputs ro
-           JOIN review_rounds rr ON rr.id = ro.round_id
-           WHERE rr.session_id = ? AND rr.round_number = ?)`,
-      [stored.split(sep).join('/'), findingId, sessionId, roundNumber],
-    )
+    // Native statement: the engine's `run()` discards the change count.
+    const res = this.db
+      .prepare(
+        `UPDATE review_findings SET verification_file = ?
+         WHERE id = ? AND verification_file IS NULL
+           AND reviewer_output_id IN (
+             SELECT ro.id FROM reviewer_outputs ro
+             JOIN review_rounds rr ON rr.id = ro.round_id
+             WHERE rr.session_id = ? AND rr.round_number = ?)`,
+      )
+      .run(stored.split(sep).join('/'), findingId, sessionId, roundNumber)
+    if (Number(res.changes) > 0) emitRoundUpdated(this.io, sessionId, roundNumber)
   }
 
   // ── Generic artifact (discourse, topology, etc.) ──

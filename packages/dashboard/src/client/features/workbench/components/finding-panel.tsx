@@ -13,6 +13,9 @@ const BUTTON =
 
 type FindingPanelProps = {
   finding: FindingView
+  /** Other rows of the round that look like this finding (same file, similar title). */
+  alsoReportedBy: { id: number; handle: string }[]
+  onSelectFinding: (id: number) => void
   isDeciding: boolean
   verificationRequested: boolean
   onConfirm: () => void
@@ -118,6 +121,24 @@ export function FindingPanel(props: FindingPanelProps) {
         <p className="text-xs text-zinc-600 dark:text-zinc-400">
           <span className="text-zinc-500">{t('workbench.flagged_by')}: </span>
           {finding.flagged_by.join(', ')}
+        </p>
+      )}
+
+      {props.alsoReportedBy.length > 0 && (
+        <p className="text-xs text-zinc-600 dark:text-zinc-400">
+          <span className="text-zinc-500">{t('workbench.also_reported_by')}: </span>
+          {props.alsoReportedBy.map((o, i) => (
+            <span key={o.id}>
+              {i > 0 && ', '}
+              <button
+                type="button"
+                onClick={() => props.onSelectFinding(o.id)}
+                className="underline hover:text-zinc-900 dark:hover:text-zinc-100"
+              >
+                {o.handle} (#{o.id})
+              </button>
+            </span>
+          ))}
         </p>
       )}
 

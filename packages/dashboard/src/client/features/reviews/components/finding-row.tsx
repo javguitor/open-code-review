@@ -8,7 +8,8 @@ import { MarkdownRenderer } from '../../../components/markdown/markdown-renderer
 import { useT } from '../../../lib/i18n'
 import type { MessageKey } from '../../../lib/i18n'
 import { DECISION_STATUSES, type DecisionStatus, type RoundFinding } from '../types'
-import { currentStatus, isDecisionComplete, requiresReason, synthesisNote } from '../decisions'
+import { MIN_DECISION_REASON_LENGTH, requiresReason } from '@open-code-review/persistence/finding-rules'
+import { currentStatus, reasonMessageKey, synthesisNote } from '../decisions'
 import { CATEGORY_LABEL_KEY, DECISION_LABEL_KEY, SEVERITY_LABEL_KEY } from '../labels'
 
 type FindingRowProps = {
@@ -52,12 +53,13 @@ export function FindingRow({ finding, onTriageChange }: FindingRowProps) {
   }
 
   const submitPending = () => {
-    if (!pending || !isDecisionComplete(pending, reason)) return
+    if (!pending || reasonMessageKey(pending, reason)) return
     onTriageChange(finding.id, pending, reason)
     setPending(null)
     setReason('')
   }
 
+  const reasonKey = pending ? reasonMessageKey(pending, reason) : null
   const severityNote = synthesisNote(finding.severity, finding.synthesis_severity)
   const categoryNote = synthesisNote(finding.category, finding.synthesis_category)
 
@@ -194,7 +196,7 @@ export function FindingRow({ finding, onTriageChange }: FindingRowProps) {
               />
               <button
                 type="submit"
-                disabled={!isDecisionComplete(pending, reason)}
+                disabled={!!reasonMessageKey(pending, reason)}
                 className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {t('reviews.decision_save')}
@@ -206,6 +208,11 @@ export function FindingRow({ finding, onTriageChange }: FindingRowProps) {
               >
                 {t('reviews.decision_cancel')}
               </button>
+              {reasonKey && reason.trim() !== '' && (
+                <p className="basis-full text-xs text-amber-700 dark:text-amber-400">
+                  {t(reasonKey, { min: MIN_DECISION_REASON_LENGTH })}
+                </p>
+              )}
             </form>
           </td>
         </tr>

@@ -30,19 +30,14 @@ export type ChatMessageRow = ChatMessage & { proposals_json?: string | null }
 /** A chat message with its proposals already parsed. */
 export type ChatEntry = ChatMessage & { proposals: Proposal[] }
 
-/** One HTTP call that applying a proposal turns into. */
-export type ProposalCall =
-  | {
-      kind: 'revise'
-      body: {
-        field: 'severity' | 'category'
-        value: string
-        reason: string
-        source: 'chat'
-        conversation_id: string
-      }
-    }
-  | { kind: 'decision'; body: { status: ProposalStatus; reason: string } }
+/** Body of `POST /api/findings/:id/apply-proposal`. */
+export type ApplyProposalBody = {
+  severity?: ProposalSeverity
+  category?: ProposalCategory
+  status?: ProposalStatus
+  reason: string
+  conversation_id: string
+}
 
 /** The finding fields the proposal card needs to show old -> new. */
 export type ProposalFindingInfo = {

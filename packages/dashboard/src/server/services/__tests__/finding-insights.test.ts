@@ -59,7 +59,21 @@ describe('countCurrent / verdictAfterDecisions', () => {
   })
 
   it('a category revised from blocker to suggestion drops the blocker', () => {
-    expect(verdictAfterDecisions([f('suggestion', null, 'high', 1)], 'REQUEST CHANGES')).toBe('APPROVE')
+    expect(verdictAfterDecisions([f('suggestion', null, 'high', 1), f('should_fix', 'fixed')], 'REQUEST CHANGES')).toBe('APPROVE')
+  })
+
+  it('returns the synthesis verdict while no finding has a final decision', () => {
+    expect(verdictAfterDecisions([f('suggestion'), f('style')], 'NEEDS DISCUSSION')).toBe('NEEDS DISCUSSION')
+    expect(verdictAfterDecisions([f(null, null, 'low'), f('blocker', 'acknowledged')], 'REQUEST CHANGES')).toBe('REQUEST CHANGES')
+  })
+
+  it('a confirmed decision counts as final', () => {
+    expect(verdictAfterDecisions([f('suggestion', 'confirmed')], 'REQUEST CHANGES')).toBe('APPROVE')
+  })
+
+  it('never turns NEEDS DISCUSSION into APPROVE; blockers still force REQUEST CHANGES', () => {
+    expect(verdictAfterDecisions([f('should_fix', 'dismissed'), f('suggestion')], 'NEEDS DISCUSSION')).toBe('NEEDS DISCUSSION')
+    expect(verdictAfterDecisions([f('should_fix', 'dismissed'), f('blocker')], 'NEEDS DISCUSSION')).toBe('REQUEST CHANGES')
   })
   it('matches a title the model rephrased between rounds (same file)', () => {
     const a = 'Cerrar el PR desechable (o protegerlo mientras siga abierto)'

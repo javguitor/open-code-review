@@ -28,6 +28,7 @@ import { childEnv, childEnvFailureHint, formatChildEnvHeader } from '../child-en
 import {
   generateCommandUid,
   appendCommandLog,
+  getFinding,
 } from '@open-code-review/persistence'
 import { getWorkflowHardDeadlineMs } from '@open-code-review/config/runtime-config'
 import {
@@ -139,6 +140,12 @@ export function registerCommandHandlers(
       const verifyError = baseCommand === 'verify' ? validateVerifyArgs(subArgs) : null
       if (verifyError) {
         socket.emit('command:error', { error: verifyError })
+        return
+      }
+
+      // Unknown finding id: refuse before an execution row exists.
+      if (baseCommand === 'verify' && !getFinding(db, Number(subArgs[0]))) {
+        socket.emit('command:error', { error: `Finding ${subArgs[0]} not found` })
         return
       }
 
@@ -364,6 +371,17 @@ function spawnCliCommand(
 
 // ── AI workflow command spawn (adapter strategy) ──
 
+/** Session/round of the finding a `verify` run targets (undefined for other commands / unknown ids). */
+function verifyTargetOf(
+  db: Database,
+  baseCommand: string,
+  subArgs: string[],
+): { sessionId: string; roundNumber: number } | undefined {
+  if (baseCommand !== 'verify') return undefined
+  const finding = getFinding(db, Number(subArgs[0]))
+  return finding ? { sessionId: finding.session_id, roundNumber: finding.round_number } : undefined
+}
+
 function spawnAiCommand(
   io: SocketIOServer,
   _socket: Socket,
@@ -428,6 +446,7 @@ function spawnAiCommand(
     commandContent,
     executionUid: entry.uid,
     localCli,
+    verifyTarget: verifyTargetOf(db, baseCommand, subArgs),
   })
   if (built.targetError) {
     const content = `Error: ${built.targetError}\n`

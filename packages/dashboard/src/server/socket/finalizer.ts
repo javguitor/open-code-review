@@ -36,6 +36,7 @@ import {
   deriveCancellationReason,
   getWorkflowCompletenessForExecution,
 } from '../services/command-outcome.js'
+import { emitRoundUpdatedForFinding } from '../services/round-events.js'
 import { activeCommands, type ProcessEntry } from './process-registry.js'
 
 /**
@@ -69,6 +70,22 @@ export function tryClaimFinalization(entry: ProcessEntry | undefined): boolean {
     entry.tailer = undefined
   }
   return true
+}
+
+/**
+ * A finished `verify <finding-id>` run may have recorded a verdict: tell the
+ * pages of that finding's session so the workbench refreshes without a reload.
+ */
+function emitVerifyRoundUpdated(io: SocketIOServer, db: Database, executionId: number): void {
+  try {
+    const row = db.exec('SELECT command, args FROM command_executions WHERE id = ?', [executionId])[0]?.values[0]
+    if (typeof row?.[0] !== 'string' || !/^(?:ocr\s+)?verify(?:\s|$)/.test(row[0])) return
+    const args: unknown = JSON.parse(typeof row[1] === 'string' ? row[1] : '[]')
+    const findingId = Array.isArray(args) ? Number(args[0]) : NaN
+    if (Number.isInteger(findingId)) emitRoundUpdatedForFinding(io, db, findingId)
+  } catch (err) {
+    console.error('[finalizer] could not emit round:updated for verify:', err)
+  }
 }
 
 export function finishExecution(
@@ -147,6 +164,7 @@ export function finishExecution(
     outcome,
     cancellation_reason: cancellationReason,
   })
+  emitVerifyRoundUpdated(io, db, executionId)
 
   activeCommands.delete(executionId)
 

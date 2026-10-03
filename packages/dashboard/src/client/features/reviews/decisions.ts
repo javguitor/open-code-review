@@ -1,15 +1,15 @@
+import { reasonProblem } from '@open-code-review/persistence/finding-rules'
+import type { MessageKey } from '../../lib/i18n'
 import { DECISION_STATUSES, type DecisionStatus, type RoundFinding } from './types'
 
-/** Statuses that close a finding with a judgement call: the user must say why. */
-const REASON_REQUIRED: ReadonlySet<DecisionStatus> = new Set(['confirmed', 'dismissed', 'wont_fix'])
-
-export function requiresReason(status: DecisionStatus): boolean {
-  return REASON_REQUIRED.has(status)
-}
-
-/** True when `status` can be sent with `reason` (the server rejects it otherwise with `reason-required`). */
-export function isDecisionComplete(status: DecisionStatus, reason: string | undefined): boolean {
-  return !requiresReason(status) || !!reason?.trim()
+/**
+ * i18n key of the inline message for a reason that cannot be submitted, or null
+ * when it can. The rules live in `finding-rules`, shared with the server.
+ */
+export function reasonMessageKey(status: DecisionStatus, reason: string | undefined): MessageKey | null {
+  const problem = reasonProblem(status, reason)
+  if (problem === 'required') return 'reviews.decision_reason_required'
+  return problem === 'too-short' ? 'reviews.decision_reason_too_short' : null
 }
 
 export function isDecisionStatus(v: string): v is DecisionStatus {

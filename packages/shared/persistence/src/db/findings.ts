@@ -72,7 +72,7 @@ export type FindingRevisionRow = {
 
 export class FindingError extends Error {
   constructor(
-    readonly code: "not-found" | "invalid-value" | "reason-required",
+    readonly code: "not-found" | "invalid-value" | "reason-required" | "reason-too-short",
     message: string,
   ) {
     super(message);
@@ -245,7 +245,7 @@ function validDecisionReason(status: FindingDecisionStatus, raw: string | undefi
   }
   if (problem === "too-short") {
     throw new FindingError(
-      "invalid-value",
+      "reason-too-short",
       `The reason for "${status}" must be at least ${MIN_DECISION_REASON_LENGTH} characters`,
     );
   }

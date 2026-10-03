@@ -9,12 +9,14 @@ import { useRound } from '../reviews/hooks/use-reviews'
 import type { DecisionStatus, DiffFile, FindingView } from '../../lib/api-types'
 import {
   GENERAL_KEY,
+  alsoReportedBy,
   buildFileEntries,
   chatPrefillKey,
   contextRange,
   diffFilePath,
   normalizePath,
   orderedFindingIds,
+  reviewerHandle,
   stepFinding,
   workbenchKeyAction,
 } from '../../lib/workbench'
@@ -24,7 +26,6 @@ import { DiffView } from './components/diff-view'
 import { ContextBlock } from './components/context-block'
 import { FindingPanel } from './components/finding-panel'
 import { DecisionDialog } from './components/decision-dialog'
-import { decisionLabelKey } from './labels'
 
 const PANE = 'rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 lg:max-h-[calc(100vh-15rem)] lg:overflow-y-auto'
 
@@ -60,10 +61,25 @@ export function WorkbenchPage() {
   const [dialog, setDialog] = useState<Extract<DecisionStatus, 'dismissed' | 'wont_fix'> | null>(null)
   const [requested, setRequested] = useState<ReadonlySet<number>>(new Set())
 
-  useSocketEvent<{ sessionId: string; roundNumber: number }>('round:updated', (data) => {
-    if (data.sessionId !== sessionId || data.roundNumber !== roundNumber) return
+  const refresh = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['sessions', sessionId, 'rounds', roundNumber] })
     queryClient.invalidateQueries({ queryKey: ['findings'] })
+  }, [queryClient, sessionId, roundNumber])
+
+  useSocketEvent<{ sessionId: string; roundNumber: number }>('round:updated', (data) => {
+    if (data.sessionId !== sessionId || data.roundNumber !== roundNumber) return
+    refresh()
+  })
+
+  // A verification run ends with these events, which carry no finding id: reload
+  // and clear every pending request (a failed run must not leave the button locked).
+  useSocketEvent('command:finished', () => {
+    setRequested(new Set())
+    refresh()
+  })
+  useSocketEvent('command:error', () => {
+    setRequested(new Set())
+    refresh()
   })
 
   const findings = useMemo(() => findingsQuery.data ?? [], [findingsQuery.data])
@@ -132,6 +148,7 @@ export function WorkbenchPage() {
         ctrlKey: e.ctrlKey,
         metaKey: e.metaKey,
         altKey: e.altKey,
+        repeat: e.repeat,
         targetTag: target?.tagName ?? null,
         isContentEditable: target?.isContentEditable ?? false,
       })
@@ -173,6 +190,10 @@ export function WorkbenchPage() {
   }
 
   const open = round?.open_counts
+  const handles = new Map((round?.reviewer_outputs ?? []).map((o) => [o.id, reviewerHandle(o)]))
+  const alsoReported = selected
+    ? alsoReportedBy(selected, findings).map((f) => ({ id: f.id, handle: handles.get(f.reviewer_output_id) ?? '?' }))
+    : []
   const hasContext = !!range && !!selected?.file_path
 
   return (
@@ -204,6 +225,7 @@ export function WorkbenchPage() {
             <Chip>{t('workbench.open_blockers', { count: open.blockers })}</Chip>
             <Chip>{t('workbench.open_should_fix', { count: open.should_fix })}</Chip>
             <Chip>{t('workbench.open_suggestions', { count: open.suggestions })}</Chip>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">({t('workbench.counted_per_row')})</span>
           </>
         )}
       </div>
@@ -286,6 +308,8 @@ export function WorkbenchPage() {
             {selected ? (
               <FindingPanel
                 finding={selected}
+                alsoReportedBy={alsoReported}
+                onSelectFinding={selectFinding}
                 isDeciding={decide.isPending}
                 verificationRequested={requested.has(selected.id)}
                 onConfirm={() => changeDecision('confirmed')}

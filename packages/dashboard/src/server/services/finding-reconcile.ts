@@ -9,6 +9,7 @@
  */
 
 import type { Database } from '@open-code-review/persistence'
+import { PREVIOUS_ROUND_MIN_SIMILARITY, titleSimilarity } from './finding-insights.js'
 
 export type IncomingFinding = {
   title: string
@@ -32,6 +33,8 @@ type ExistingRow = {
   lineStart: number | null
   revisedSeverity: boolean
   revisedCategory: boolean
+  /** A human decision (status other than `unread`) or any revision hangs off this row. */
+  hasHumanState: boolean
 }
 
 function norm(s: string): string {
@@ -46,7 +49,9 @@ function loadExisting(db: Database, outputId: number): ExistingRow[] {
   const res = db.exec(
     `SELECT rf.id, rf.title, rf.file_path, rf.line_start,
             EXISTS (SELECT 1 FROM finding_revisions fr WHERE fr.finding_id = rf.id AND fr.field = 'severity'),
-            EXISTS (SELECT 1 FROM finding_revisions fr WHERE fr.finding_id = rf.id AND fr.field = 'category')
+            EXISTS (SELECT 1 FROM finding_revisions fr WHERE fr.finding_id = rf.id AND fr.field = 'category'),
+            EXISTS (SELECT 1 FROM finding_revisions fr WHERE fr.finding_id = rf.id)
+              OR EXISTS (SELECT 1 FROM user_finding_progress ufp WHERE ufp.finding_id = rf.id AND ufp.status != 'unread')
      FROM review_findings rf WHERE rf.reviewer_output_id = ? ORDER BY rf.id`,
     [outputId],
   )
@@ -57,6 +62,7 @@ function loadExisting(db: Database, outputId: number): ExistingRow[] {
     lineStart: r[3] as number | null,
     revisedSeverity: r[4] === 1,
     revisedCategory: r[5] === 1,
+    hasHumanState: r[6] === 1,
   }))
 }
 
@@ -81,14 +87,33 @@ function matchRows(existing: ExistingRow[], incoming: IncomingFinding[]): Map<nu
   }
   pass((e) => strongKey(e.title, e.filePath, e.lineStart), (f) => strongKey(f.title, f.filePath, f.lineStart))
   pass((e) => weakKey(e.title, e.filePath), (f) => weakKey(f.title, f.filePath))
+  // Third pass, only for rows carrying a decision/revisions: the source may have
+  // rephrased the title (markdown → round-meta). Same file, similar title.
+  incoming.forEach((f, i) => {
+    if (matches.has(i)) return
+    let best: ExistingRow | undefined
+    let bestScore = PREVIOUS_ROUND_MIN_SIMILARITY
+    for (const e of existing) {
+      if (used.has(e.id) || !e.hasHumanState || e.filePath !== f.filePath) continue
+      const score = titleSimilarity(e.title, f.title)
+      if (score >= bestScore) {
+        best = e
+        bestScore = score
+      }
+    }
+    if (!best) return
+    matches.set(i, best)
+    used.add(best.id)
+  })
   return matches
 }
 
 /**
  * Bring the findings of `outputId` in line with `incoming`: update matched
- * rows, insert new ones, delete the ones that vanished. `sqlNow` stamps
- * `parsed_at`. Severity/category/is_blocker of a finding that has revisions are
- * left alone (the revised value is current); flagged_by/evidence/verification
+ * rows, insert new ones, delete the ones that vanished (never one that
+ * carries a decision or revisions: that history is the user's, so it is kept). `sqlNow` stamps
+ * `parsed_at`. A revised severity is kept; a revised category is kept together
+ * with `is_blocker` (the revised value is current); flagged_by/evidence/verification
  * are only touched when the source provides them.
  */
 export function reconcileFindings(
@@ -113,7 +138,6 @@ export function reconcileFindings(
       )
       return
     }
-    const revised = row.revisedSeverity || row.revisedCategory
     db.run(
       `UPDATE review_findings SET
          title = ?, file_path = ?, line_start = ?, line_end = ?, summary = ?, parsed_at = ?,
@@ -126,13 +150,13 @@ export function reconcileFindings(
       [f.title, f.filePath, f.lineStart, f.lineEnd, f.summary, sqlNow,
        row.revisedSeverity ? 1 : 0, f.severity,
        row.revisedCategory ? 1 : 0, f.category, f.category,
-       revised ? 1 : 0, f.isBlocker ? 1 : 0,
+       row.revisedCategory ? 1 : 0, f.isBlocker ? 1 : 0,
        flagged, f.evidence ?? null, row.id],
     )
   })
 
   const kept = new Set([...matches.values()].map((r) => r.id))
   for (const e of existing) {
-    if (!kept.has(e.id)) db.run('DELETE FROM review_findings WHERE id = ?', [e.id])
+    if (!kept.has(e.id) && !e.hasHumanState) db.run('DELETE FROM review_findings WHERE id = ?', [e.id])
   }
 }

@@ -5,8 +5,9 @@ import {
   buildFileEntries,
   chatPrefillKey,
   contextRange,
-  isDecisionSubmittable,
-  isReasonRequired,
+  alsoReportedBy,
+  reviewerHandle,
+  titleSimilarity,
   mapFindingsToDiff,
   normalizePath,
   orderedFindingIds,
@@ -177,20 +178,38 @@ describe('buildFileEntries', () => {
   })
 })
 
-describe('decision reason rule', () => {
-  it('requires a reason for dismissed and wont_fix only', () => {
-    expect(isReasonRequired('dismissed')).toBe(true)
-    expect(isReasonRequired('wont_fix')).toBe(true)
-    for (const s of ['unread', 'read', 'acknowledged', 'confirmed', 'fixed'] as const) {
-      expect(isReasonRequired(s)).toBe(false)
-    }
+describe('alsoReportedBy', () => {
+  const row = (id: number, title: string, file_path: string | null, reviewer_output_id = id) => ({ id, title, file_path, reviewer_output_id })
+
+  it('lists other rows in the same file with a similar title', () => {
+    const all = [
+      row(1, 'Verifier cannot locate the session', 'src/a.ts'),
+      row(2, 'The verifier cannot locate the session or round', 'src/a.ts'),
+      row(3, 'Verifier cannot locate the session', 'src/b.ts'),
+      row(4, 'Unrelated naming nit', 'src/a.ts'),
+    ]
+    expect(alsoReportedBy(all[0]!, all).map((f) => f.id)).toEqual([2])
   })
 
-  it('does not accept a blank reason where one is required', () => {
-    expect(isDecisionSubmittable('dismissed', '   ')).toBe(false)
-    expect(isDecisionSubmittable('wont_fix', '')).toBe(false)
-    expect(isDecisionSubmittable('dismissed', 'false positive')).toBe(true)
-    expect(isDecisionSubmittable('confirmed', '')).toBe(true)
+  it('compares paths without ./ and never matches a finding without a file', () => {
+    const all = [row(1, 'same title here', './src/a.ts'), row(2, 'same title here', 'src/a.ts'), row(3, 'same title here', null)]
+    expect(alsoReportedBy(all[0]!, all).map((f) => f.id)).toEqual([2])
+    expect(alsoReportedBy(all[2]!, all)).toEqual([])
+  })
+})
+
+describe('titleSimilarity', () => {
+  it('is Dice over title tokens', () => {
+    expect(titleSimilarity('a b c d', 'a b c d')).toBe(1)
+    expect(titleSimilarity('a b', 'c d')).toBe(0)
+    expect(titleSimilarity('', 'a')).toBe(0)
+    expect(titleSimilarity('a b c', 'a b d')).toBeCloseTo(2 / 3)
+  })
+})
+
+describe('reviewerHandle', () => {
+  it('joins type and instance', () => {
+    expect(reviewerHandle({ reviewer_type: 'principal', instance_number: 2 })).toBe('@principal-2')
   })
 })
 
@@ -211,6 +230,11 @@ describe('workbenchKeyAction', () => {
     expect(workbenchKeyAction({ key: 'c', ctrlKey: true })).toBeNull()
     expect(workbenchKeyAction({ key: 'd', metaKey: true })).toBeNull()
     expect(workbenchKeyAction({ key: 'f', altKey: true })).toBeNull()
+  })
+
+  it('ignores auto-repeat so a held key writes one decision', () => {
+    expect(workbenchKeyAction({ key: 'c', repeat: true })).toBeNull()
+    expect(workbenchKeyAction({ key: 'c', repeat: false })).toBe('confirm')
   })
 
   it('ignores keys typed into form controls', () => {

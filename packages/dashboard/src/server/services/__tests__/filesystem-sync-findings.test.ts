@@ -142,12 +142,11 @@ describe('id-preserving finding ingestion', () => {
     expect(getFinding(db, id)).toMatchObject({ severity: 'critical' })
   })
 
-  it('matches by title+file when the line moved, and deletes only findings that left the source', async () => {
+  it('matches by title+file when the line moved, and deletes only undecided findings that left the source', async () => {
     writeMeta([F_SQL, F_VAL])
     await scan()
     const sqlId = findingId('SQL injection in login')
     const valId = findingId('Missing validation on input')
-    setFindingDecision(db, { findingId: valId, status: 'confirmed' })
 
     writeMeta([{ ...F_SQL, line_start: 50, line_end: 53 }])
     await scan()
@@ -155,7 +154,50 @@ describe('id-preserving finding ingestion', () => {
     expect(findingId('SQL injection in login')).toBe(sqlId)
     expect(getFinding(db, sqlId)).toMatchObject({ line_start: 50 })
     expect(getFinding(db, valId)).toBeUndefined()
-    expect(rows('SELECT COUNT(*) AS n FROM user_finding_progress')[0]?.['n']).toBe(0)
+  })
+
+  it('never deletes an unmatched finding that has a decision or revisions', async () => {
+    writeMeta([F_SQL, F_VAL, { ...F_VAL, title: 'Unrelated style nit', file_path: 'src/other.ts' }])
+    await scan()
+    const valId = findingId('Missing validation on input')
+    const nitId = findingId('Unrelated style nit')
+    setFindingDecision(db, { findingId: valId, status: 'confirmed' })
+    reviseFinding(db, { findingId: nitId, field: 'severity', value: 'low', reason: 'minor enough', source: 'user' })
+
+    writeMeta([F_SQL])
+    await scan()
+
+    expect(getFinding(db, valId)?.decision?.status).toBe('confirmed')
+    expect(getFinding(db, nitId)).toMatchObject({ severity: 'low' })
+  })
+
+  it('re-pairs a decided finding whose title was rephrased (same file) instead of dropping it', async () => {
+    writeMeta([F_VAL])
+    await scan()
+    const valId = findingId('Missing validation on input')
+    setFindingDecision(db, { findingId: valId, status: 'confirmed' })
+
+    writeMeta([{ ...F_VAL, title: 'Missing validation of the input', line_start: 99 }])
+    await scan()
+
+    expect(findingId('Missing validation of the input')).toBe(valId)
+    expect(getFinding(db, valId)?.decision?.status).toBe('confirmed')
+    expect(rows('SELECT COUNT(*) AS n FROM review_findings')[0]?.['n']).toBe(1)
+  })
+
+  it('a severity-only revision does not freeze category/is_blocker, a category revision does', async () => {
+    writeMeta([F_SQL])
+    await scan()
+    const id = findingId('SQL injection in login')
+    reviseFinding(db, { findingId: id, field: 'severity', value: 'low', reason: 'not reachable', source: 'user' })
+    writeMeta([{ ...F_SQL, category: 'should_fix' }])
+    await scan()
+    expect(getFinding(db, id)).toMatchObject({ severity: 'low', category: 'should_fix', is_blocker: 0 })
+
+    reviseFinding(db, { findingId: id, field: 'category', value: 'blocker', reason: 'it is exploitable', source: 'user' })
+    writeMeta([{ ...F_SQL, category: 'suggestion' }])
+    await scan()
+    expect(getFinding(db, id)).toMatchObject({ category: 'blocker' })
   })
 
   it('inserts new findings next to existing ones without touching them', async () => {
@@ -246,5 +288,28 @@ describe('provenance and artifacts', () => {
     expect(getFinding(db, sqlId)?.verification_file).toBe(`.ocr/sessions/${SESSION}/rounds/round-1/verifications/finding-${sqlId}.md`)
     expect(getFinding(db, sqlId)?.verification_status).toBeNull()
     expect(getFinding(db, valId)?.verification_file).toBe('cli/set/path.md')
+  })
+
+  it('emits round:updated when a verification file gets linked, and only then', async () => {
+    writeMeta([F_SQL, F_VAL])
+    await scan()
+    const sqlId = findingId('SQL injection in login')
+    const valId = findingId('Missing validation on input')
+    recordVerification(db, { findingId: valId, status: 'pending', note: 'n', file: 'cli/set/path.md' })
+    const emitted: Array<{ room: string; event: string; payload: unknown }> = []
+    const io = {
+      to: (room: string) => ({ emit: (event: string, payload: unknown) => void emitted.push({ room, event, payload }) }),
+      emit: () => undefined,
+    } as unknown as ConstructorParameters<typeof FilesystemSync>[2]
+
+    mkdirSync(join(roundDir, 'verifications'), { recursive: true })
+    writeFileSync(join(roundDir, 'verifications', `finding-${valId}.md`), '## Verdict\n')
+    await new FilesystemSync(db, sessionsDir, io).fullScan()
+    const bare = { room: `session:${SESSION}`, event: 'round:updated', payload: { sessionId: SESSION, roundNumber: 1 } }
+    expect(emitted).not.toContainEqual(bare)
+
+    writeFileSync(join(roundDir, 'verifications', `finding-${sqlId}.md`), '## Verdict\n')
+    await new FilesystemSync(db, sessionsDir, io).fullScan()
+    expect(emitted).toContainEqual(bare)
   })
 })

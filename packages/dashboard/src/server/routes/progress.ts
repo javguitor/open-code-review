@@ -1,33 +1,21 @@
 /**
- * User progress mutation endpoints for files and findings.
+ * User progress mutation endpoints for map files and rounds. Finding decisions go
+ * through `routes/findings.ts` (persistence write path with the revision log).
  */
 
 import { Router } from 'express'
 import type { Database } from '@open-code-review/persistence'
 import {
   getMapFile,
-  getFinding,
   upsertFileProgress,
   deleteFileProgress,
-  upsertFindingProgress,
-  deleteFindingProgress,
   getFileProgress,
-  getFindingProgress,
   getRoundById,
   getRoundProgress,
   upsertRoundProgress,
   deleteRoundProgress,
-  type FindingProgressRow,
   type RoundProgressRow,
 } from '../db.js'
-
-const VALID_FINDING_STATUSES = new Set<FindingProgressRow['status']>([
-  'unread',
-  'read',
-  'acknowledged',
-  'fixed',
-  'wont_fix',
-])
 
 const VALID_ROUND_STATUSES = new Set<RoundProgressRow['status']>([
   'needs_review',
@@ -85,57 +73,6 @@ export function createProgressRouter(db: Database): Router {
     } catch (err) {
       console.error('Failed to clear file progress:', err)
       res.status(500).json({ error: 'Failed to clear file progress' })
-    }
-  })
-
-  // PATCH /api/findings/:id/progress — Update finding triage status
-  router.patch('/findings/:id/progress', (req, res) => {
-    try {
-      const findingId = parseInt(req.params['id'] as string, 10)
-      if (isNaN(findingId)) {
-        res.status(400).json({ error: 'Invalid finding ID' })
-        return
-      }
-
-      const finding = getFinding(db, findingId)
-      if (!finding) {
-        res.status(404).json({ error: 'Finding not found' })
-        return
-      }
-
-      const status = req.body?.status as string | undefined
-      if (!status || !VALID_FINDING_STATUSES.has(status as FindingProgressRow['status'])) {
-        res.status(400).json({
-          error: 'Invalid status',
-          valid_statuses: [...VALID_FINDING_STATUSES],
-        })
-        return
-      }
-
-      upsertFindingProgress(db, findingId, status as FindingProgressRow['status'])
-
-      const progress = getFindingProgress(db, findingId)
-      res.json(progress)
-    } catch (err) {
-      console.error('Failed to update finding progress:', err)
-      res.status(500).json({ error: 'Failed to update finding progress' })
-    }
-  })
-
-  // DELETE /api/findings/:id/progress — Clear finding progress
-  router.delete('/findings/:id/progress', (req, res) => {
-    try {
-      const findingId = parseInt(req.params['id'] as string, 10)
-      if (isNaN(findingId)) {
-        res.status(400).json({ error: 'Invalid finding ID' })
-        return
-      }
-
-      deleteFindingProgress(db, findingId)
-      res.status(200).json({ deleted: true })
-    } catch (err) {
-      console.error('Failed to clear finding progress:', err)
-      res.status(500).json({ error: 'Failed to clear finding progress' })
     }
   })
 

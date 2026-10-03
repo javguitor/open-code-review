@@ -150,8 +150,42 @@ index 1..2 100644
     ])
   })
 
-  it('strips quotes git adds around unusual paths', () => {
-    const { files } = parseUnifiedDiff('diff --git "a/caf\\303\\251.ts" "b/caf\\303\\251.ts"\n--- "a/x.ts"\n+++ "b/x.ts"\n')
-    expect(files[0]!.newPath).toBe('x.ts')
+  it('decodes C-quoted octal escapes as UTF-8 bytes', () => {
+    const { files } = parseUnifiedDiff(
+      'diff --git "a/caf\\303\\251.ts" "b/caf\\303\\251.ts"\nindex 1..2 100644\n@@ -1 +1 @@\n-a\n+b\n',
+    )
+    expect(files[0]!.oldPath).toBe('café.ts')
+    expect(files[0]!.newPath).toBe('café.ts')
+    expect(files[0]!.hunks).toHaveLength(1)
+  })
+
+  it('decodes \\" \\\\ \\t \\n escapes in quoted paths', () => {
+    const { files } = parseUnifiedDiff('diff --git "a/q\\"x\\\\y\\tz\\nw.ts" "b/q\\"x\\\\y\\tz\\nw.ts"\n')
+    expect(files[0]!.newPath).toBe('q"x\\y\tz\nw.ts')
+  })
+
+  it('reads a quoted binary header that has no ---/+++ lines', () => {
+    const { files } = parseUnifiedDiff(
+      'diff --git "a/img/caf\\303\\251.png" "b/img/caf\\303\\251.png"\nindex 1..2 100644\nBinary files "a/img/caf\\303\\251.png" and "b/img/caf\\303\\251.png" differ\n',
+    )
+    expect(files[0]).toMatchObject({ oldPath: 'img/café.png', newPath: 'img/café.png', status: 'binary' })
+  })
+
+  it('handles a quoted new path next to an unquoted old one, and quoted renames', () => {
+    const { files } = parseUnifiedDiff(
+      'diff --git a/old.ts "b/n\\303\\261.ts"\nsimilarity index 90%\nrename from old.ts\nrename to "n\\303\\261.ts"\n',
+    )
+    expect(files[0]).toMatchObject({ oldPath: 'old.ts', newPath: 'nñ.ts', status: 'renamed' })
+  })
+
+  it('strips only a/ and b/ prefixes (mnemonic prefixes are not guessed)', () => {
+    const { files } = parseUnifiedDiff('diff --git c/x.ts i/x.ts\n--- c/x.ts\n+++ i/x.ts\n')
+    expect(files[0]!.newPath).toBe('i/x.ts')
+    expect(parseUnifiedDiff('diff --git a/x.ts b/x.ts\n').files[0]!.newPath).toBe('x.ts')
+  })
+
+  it('keeps plain unquoted paths with spaces', () => {
+    const { files } = parseUnifiedDiff('diff --git a/sp ace.ts b/sp ace.ts\n')
+    expect(files[0]!.newPath).toBe('sp ace.ts')
   })
 })

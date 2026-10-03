@@ -3,29 +3,18 @@
  * round hints), current-value counts and the "verdict after your decisions".
  */
 
-/** Decisions that take a finding off the table for the verdict. */
-export const RESOLVED_DECISIONS: ReadonlySet<string> = new Set(['dismissed', 'wont_fix', 'fixed'])
+import {
+  RESOLVED_DECISIONS,
+  SAME_FINDING_MIN_SIMILARITY,
+  titleSimilarity,
+} from '@open-code-review/persistence/finding-rules'
 
-function tokens(title: string): Set<string> {
-  return new Set(title.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((t) => t.length > 0))
-}
+const isResolved = (status: string): boolean => (RESOLVED_DECISIONS as readonly string[]).includes(status)
 
-/** Sørensen–Dice similarity of the token sets of two titles, in [0, 1]. */
-export function titleSimilarity(a: string, b: string): number {
-  const ta = tokens(a)
-  const tb = tokens(b)
-  if (ta.size === 0 || tb.size === 0) return 0
-  let shared = 0
-  for (const t of ta) if (tb.has(t)) shared++
-  return (2 * shared) / (ta.size + tb.size)
-}
+export { titleSimilarity }
 
-/**
- * Same file + this title similarity marks "the same finding" in the previous
- * round. Models rephrase titles between rounds (0.63 for a real pair), so 0.8
- * almost never matched; the hint is read-only, so a lower bar is the safer miss.
- */
-export const PREVIOUS_ROUND_MIN_SIMILARITY = 0.5
+/** Same file + this similarity marks "the same finding" in the previous round (read-only hint). */
+export const PREVIOUS_ROUND_MIN_SIMILARITY = SAME_FINDING_MIN_SIMILARITY
 
 export type FindingClassInput = {
   category: string | null
@@ -56,7 +45,7 @@ export function countCurrent(
 ): CurrentCounts {
   const counts: CurrentCounts = { blockers: 0, should_fix: 0, suggestions: 0 }
   for (const f of findings) {
-    if (excludeResolved && f.decision_status !== null && RESOLVED_DECISIONS.has(f.decision_status)) continue
+    if (excludeResolved && f.decision_status !== null && isResolved(f.decision_status)) continue
     const c = classifyFinding(f)
     if (c === 'blocker') counts.blockers++
     else if (c === 'should_fix') counts.should_fix++
@@ -66,17 +55,22 @@ export function countCurrent(
 }
 
 /**
- * APPROVE when no blocker and no should-fix remains open; REQUEST CHANGES when
- * a blocker remains; otherwise the synthesis verdict. With no finding rows
- * there is nothing to recompute from, so the synthesis verdict stands.
+ * Recomputes the verdict only once the user has taken a final decision
+ * (resolved or confirmed) on some finding; with none, the synthesis verdict
+ * stands. After that: REQUEST CHANGES while a blocker remains, APPROVE when no
+ * blocker/should-fix remains — except that a `NEEDS DISCUSSION` synthesis is
+ * never upgraded to APPROVE (it is not derived from counts).
  */
 export function verdictAfterDecisions(
   findings: Array<FindingClassInput & { decision_status: string | null }>,
   synthesisVerdict: string | null,
 ): string | null {
-  if (findings.length === 0) return synthesisVerdict
+  const decided = findings.some(
+    (f) => f.decision_status !== null && (isResolved(f.decision_status) || f.decision_status === 'confirmed'),
+  )
+  if (!decided) return synthesisVerdict
   const open = countCurrent(findings, true)
   if (open.blockers > 0) return 'REQUEST CHANGES'
-  if (open.should_fix === 0) return 'APPROVE'
+  if (open.should_fix === 0 && synthesisVerdict !== 'NEEDS DISCUSSION') return 'APPROVE'
   return synthesisVerdict
 }

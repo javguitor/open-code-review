@@ -1,3 +1,4 @@
+import { SAME_FINDING_MIN_SIMILARITY, titleSimilarity } from '@open-code-review/persistence/finding-rules'
 import type {
   DecisionStatus,
   DiffFile,
@@ -42,16 +43,6 @@ export function worstDecisionState(
     if (worst === null || DECISION_RANK[status] < DECISION_RANK[worst]) worst = status
   }
   return worst
-}
-
-/** Dismissing or declining to fix a finding must be justified; the server enforces the same rule. */
-export function isReasonRequired(status: DecisionStatus): boolean {
-  return status === 'dismissed' || status === 'wont_fix'
-}
-
-/** True when `status` can be submitted with the given reason text. */
-export function isDecisionSubmittable(status: DecisionStatus, reason: string): boolean {
-  return !isReasonRequired(status) || reason.trim().length > 0
 }
 
 /** Diff paths and finding paths are compared without `./` or leading `/`. */
@@ -210,6 +201,8 @@ export type KeyInput = {
   ctrlKey?: boolean
   metaKey?: boolean
   altKey?: boolean
+  /** True for the auto-repeat events of a held key. */
+  repeat?: boolean
   /** `tagName` of the event target. */
   targetTag?: string | null
   isContentEditable?: boolean
@@ -224,9 +217,10 @@ const KEY_ACTIONS: Record<string, WorkbenchAction> = {
   f: 'fixed',
 }
 
-/** Maps a keydown to a workbench action; null while typing or with a modifier held. */
+/** Maps a keydown to a workbench action; null while typing, with a modifier held or on auto-repeat
+ * (a held key must not write one decision per repeat). */
 export function workbenchKeyAction(input: KeyInput): WorkbenchAction | null {
-  if (input.ctrlKey || input.metaKey || input.altKey) return null
+  if (input.ctrlKey || input.metaKey || input.altKey || input.repeat) return null
   if (input.isContentEditable) return null
   if (input.targetTag && TYPING_TAGS.has(input.targetTag.toUpperCase())) return null
   return KEY_ACTIONS[input.key.toLowerCase()] ?? null
@@ -243,4 +237,33 @@ export function stepFinding(ids: ReadonlyArray<number>, current: number | null, 
 /** sessionStorage key the chat reads to prefill its first message (see the workbench's "Ask about this finding"). */
 export function chatPrefillKey(sessionId: string, round: number): string {
   return `ocr.chat.prefill.${sessionId}.${round}`
+}
+
+/** Same file + this similarity: "the same finding" reported by another reviewer. */
+export const ALSO_REPORTED_MIN_SIMILARITY = SAME_FINDING_MIN_SIMILARITY
+export { titleSimilarity }
+
+/**
+ * The other rows of the round that look like the same finding: same file and a
+ * similar title. Each reviewer's row is decided separately, so the panel points
+ * at the copies. Findings without a file never match.
+ */
+export function alsoReportedBy(
+  finding: Pick<FindingView, 'id' | 'title' | 'file_path'>,
+  all: ReadonlyArray<Pick<FindingView, 'id' | 'title' | 'file_path' | 'reviewer_output_id'>>,
+): typeof all[number][] {
+  if (!finding.file_path) return []
+  const path = normalizePath(finding.file_path)
+  return all.filter(
+    (o) =>
+      o.id !== finding.id &&
+      !!o.file_path &&
+      normalizePath(o.file_path) === path &&
+      titleSimilarity(o.title, finding.title) >= ALSO_REPORTED_MIN_SIMILARITY,
+  )
+}
+
+/** `@principal-1` style handle of the reviewer that produced a row. */
+export function reviewerHandle(output: { reviewer_type: string; instance_number: number }): string {
+  return `@${output.reviewer_type}-${output.instance_number}`
 }

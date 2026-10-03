@@ -39,6 +39,7 @@ import {
   type WorkflowType,
   type SessionStatus,
 } from '@open-code-review/persistence'
+import { RESOLVED_DECISIONS } from '@open-code-review/persistence/finding-rules'
 import { join } from 'node:path'
 
 // ── Types ──
@@ -447,12 +448,6 @@ export function getRoundDiff(db: Database, sessionId: string, roundNumber: numbe
   return row?.content
 }
 
-export function getFinding(db: Database, findingId: number): FindingRow | undefined {
-  return resultToRow<FindingRow>(
-    db.exec('SELECT * FROM review_findings WHERE id = ?', [findingId])
-  )
-}
-
 // ── Artifacts queries ──
 
 export function getArtifact(
@@ -567,24 +562,6 @@ export function getFindingProgress(
   return resultToRow<FindingProgressRow>(
     db.exec('SELECT * FROM user_finding_progress WHERE finding_id = ?', [findingId])
   )
-}
-
-export function upsertFindingProgress(
-  db: Database,
-  findingId: number,
-  status: FindingProgressRow['status']
-): void {
-  db.run(
-    `INSERT INTO user_finding_progress (finding_id, status, updated_at)
-     VALUES (?, ?, datetime('now'))
-     ON CONFLICT(finding_id)
-     DO UPDATE SET status = ?, updated_at = datetime('now')`,
-    [findingId, status, status]
-  )
-}
-
-export function deleteFindingProgress(db: Database, findingId: number): void {
-  db.run('DELETE FROM user_finding_progress WHERE finding_id = ?', [findingId])
 }
 
 // ── User round progress queries ──
@@ -822,8 +799,9 @@ export function getStats(db: Database): StatsResult {
         (SELECT COUNT(*) FROM review_findings rf
          LEFT JOIN user_finding_progress ufp ON ufp.finding_id = rf.id
          WHERE rf.is_blocker = 1
-           AND (ufp.status IS NULL OR ufp.status NOT IN ('fixed', 'wont_fix'))
-        ) as unresolved_blockers`
+           AND (ufp.status IS NULL OR ufp.status NOT IN (${[...RESOLVED_DECISIONS].map(() => '?').join(', ')}))
+        ) as unresolved_blockers`,
+      [...RESOLVED_DECISIONS]
     )
   )
 

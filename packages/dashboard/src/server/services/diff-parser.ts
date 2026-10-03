@@ -40,18 +40,68 @@ export type ParsedDiff = { files: DiffFile[] }
 
 const HUNK_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/
 
-/** Strip the `a/` / `b/` prefix and surrounding quotes git adds; `/dev/null` → null. */
+const C_ESCAPES: Record<string, number> = { a: 7, b: 8, f: 12, n: 10, r: 13, t: 9, v: 11, '"': 34, '\\': 92 }
+
+/**
+ * Decode the body of a git C-quoted path (the text between the quotes):
+ * `\ooo` octal bytes (decoded together as UTF-8), `\"`, `\\`, `\t`, `\n`, ...
+ */
+function unescapeCQuoted(body: string): string {
+  const bytes: number[] = []
+  for (let i = 0; i < body.length; i++) {
+    const ch = String.fromCodePoint(body.codePointAt(i) as number)
+    if (ch !== '\\') {
+      bytes.push(...Buffer.from(ch, 'utf8'))
+      i += ch.length - 1
+      continue
+    }
+    const octal = /^[0-7]{1,3}/.exec(body.slice(i + 1))
+    if (octal) {
+      bytes.push(parseInt(octal[0], 8) & 0xff)
+      i += octal[0].length
+    } else {
+      const next = body[i + 1] ?? ''
+      bytes.push(C_ESCAPES[next] ?? next.charCodeAt(0))
+      i++
+    }
+  }
+  return Buffer.from(bytes).toString('utf8')
+}
+
+/** Index of the closing quote of a C-quoted token starting at `start` (a `"`), or -1. */
+function closingQuote(s: string, start: number): number {
+  for (let i = start + 1; i < s.length; i++) {
+    if (s[i] === '\\') i++
+    else if (s[i] === '"') return i
+  }
+  return -1
+}
+
+/** Decode a possibly C-quoted path token (no prefix handling). */
+function decodePath(raw: string): string {
+  const p = raw.trim()
+  return p.length >= 2 && p.startsWith('"') && p.endsWith('"') ? unescapeCQuoted(p.slice(1, -1)) : p
+}
+
+/** Decode quoting and strip the `a/` / `b/` prefix (only those); `/dev/null` → null. */
 function cleanPath(raw: string): string | null {
-  let p = raw.trim()
+  const p = decodePath(raw)
   if (p === '/dev/null') return null
-  if (p.startsWith('"') && p.endsWith('"')) p = p.slice(1, -1)
   return p.replace(/^[ab]\//, '')
 }
 
-/** `diff --git a/x b/y` → [x, y]. Paths with spaces are ambiguous; split on the ` b/` midpoint. */
+/**
+ * `diff --git a/x b/y` → [x, y]. Quoted tokens are decoded; unquoted paths with
+ * spaces are ambiguous, so split on the ` b/` midpoint.
+ */
 function pathsFromGitHeader(line: string): [string | null, string | null] {
   const rest = line.slice('diff --git '.length)
-  const mid = rest.indexOf(' b/')
+  if (rest.startsWith('"')) {
+    const end = closingQuote(rest, 0)
+    if (end !== -1) return [cleanPath(rest.slice(0, end + 1)), cleanPath(rest.slice(end + 2))]
+  }
+  const quotedSecond = rest.indexOf(' "')
+  const mid = quotedSecond !== -1 ? quotedSecond : rest.indexOf(' b/')
   if (mid === -1) return [cleanPath(rest), cleanPath(rest)]
   return [cleanPath(rest.slice(0, mid)), cleanPath(rest.slice(mid + 1))]
 }
@@ -146,10 +196,10 @@ export function parseUnifiedDiff(patch: string): ParsedDiff {
       file.newMode = line.slice('new mode '.length).trim()
     } else if (line.startsWith('rename from ')) {
       file.status = 'renamed'
-      file.oldPath = line.slice('rename from '.length).trim()
+      file.oldPath = decodePath(line.slice('rename from '.length))
     } else if (line.startsWith('rename to ')) {
       file.status = 'renamed'
-      file.newPath = line.slice('rename to '.length).trim()
+      file.newPath = decodePath(line.slice('rename to '.length))
     } else if (line.startsWith('Binary files ') || line.startsWith('GIT binary patch')) {
       file.status = 'binary'
     } else if (line.startsWith('--- ')) {

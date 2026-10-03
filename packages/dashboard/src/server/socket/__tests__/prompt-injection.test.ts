@@ -425,10 +425,13 @@ describe('buildPrompt — PR targets', () => {
 
 describe('buildPrompt — verify', () => {
   const base = { commandContent: '# verify-command-md', executionUid: 'uid-1', localCli: '/abs/cli.js' }
+  const verifyTarget = { sessionId: '2026-10-03-pr-16', roundNumber: 2 }
 
   it('passes the finding id as data, includes the command file, and skips workflow linkage', () => {
-    const { prompt, targetError } = buildPrompt({ ...base, baseCommand: 'verify', subArgs: ['42'] })
+    const { prompt, targetError } = buildPrompt({ ...base, baseCommand: 'verify', subArgs: ['42'], verifyTarget })
     expect(targetError).toBeNull()
+    expect(prompt).toContain('Session: 2026-10-03-pr-16')
+    expect(prompt).toContain('Round: 2')
     expect(prompt).toContain('Follow the instructions below to run the OCR verify workflow.')
     expect(prompt).toContain('Finding ID: 42')
     expect(prompt).toContain('# verify-command-md')
@@ -444,6 +447,10 @@ describe('buildPrompt — verify', () => {
       )
     },
   )
+
+  it('reports an unknown finding (no session/round resolved) as a target error', () => {
+    expect(buildPrompt({ ...base, baseCommand: 'verify', subArgs: ['42'] }).targetError).toBe('Finding 42 not found')
+  })
 
   it('accepts a positive integer', () => {
     expect(validateVerifyArgs(['7'])).toBeNull()
