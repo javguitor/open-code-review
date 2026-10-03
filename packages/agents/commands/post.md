@@ -32,19 +32,19 @@ The posted comment is written in the `language` set in `.ocr/config.yaml` (defau
 
 **Prerequisites**
 - GitHub CLI (`gh`) must be installed and authenticated
-- Must be on a branch with an open PR
+- A PR session (started from `pr:<n>` or a PR URL) needs nothing else; otherwise be on a branch with an open PR
 
 **Steps**
 
 1. Verify `gh` is available and authenticated
-2. Find the PR for current branch
+2. Find the PR: if `ocr state show --json` reports a `pr_url` for the session, use it; otherwise look it up for the current branch
 3. Determine current round from `ocr state show` -> `current_round` (or enumerate `rounds/` directory)
 4. **Select the review content to post** (in priority order):
    a. If `--human-translated-review <path>` is provided, use that file
    b. Otherwise, check if `rounds/round-{current_round}/final-human.md` exists -- if yes, prefer it
    c. Fall back to `rounds/round-{current_round}/final.md`
 5. **Resolve the review state**: use `--state` if given; otherwise derive it from the round verdict using the table above
-6. Post as a PR review: `gh pr review {number} --{state} --body-file {file}`
+6. Post as a PR review: `gh pr review {pr_url or number} --{state} --body-file {file}` (prefer the URL: a bare number resolves against `gh`'s default repo)
 7. `gh pr review` prints nothing on success. To show the user a link, run `gh api repos/{owner}/{repo}/pulls/{number}/reviews --jq '.[-1].html_url'` (best effort; if it fails, just say the review was posted)
 
 **Own pull request**

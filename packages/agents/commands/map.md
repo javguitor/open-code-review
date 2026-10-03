@@ -11,7 +11,7 @@ tags: [ocr, map, navigation, review-map]
 ```
 
 **Arguments**
-- `target` (optional): Branch, commit, or file to map. Defaults to staged changes.
+- `target` (optional): Branch, commit, file, `pr:<number>` or a GitHub PR URL to map. A PR target is fetched into a dedicated worktree (see `references/pr-target.md`). Defaults to staged changes.
 - `--fresh` (optional): Clear any existing map for today's session and start from scratch.
 - `--requirements <path>` (optional): Path to requirements document (spec, proposal, ticket).
 
@@ -21,6 +21,7 @@ tags: [ocr, map, navigation, review-map]
 /ocr-map --fresh                   # Clear existing map and regenerate
 /ocr-map HEAD~5                    # Map last 5 commits
 /ocr-map feature/big-refactor      # Map branch vs main
+/ocr-map pr:123                    # Map PR #123 from a dedicated worktree
 /ocr-map --requirements spec.md    # Map with requirements context
 ```
 
