@@ -246,6 +246,8 @@ The CLI **rejects** a contradictory pair (exit 7, nothing written), so pick the 
 
 **Why this blocks**: {Impact if merged as-is}
 
+**Evidence**: {Optional. What supports the finding: the command run and its output, or the code path traced. Omit when there is none.}
+
 **Suggested fix**: 
 ```{language}
 {code suggestion if applicable}
@@ -261,6 +263,7 @@ The CLI **rejects** a contradictory pair (exit 7, nothing written), so pick the 
 
 **Flagged by**: @principal-1, @quality-1
 **Location**: `path/to/file.ts:42-50`
+**Evidence**: {Optional — omit when there is none}
 
 {Description and why it should be fixed.}
 

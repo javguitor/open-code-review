@@ -104,6 +104,8 @@ OCR uses a **run-based architecture** for maps, parallel to review rounds.
 |------|-------|-------------|---------|
 | `discovered-standards.md` | 1 | Merged project context from config + references | All reviewers |
 | `context.md` | 2 | Change summary, diff analysis, Tech Lead guidance | All reviewers |
+| `rounds/round-{n}/diff.patch` | 2 | Exact `git diff` output of the reviewed target for this round | Dashboard workbench, `/ocr:verify` |
+| `rounds/round-{n}/verifications/finding-{id}.md` | on demand | Verifier report for one finding (`## Verdict`, `## Evidence for`, `## Evidence against`, `## What I ran`), written by `/ocr:verify` | Dashboard workbench |
 | `rounds/round-{n}/reviews/{type}-{n}.md` | 4 | Individual reviewer outputs | Discourse, Synthesis |
 | `rounds/round-{n}/discourse.md` | 6 | Cross-reviewer discussion results | Synthesis |
 | `rounds/round-{n}/round-meta.json` | 7 | Structured review data (written by CLI via `complete-round --stdin`) | Dashboard |
