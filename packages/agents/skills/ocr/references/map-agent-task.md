@@ -37,6 +37,12 @@ Trace dependencies for these files:
 
 {brief context from topology analysis — what sections are emerging, what patterns are suspected}
 
+## Code root
+
+{code_root} — (Omit this section when the code root is the checkout.)
+
+The code under review lives at `{code_root}`. Trace dependencies by reading files under that path; `cd` there only to run commands. Run `ocr` commands only from the main checkout, never from the worktree (it carries the PR's own `.ocr/`).
+
 ## Language
 
 Follow `references/language-policy.md` with language = `{language}`. (Omit this section when the language is `en`.)
@@ -128,6 +134,12 @@ When spawning a Requirements Mapper, provide the following context:
 ## Flow Context
 
 {summary from flow analysis — how files relate to each other}
+
+## Code root
+
+{code_root} — (Omit this section when the code root is the checkout.)
+
+The code under review lives at `{code_root}`. Verify coverage claims by reading files under that path. Run `ocr` commands only from the main checkout, never with the working directory in the worktree (it carries the PR's own `.ocr/`).
 
 ## Language
 

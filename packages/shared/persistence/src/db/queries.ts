@@ -24,12 +24,17 @@ export function insertSession(db: Database, params: InsertSessionParams): void {
     current_round = 1,
     current_map_run = 1,
     session_dir,
+    base_ref = null,
+    head_ref = null,
+    head_sha = null,
+    pr_number = null,
+    pr_url = null,
   } = params;
 
   db.run(
-    `INSERT INTO sessions (id, branch, workflow_type, current_phase, phase_number, current_round, current_map_run, session_dir)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, branch, workflow_type, current_phase, phase_number, current_round, current_map_run, session_dir],
+    `INSERT INTO sessions (id, branch, workflow_type, current_phase, phase_number, current_round, current_map_run, session_dir, base_ref, head_ref, head_sha, pr_number, pr_url)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, branch, workflow_type, current_phase, phase_number, current_round, current_map_run, session_dir, base_ref, head_ref, head_sha, pr_number, pr_url],
   );
 }
 
@@ -60,6 +65,14 @@ export function updateSession(
   if (params.current_map_run !== undefined) {
     setClauses.push("current_map_run = ?");
     values.push(params.current_map_run);
+  }
+
+  for (const column of ["base_ref", "head_ref", "head_sha", "pr_number", "pr_url"] as const) {
+    const value = params[column];
+    if (value !== undefined) {
+      setClauses.push(`${column} = ?`);
+      values.push(value);
+    }
   }
 
   if (setClauses.length === 0) {

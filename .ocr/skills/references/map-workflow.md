@@ -82,6 +82,8 @@ ocr state begin \
   --session-dir "$SESSION_DIR"
 ```
 
+For a PR target (`pr:<n>` or a PR URL), resolve it first with `references/pr-target.md` (session id `{date}-pr-<n>`, branch = `headRefName`) and add `--base-ref --head-ref --head-sha --pr-number --pr-url` to `ocr state begin`.
+
 Then transition to the first map phase:
 ```bash
 ocr state advance \
@@ -190,7 +192,7 @@ code-review-map:
    | Specific commit | `git diff {commit}^ {commit} --name-only` |
    | Commit range | `git diff {from}..{to} --name-only` |
    | Branch vs main | `git diff main...{branch} --name-only` |
-   | PR (via gh CLI) | `gh pr diff {number} --name-only` |
+   | PR (`pr:<n>` or URL) | already resolved in Phase 0 (`references/pr-target.md`); `git diff origin/{base}...refs/ocr/pr/{n} --name-only` (session id `{date}-pr-{n}`; pass `{code_root}` to map agents) |
 
    ```bash
    # Default: staged changes

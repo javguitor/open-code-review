@@ -26,6 +26,21 @@
 # language: en
 
 # ─────────────────────────────────────────────────────────────────────────────
+# PR WORKTREES
+# ─────────────────────────────────────────────────────────────────────────────
+# Reviewing a PR target (`pr:<n>`) checks the PR out into its own git worktree
+# at <dir>/pr-<n>, so your working tree is never touched. The default
+# directory is gitignored by `ocr init` / `ocr update`.
+#   dir:     where worktrees are created. Relative paths resolve against the
+#            repository root; absolute paths and a leading ~ also work.
+#   cleanup: keep (default) leaves worktrees until `ocr worktree remove`;
+#            on-close removes a worktree when its last open session is closed.
+
+# worktrees:
+#   dir: .ocr/worktrees
+#   cleanup: keep
+
+# ─────────────────────────────────────────────────────────────────────────────
 # CONTEXT DISCOVERY
 # ─────────────────────────────────────────────────────────────────────────────
 # Files to read during Phase 1 (Context Discovery). OCR merges these into

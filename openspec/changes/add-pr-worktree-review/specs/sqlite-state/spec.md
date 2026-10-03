@@ -2,7 +2,7 @@
 
 ### Requirement: Reviewed Ref Columns
 
-The `sessions` table SHALL carry nullable `base_ref`, `head_ref`, `head_sha`, `pr_number` and `pr_url` columns (migration 15) so a session states exactly what it reviewed, and `round-meta.json` MAY carry `head_sha`.
+The `sessions` table SHALL carry nullable `base_ref`, `head_ref`, `head_sha`, `pr_number` and `pr_url` columns (migration 15) so a session states exactly what it reviewed (`head_ref` is the local ref reviewed, `refs/ocr/pr/<n>`; `branch` stays the PR head branch name), and `round-meta.json` MAY carry `head_sha`.
 
 #### Scenario: Migration is additive
 

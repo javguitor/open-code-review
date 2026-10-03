@@ -291,6 +291,33 @@ describe('post:check-gh ownership', () => {
   })
 })
 
+describe('post:check-gh for PR-targeted sessions', () => {
+  const prViewRule = (author: string): GhRule => ({
+    match: `pr view ${PR_URL_42}`,
+    stdout: JSON.stringify({ number: PR_NUMBER, url: PR_URL_42, author: { login: author }, headRefName: 'feat/real' }),
+  })
+
+  beforeEach(() => {
+    db.run('UPDATE sessions SET pr_url = ?, pr_number = ? WHERE id = ?', [PR_URL_42, PR_NUMBER, 'sess-1'])
+  })
+
+  it('resolves by the stored pr_url and never runs gh pr list', async () => {
+    const h = setup([AUTH_OK, prViewRule('Me'), { match: 'api user', stdout: 'me\n' }])
+    await checkGh(h)
+    expect(h.last('post:gh-result')).toMatchObject({
+      authenticated: true, prNumber: PR_NUMBER, prUrl: PR_URL_42, branch: 'feat/real', ownership: 'own',
+    })
+    expect(h.ghCalls.some((a) => a[0] === 'pr' && a[1] === 'list')).toBe(false)
+  })
+
+  it('reports no PR (without falling back to the branch) when the URL lookup fails', async () => {
+    const h = setup([AUTH_OK, { match: 'pr view', fail: true }])
+    await checkGh(h)
+    expect(h.last('post:gh-result')).toMatchObject({ authenticated: true, prNumber: null, ownership: 'unknown' })
+    expect(h.ghCalls.some((a) => a[1] === 'list')).toBe(false)
+  })
+})
+
 describe('post:submit', () => {
   const submit = (h: ReturnType<typeof setup>, extra: Record<string, unknown> = {}) =>
     h.fire('post:submit', { prNumber: PR_NUMBER, content: 'hi', ...extra })

@@ -19,7 +19,7 @@ PR into its own `git worktree`, a session tied to the reviewed commit, and a vis
 
 - New review target `pr:<number>` (also accepted: a full PR URL) for `/ocr:review`,
   `/ocr:map` and the dashboard command palette. The Tech Lead resolves it with `gh pr view
-  --json headRefName,headRefOid,baseRefName,url,author`, fetches `pull/<n>/head`, creates
+  --repo <origin owner/repo> --json number,url,headRefName,headRefOid,baseRefName,author`, fetches `pull/<n>/head` from `origin`, verifies the fetched sha equals `headRefOid`, creates
   (or reuses) a worktree under the configured directory, and runs the review **with the
   worktree as the code root** while the session stays in the main checkout's `.ocr/`.
 - New `worktrees` block in `.ocr/config.yaml` (`dir`, default `.ocr/worktrees`; `cleanup`,
@@ -30,17 +30,17 @@ PR into its own `git worktree`, a session tied to the reviewed commit, and a vis
   through new flags and shown by `ocr state show`.
 - Stale detection: the dashboard compares the session's `head_sha` with the PR's current
   `headRefOid` (`gh pr view`, cached per session for a few minutes) and shows **Stale**
-  on the session card and round page, with a "Re-review (round N+1)" action that
-  re-fetches the head into the same worktree. Finding-level user decisions carry over
-  because they are keyed by finding id, not by round (existing behaviour; verified in
-  tasks).
+  on the session card and session detail (not on round pages), with a "Re-review (round N+1)" action that
+  runs `/ocr:review <pr_url>` and re-fetches the head into the same worktree. Decisions taken on round N stay on round N
+  (keyed by finding id); round N+1 findings are new rows and start unread — carrying a
+  decision to the matching finding of the next round is out of scope.
 - Posting uses the session's `pr_number`/`pr_url` when present instead of looking the PR
   up by branch (removes the fork default-repo ambiguity for PR-targeted sessions).
 - Worktree lifecycle: `ocr worktree list|remove [--all-stale]`; `cleanup: on-close` removes
   the worktree when `ocr state finish` closes the last open session that uses it.
 
 Not in scope: a dashboard settings screen that writes `config.yaml` (separate change);
-reviewing PRs from a different repository than the checkout's remotes; GitHub Enterprise.
+reviewing PRs from remotes other than `origin` (e.g. `upstream` in a fork); GitHub Enterprise.
 
 ## Impact
 

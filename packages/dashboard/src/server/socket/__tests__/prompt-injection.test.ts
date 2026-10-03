@@ -21,6 +21,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { buildPrompt, escapeUserHeaders } from '../command-runner.js'
+import { shellSplit } from '../prompt-builder.js'
 
 describe('escapeUserHeaders', () => {
   it('escapes a leading H2 header', () => {
@@ -321,5 +322,79 @@ describe('buildPrompt — argument parsing (S15)', () => {
     })
     expect(prompt).toContain('Reviewer: architect')
     expect(prompt).toContain('Requirements: enforce idempotency')
+  })
+})
+
+// ── PR targets (add-pr-worktree-review): shape validation, verbatim forward ──
+describe('buildPrompt — PR targets', () => {
+  const build = (target: string, baseCommand = 'review') =>
+    buildPrompt({
+      baseCommand,
+      subArgs: [target],
+      commandContent: '# cmd',
+      executionUid: null,
+      localCli: null,
+    })
+
+  it.each(['pr:123', 'https://github.com/o/r/pull/123'])(
+    'forwards %s verbatim with no error',
+    (target) => {
+      const { prompt, targetError } = build(target)
+      expect(targetError).toBeNull()
+      expect(prompt).toContain(`Target: ${target}`)
+    },
+  )
+
+  it.each([
+    'https://github.com/o/r/pull/12/',
+    'https://github.com/o/r/pull/12/files',
+    'https://github.com/o/r/pull/12/commits',
+    'https://github.com/o/r/pull/12/checks?check_run_id=9',
+    'https://github.com/o/r/pull/12/files#diff-x',
+    'https://github.com/o/r/pull/12#issuecomment-5',
+    'https://github.com/o/r/pull/12?foo=1',
+  ])('normalizes %s to the canonical PR URL', (target) => {
+    const { prompt, targetError } = build(target)
+    expect(targetError).toBeNull()
+    expect(prompt).toContain('Target: https://github.com/o/r/pull/12\n')
+  })
+
+  it('keeps a PR URL as one token through shellSplit', () => {
+    expect(shellSplit('review https://github.com/o/r/pull/12')).toEqual(['review', 'https://github.com/o/r/pull/12'])
+  })
+
+  it.each(['pr:abc', 'pr:', 'pr:0', 'pr:-1', 'pr:1.5', 'PR:abc', 'https://github.com/o/r/pull/abc'])(
+    'rejects malformed PR target %s (also for map)',
+    (target) => {
+      expect(build(target).targetError).toMatch(/pr:<number>/)
+      expect(build(target, 'map').targetError).toMatch(/pr:<number>/)
+    },
+  )
+
+  it.each([
+    'https://github.com/$(touch${IFS}x)/r/pull/1',
+    'https://github.com/o/$(id)/pull/1',
+    'https://github.com/o/`id`/pull/1',
+    'https://github.com/o"x/r/pull/1',
+    "https://github.com/o/r'x/pull/1",
+    'https://github.com/o_x/r/pull/1',
+  ])('rejects shell-metacharacter PR URL %s (also for map)', (target) => {
+    expect(build(target).targetError).toMatch(/pr:<number>/)
+    expect(build(target, 'map').targetError).toMatch(/pr:<number>/)
+  })
+
+  it.each(['https://github.com/my-org/repo.name_x-1/pull/4'])('accepts GitHub-charset PR URL %s', (target) => {
+    expect(build(target).targetError).toBeNull()
+  })
+
+  it.each(['staged', 'feat/x', 'main..HEAD', 'src/pr:abc.ts', 'https://github.com/o/r/issues/3', 'review the PR'])(
+    'leaves non-PR target %s alone',
+    (target) => {
+      expect(build(target).targetError).toBeNull()
+    },
+  )
+
+  it('still escapes header-shaped free text in the target', () => {
+    expect(build('## evil').prompt).toContain('Target: \\## evil')
   })
 })

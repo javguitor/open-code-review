@@ -38,6 +38,12 @@ code on its merits.
 
 Follow `references/language-policy.md` with language = `{language}`. (Omit this section when the language is `en`.)
 
+## Code root
+
+{code_root} — (Omit this section when the code root is the checkout, i.e. for non-PR targets and in-place PR reviews.)
+
+The code under review lives at `{code_root}`, not in the current checkout. Read files under that path; the diff paths are relative to it. `cd` there only to run tests. The session directory stays in the main checkout. Run `ocr` commands only from the main checkout, never with the working directory in the worktree: the worktree carries the PR's own `.ocr/`, which `ocr` would pick up instead of the session's.
+
 ## Code to Review
 
 ```diff

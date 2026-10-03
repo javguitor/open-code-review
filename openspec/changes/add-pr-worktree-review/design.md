@@ -22,13 +22,14 @@ How OCR works today (verified on `main` after PR #5):
 
 ## Goals / Non-Goals
 
-- Goals: review any PR of the repo's remotes without touching the user's working tree;
+- Goals: review any PR of the `origin` repository without touching the user's working tree;
   reviewers get a full checkout; every session knows the exact commit it reviewed; a
   push after the review is visible as "stale" with a one-click re-review; posting targets
   the right PR without relying on `gh` defaults.
 - Non-Goals: multi-repo; GHES; a settings UI that edits `config.yaml`; running the
   reviewed code's tests in isolation (sandboxing) — reviewers may run tests in the
-  worktree as they do today in the checkout, with the same trust model.
+  worktree as they do today in the checkout, with the same trust model; PRs from remotes
+  other than origin (e.g. `upstream` in a fork).
 
 ## Decisions
 
@@ -41,19 +42,37 @@ How OCR works today (verified on `main` after PR #5):
   - Alternative: run the whole skill from inside the worktree. Rejected: `.ocr/` would be
     looked up from the worktree (`resolveOcrDir` walks up from cwd) and sessions would
     scatter across worktrees; the dashboard watches one `.ocr/`.
-- **Decision: refs.** `git fetch origin pull/<n>/head:refs/ocr/pr/<n>` (GitHub exposes
-  `pull/<n>/head` on the base repo's remote; for a fork checkout the PR lives on the
-  parent, so the fetch remote is the one `gh repo view --json nameWithOwner` reports for
-  the PR's repository — resolve it via `gh pr view --json headRepository,baseRepository`
-  and pick the remote whose URL matches; fall back to `origin`). Worktree branch:
-  `ocr/pr-<n>` checked out at that ref so the worktree is detached from the author's
-  branch name and never pushes by accident. Base ref: `origin/<baseRefName>` fetched too.
+- **Decision: refs.** Only PRs of the repository behind the `origin` remote are supported.
+  `pr:<n>` is resolved with `gh pr view <n> --repo <origin owner/repo> --json url`
+  (owner/repo derived from `git remote get-url origin` by keeping its last two path
+  segments, so `ssh://`, SSH host aliases such as `git@github-work:o/r.git`,
+  `https://token@…` and a trailing slash all work; `gh repo view <url>` was rejected
+  because it fails on SSH aliases; owner/repo are compared case-insensitively); the PR is then read with `gh pr view <url> --json
+  number,url,headRefName,headRefOid,baseRefName,author` (`baseRepository` is not a valid
+  `--json` field; `headRepository` is). A PR URL is accepted only as
+  `https://github.com/<owner>/<repo>/pull/<n>` with owner `[A-Za-z0-9-]+` and repo
+  `[A-Za-z0-9._-]+` (GitHub's real charset, so no shell metacharacters reach `gh`). The
+  origin check runs **before** the first `gh` call: a PR URL whose `<owner>/<repo>` is not
+  origin's stops with an error saying only PRs of `<origin owner/repo>` are supported. The fetch remote is
+  always `origin`: `git fetch origin +pull/<n>/head:refs/ocr/pr/<n>`, then
+  `git rev-parse refs/ocr/pr/<n>` must equal `headRefOid` or the flow stops naming both
+  SHAs (the PR moved between view and fetch); that verified sha is the recorded
+  `head_sha`. Worktrees are detached at `refs/ocr/pr/<n>`; nothing creates an `ocr/pr-<n>`
+  branch, so the worktree is never tied to the author's branch name and cannot push by
+  accident. Base ref: `origin/<baseRefName>` fetched too. `head_ref` is the local ref that
+  was reviewed (`refs/ocr/pr/<n>`); `branch` is the PR head branch name.
   - Alternative: `gh pr checkout <n>` in a worktree. Rejected: it creates/overwrites a
     local branch named like the author's and sets upstream tracking, inviting pushes.
+  - Alternative: pick the fetch remote matching the PR's base repository (e.g. `upstream`
+    in a fork). Rejected: the number-only identity (`pr-<n>`, `refs/ocr/pr/<n>`) would
+    collide between remotes; supporting one repo keeps it unambiguous.
 - **Decision: worktree path and reuse.** `<worktrees.dir>/pr-<n>` (dir relative to the
   repo root or absolute). If it exists and is a registered worktree, `git -C <path>
-  checkout --detach refs/ocr/pr/<n>` updates it (re-review); if it exists but is not a
-  worktree, abort with a clear error. Default dir `.ocr/worktrees` is added to the managed
+  checkout --detach refs/ocr/pr/<n>` updates it (re-review) only when `git status
+  --porcelain` is empty (a checkout would carry local changes into the review); otherwise
+  stop and suggest `ocr worktree remove <n> --force`. If it exists but is not a worktree,
+  abort with a clear error. The in-place shortcut likewise requires an empty `git status
+  --porcelain`. Default dir `.ocr/worktrees` is added to the managed
   block of `.ocr/.gitignore` by `ocr init`/`update`.
 - **Decision: session identity.** Session id = `{date}-pr-<n>` (not the author's branch:
   two PRs can share a branch name across forks; the number is unique per repo).
@@ -65,21 +84,33 @@ How OCR works today (verified on `main` after PR #5):
   states what it reviewed — validated as optional string).
 - **Decision: stale = session `head_sha` ≠ PR `headRefOid`.** Computed server-side in a
   new `services/pr-head.ts` (`gh pr view <url> --json headRefOid`, cached 5 min per PR,
-  refreshed on demand by a "Check for updates" action; never on the sessions list
-  automatically for more than the sessions visible). Exposed as `stale: boolean | null`
-  (`null` = not a PR session or lookup failed) on the sessions API. The badge says
-  "Stale — PR moved to <sha7>" and offers "Re-review" which runs
-  `/ocr:review pr:<n>` (new round). No automatic polling.
+  refreshed on demand by a "Check for updates" action). The sessions **list** spawns
+  `gh` only for `active` sessions and serves the cached head (no spawn) for closed ones;
+  the session **detail** and "Check for updates" always look the PR up. Lookups are
+  bounded and deduplicated in flight. A passive lookup failure (list, detail) serves the
+  last known head; a forced one ("Check for updates") answers 502 and the UI shows an
+  error. Exposed as `stale: boolean | null` (`null` = not a PR session, or no head known)
+  on the sessions API. The badge appears on
+  the session card and the session detail only; round pages show nothing (a round page
+  would compare against the session's latest `head_sha`, not the one that round reviewed).
+  The badge says "Stale — PR moved to <sha7>" and offers "Re-review" which runs
+  `/ocr:review <pr_url>` (the session's stored URL, never a bare number; new round). No
+  automatic polling.
 - **Decision: posting prefers the session's PR.** `post:check-gh` uses `pr_url` when the
   session has one (ownership check unchanged); otherwise today's branch lookup.
 - **Decision: cleanup.** `worktrees.cleanup: keep | on-close`. `ocr worktree remove
-  <n>` runs `git worktree remove --force <path>` and deletes `refs/ocr/pr/<n>` and the
-  `ocr/pr-<n>` branch; `--all-stale` removes worktrees whose session is closed. `on-close`
-  calls the same from `ocr state finish`. Never remove a worktree with uncommitted
-  changes unless `--force` is passed explicitly (reviewers may have run formatters).
+  <n>` runs `git worktree remove <path>` and deletes `refs/ocr/pr/<n>` only (no branch is
+  ever created or deleted); it refuses a dirty worktree and passes `--force` only when the
+  user does. `remove <n>` also refuses a PR that has an **active** session unless
+  `--force` is given (so `--force` overrides both guards). `--all-stale` removes every
+  worktree whose PR has no active session, including worktrees with no session at all. `on-close` calls the
+  same from `ocr state finish`. Never remove a worktree with uncommitted changes unless
+  `--force` is passed explicitly (reviewers may have run formatters).
 - **Decision: target syntax.** `pr:<n>` and `https://github.com/<o>/<r>/pull/<n>` are
   recognised by the skill (`references/pr-target.md`) and by `prompt-builder.ts` (which
-  only validates the shape and forwards it; resolution stays in the skill so the CLI path
+  validates the shape with the same charset and **normalizes** the URL, stripping `/files`,
+  `/commits`, `/checks`, query and fragment copied from the browser, then forwards the
+  canonical form; resolution stays in the skill so the CLI path
   and the dashboard path behave identically). Command palette shows the hint
   `pr:123 · branch · commit range · path` in the target placeholder.
 
@@ -101,12 +132,13 @@ Additive: new nullable columns, new config block with safe defaults, new target 
 Existing sessions have `head_sha = null` → `stale = null` → no badge. Rollback: revert;
 migration 15 can stay (unused nullable columns).
 
-## Open Questions
+## Resolved Questions (2026-10-03)
 
-- Should `pr:<n>` on a PR whose head branch is the current checkout skip the worktree and
-  review in place? (Proposed: yes, with a one-line notice.)
-- Keep `refs/ocr/pr/<n>` after `ocr worktree remove`, to diff old rounds later? (Proposed:
-  delete; `round-meta.json.head_sha` is enough to re-fetch.)
+- `pr:<n>` on a PR whose head branch is the current checkout (whose `HEAD` equals the
+  PR's `headRefOid` and whose `git status --porcelain` is empty) **skips the worktree and reviews in place**, with a one-line notice;
+  the session still records `pr_number`/`pr_url`/`head_sha` and uses id `{date}-pr-<n>`.
+- `ocr worktree remove` **deletes** `refs/ocr/pr/<n>` (no branch exists to delete);
+  `round-meta.json.head_sha` is enough to re-fetch an old round.
 
 ## How to execute this change (handoff)
 

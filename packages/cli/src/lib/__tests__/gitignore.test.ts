@@ -31,6 +31,7 @@ describe("ensureGitignore", () => {
     expect(content).toContain("# OCR:END");
     expect(content).toContain("sessions/");
     expect(content).toContain("data/");
+    expect(content).toContain("worktrees/");
     expect(content).toContain("*.db-shm");
     expect(content).toContain("*.db-wal");
   });

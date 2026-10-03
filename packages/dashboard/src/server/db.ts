@@ -55,6 +55,12 @@ export type SessionRow = {
   started_at: string
   updated_at: string
   session_dir: string
+  // PR-targeted sessions only (null for branch/staged/range targets)
+  base_ref: string | null
+  head_ref: string | null
+  head_sha: string | null
+  pr_number: number | null
+  pr_url: string | null
 }
 
 export type EventRow = {

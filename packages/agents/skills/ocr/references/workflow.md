@@ -22,6 +22,9 @@ BRANCH_RAW=$(git branch --show-current)
 BRANCH=$(echo "$BRANCH_RAW" | tr '/' '-')
 DATE=$(date +%Y-%m-%d)
 SESSION_DIR=".ocr/sessions/${DATE}-${BRANCH}"
+# PR target (pr:<n> or a PR URL): resolve it now with `references/pr-target.md`
+# (gh pr view, fetch, worktree) — `ocr state begin` in Phase 1 needs its values.
+# Then BRANCH=<headRefName> and SESSION_DIR=".ocr/sessions/${DATE}-pr-<n>".
 
 # Check if session exists
 ls -la "$SESSION_DIR" 2>/dev/null
@@ -194,6 +197,11 @@ ocr state begin \
   --workflow-type review \
   --session-dir "$SESSION_DIR"
 
+# PR targets (pr:<n> or a PR URL) add the reviewed refs resolved in Phase 0
+# (`references/pr-target.md`). Re-running for a new round updates them.
+#   --base-ref "$BASE_REF" --head-ref "$HEAD_REF" --head-sha "$HEAD_SHA" \
+#   --pr-number "$PR_NUMBER" --pr-url "$PR_URL"
+
 # Transition to context phase
 ocr state advance --phase "context"
 ```
@@ -311,7 +319,7 @@ See `references/context-discovery.md` for detailed algorithm.
    - Staged changes: `git diff --cached`
    - Unstaged changes: `git diff`
    - Commit range: `git diff {range}`
-   - PR: `gh pr diff {number}`
+   - PR (`pr:<n>` or a PR URL): already resolved in Phase 0 (`references/pr-target.md`); `git diff origin/<base>...refs/ocr/pr/<n>` — run in the main checkout
 
 2. Gather supporting context:
    ```bash
@@ -330,7 +338,7 @@ See `references/context-discovery.md` for detailed algorithm.
 
 3. Create session directory:
    ```bash
-   SESSION_ID="$(date +%Y-%m-%d)-$(git branch --show-current | tr '/' '-')"
+   SESSION_ID="$(date +%Y-%m-%d)-$(git branch --show-current | tr '/' '-')"   # PR targets: "$(date +%Y-%m-%d)-pr-<n>"
    mkdir -p .ocr/sessions/$SESSION_ID/rounds/round-1/reviews
    ```
 
@@ -342,6 +350,8 @@ See `references/context-discovery.md` for detailed algorithm.
    **Target**: staged changes
    **Branch**: {branch}
    **Files**: {count} files changed
+   **PR** (PR targets only): {pr_url} — base `{base_ref}`, head `{head_ref}` @ `{head_sha}`
+   **Code root** (PR targets only): {code_root}
 
    ## Change Summary
    [Brief description of what changed]
@@ -637,6 +647,7 @@ instantiation strategy your host CLI supports (parallel sub-agents or sequential
    - Project context (from `discovered-standards.md`)
    - **Requirements context (from `requirements.md` if provided)**
    - Tech Lead guidance (including requirements assessment)
+   - **Code root** (PR targets in a worktree only): the path from `context.md`, so reviewers read files there instead of the checkout
    - The diff to review
    - **Instruction to explore codebase with full agency**
    - The output language policy (`references/language-policy.md` with `{language}` = the value read in Phase 1) — omitted when `en`
@@ -795,6 +806,8 @@ Synthesis prose follows the configured `language`; headings, labels, verdicts an
 
    > **CRITICAL — `synthesis_counts` must match `final.md`**: The `synthesis_counts` object contains the **deduplicated** counts of items in each section of `final.md`. Multiple reviewers often flag the same issue independently, so the per-reviewer findings array will have more entries than `final.md` lists. Count the actual numbered items under each section heading in your synthesized review (`## Blockers`, `## Should Fix`, `## Suggestions`) and set those counts here. The dashboard uses `synthesis_counts` when present, falling back to derived counts only for older reviews.
 
+   > **PR sessions**: add `"head_sha": "<headRefOid>"` (the reviewed commit, from `context.md`) at the top level of the JSON. It is optional and persisted in `round-meta.json`; omit it for non-PR targets.
+
    ```bash
    cat <<'JSON' | ocr state complete-round --stdin
    {
@@ -929,7 +942,7 @@ fi
 
 2. If `--post` flag or PR target:
    - Check for `gh` CLI: `which gh`
-   - Post as a PR review: `gh pr review {number} --{state} --body-file final.md`
+   - Post as a PR review: `gh pr review {pr_url} --{state} --body-file final.md` — for PR sessions use the session's `pr_url` (`ocr state show --json`); otherwise find the PR number for the branch
    - `{state}` comes from the round verdict: `APPROVE` -> `approve`, `REQUEST CHANGES` -> `request-changes`, `NEEDS DISCUSSION` or no verdict -> `comment` (see `commands/post.md`)
    - On your own PR GitHub rejects `approve`/`request-changes`; retry with `--comment` and tell the user the state was downgraded
 

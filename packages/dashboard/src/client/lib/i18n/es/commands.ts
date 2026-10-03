@@ -28,7 +28,7 @@ const commands = {
   'commands.param_target': 'Objetivo',
   'commands.param_requirements': 'Requisitos',
   'commands.param_fresh': 'Empezar de cero',
-  'commands.param_target_placeholder': 'staged (por defecto)',
+  'commands.param_target_placeholder': 'pr:123 · rama · rango de commits · ruta (por defecto: staged)',
   'commands.param_requirements_placeholder': 'spec.md o describe en qué centrarse...',
   'commands.default_model_label': '(modelo por defecto)',
   'commands.default_model_detail': 'Usa el valor por defecto de la CLI anfitriona',

@@ -1,10 +1,11 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { ensureDatabase, getSession } from "../../db/index.js";
 import { makeTempWorkspace, removeTempWorkspace } from "../../db/test-support.js";
 import {
   stateBegin,
+  stateShow,
   stateAdvance,
   stateCompleteRound,
   stateClose,
@@ -104,6 +105,58 @@ describe("stateCompleteRound", () => {
     await expect(
       stateCompleteRound({ source: "stdin", data: META, ocrDir, sessionId: "cr5", requireFinal: true }),
     ).resolves.toBeDefined();
+  });
+});
+
+describe("reviewed refs", () => {
+  const prRefs = {
+    baseRef: "origin/main",
+    headRef: "feat/x",
+    headSha: "a".repeat(40),
+    prNumber: 123,
+    prUrl: "https://github.com/o/r/pull/123",
+  };
+
+  it("begin persists the refs and show reports them", async () => {
+    const dir = join(ocrDir, "sessions", "refs");
+    mkdirSync(dir, { recursive: true });
+    await stateBegin({ sessionId: "refs", branch: "feat/x", workflowType: "review", sessionDir: dir, ocrDir, ...prRefs });
+    const s = (await stateShow(ocrDir, "refs"))!.session;
+    expect(s).toMatchObject({
+      base_ref: "origin/main",
+      head_ref: "feat/x",
+      head_sha: "a".repeat(40),
+      pr_number: 123,
+      pr_url: "https://github.com/o/r/pull/123",
+    });
+  });
+
+  it("leaves the refs NULL when not passed", async () => {
+    await begin("norefs");
+    const s = (await stateShow(ocrDir, "norefs"))!.session;
+    expect([s.base_ref, s.head_ref, s.head_sha, s.pr_number, s.pr_url]).toEqual([null, null, null, null, null]);
+  });
+
+  it("a new round updates only the refs that are passed", async () => {
+    const dir = join(ocrDir, "sessions", "round2");
+    mkdirSync(dir, { recursive: true });
+    await stateBegin({ sessionId: "round2", branch: "feat/x", workflowType: "review", sessionDir: dir, ocrDir, ...prRefs });
+    await walkToSynthesis("round2");
+    await stateCompleteRound({ source: "stdin", data: META, ocrDir, sessionId: "round2" });
+    await stateBegin({ sessionId: "round2", branch: "feat/x", workflowType: "review", sessionDir: dir, ocrDir, headSha: "b".repeat(40) });
+    const s = (await stateShow(ocrDir, "round2"))!.session;
+    expect(s.head_sha).toBe("b".repeat(40));
+    expect(s.pr_number).toBe(123);
+    expect(s.base_ref).toBe("origin/main");
+  });
+
+  it("complete-round persists head_sha into round-meta.json", async () => {
+    const dir = await begin("hs");
+    await walkToSynthesis("hs");
+    const data = JSON.stringify({ schema_version: 1, verdict: "APPROVE", reviewers: [], head_sha: "c".repeat(40) });
+    await stateCompleteRound({ source: "stdin", data, ocrDir, sessionId: "hs" });
+    const written = JSON.parse(readFileSync(join(dir, "rounds", "round-1", "round-meta.json"), "utf-8"));
+    expect(written.head_sha).toBe("c".repeat(40));
   });
 });
 

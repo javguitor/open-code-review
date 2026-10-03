@@ -18,11 +18,14 @@
  *   reconcile      — Heal legacy/drifted session state
  */
 
-import { Command } from "commander";
+import { Command, InvalidArgumentError } from "commander";
 import chalk from "chalk";
 import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { requireOcrSetup } from "../lib/guards.js";
+import { isValidPrNumber } from "../lib/pr-number.js";
+import { getWorktreeConfig } from "@open-code-review/config/worktree-config";
+import { removePrWorktree } from "./worktree.js";
 import {
   stateClose,
   stateShow,
@@ -45,6 +48,8 @@ import {
 } from "@open-code-review/config/runtime-config";
 import {
   getDb,
+  getSession,
+  getAllSessions,
   isBusyError,
   linkDashboardInvocationToWorkflow,
 } from "@open-code-review/persistence";
@@ -263,6 +268,18 @@ const showSubcommand = new Command("show")
           chalk.dim("  Map Run:   ") + chalk.white(String(s.current_map_run)),
         );
       }
+      const refRows: Array<[string, string | number | null]> = [
+        ["Base ref:  ", s.base_ref],
+        ["Head ref:  ", s.head_ref],
+        ["Head SHA:  ", s.head_sha],
+        ["PR:        ", s.pr_number],
+        ["PR URL:    ", s.pr_url],
+      ];
+      for (const [label, value] of refRows) {
+        if (value !== null) {
+          console.log(chalk.dim(`  ${label}`) + chalk.white(String(value)));
+        }
+      }
       console.log(
         chalk.dim("  Started:   ") + chalk.white(s.started_at),
       );
@@ -416,6 +433,16 @@ const beginSubcommand = new Command("begin")
     "--dashboard-uid <uid>",
     "Dashboard command_executions uid to link this workflow to (takes precedence over OCR_DASHBOARD_EXECUTION_UID)",
   )
+  .option("--base-ref <ref>", "Base ref of the reviewed change (e.g. origin/main)")
+  .option("--head-ref <ref>", "Local ref that was reviewed (e.g. refs/ocr/pr/<n>)")
+  .option("--head-sha <sha>", "Commit SHA being reviewed")
+  .option("--pr-number <n>", "Pull request number (positive integer)", (v: string) => {
+    if (!isValidPrNumber(v)) {
+      throw new InvalidArgumentError(`Invalid PR number: "${v}". Must be a positive integer.`);
+    }
+    return Number(v);
+  })
+  .option("--pr-url <url>", "Pull request URL")
   .option("--json", "Output the result as JSON")
   .action(
     async (options: {
@@ -423,6 +450,11 @@ const beginSubcommand = new Command("begin")
       branch: string;
       workflowType: WorkflowType;
       sessionDir?: string;
+      baseRef?: string;
+      headRef?: string;
+      headSha?: string;
+      prNumber?: number;
+      prUrl?: string;
       dashboardUid?: string;
       json?: boolean;
     }) => {
@@ -439,6 +471,11 @@ const beginSubcommand = new Command("begin")
           workflowType: options.workflowType,
           sessionDir,
           ocrDir,
+          baseRef: options.baseRef,
+          headRef: options.headRef,
+          headSha: options.headSha,
+          prNumber: options.prNumber,
+          prUrl: options.prUrl,
         });
         // Superset of `init`: wire up dashboard linkage so the dashboard can
         // bind outcome + offer resume.
@@ -579,6 +616,31 @@ const completeMapSubcommand = new Command("complete-map")
     },
   );
 
+/**
+ * `worktrees.cleanup: on-close` — drop the PR worktree once its last active
+ * session is closed. Best effort: a dirty/missing worktree or a git failure
+ * prints a notice and never fails the finish (the session is already closed).
+ */
+export async function cleanupPrWorktree(ocrDir: string, sessionId: string): Promise<void> {
+  try {
+    if (getWorktreeConfig(ocrDir).cleanup !== "on-close") return;
+    const db = await getDb(ocrDir);
+    const prNumber = getSession(db, sessionId)?.pr_number;
+    if (prNumber == null) return;
+    if (getAllSessions(db).some((s) => s.status === "active" && s.pr_number === prNumber)) return;
+    const result = removePrWorktree({ ocrDir, prNumber });
+    if (result.status === "removed") {
+      console.log(chalk.dim(`Removed worktree ${result.path}`));
+    } else if (result.status === "dirty") {
+      console.log(chalk.dim(`Worktree ${result.path} has uncommitted changes; kept (ocr worktree remove ${prNumber} --force)`));
+    } else {
+      console.log(chalk.dim(`No worktree for PR #${prNumber}; nothing to clean up`));
+    }
+  } catch (error) {
+    console.log(chalk.dim(`Worktree cleanup skipped: ${error instanceof Error ? error.message : String(error)}`));
+  }
+}
+
 const finishSubcommand = new Command("finish")
   .description("Close a workflow (refuses unless the current round/run is complete)")
   .option("--session-id <id>", "Session ID (auto-detects active if omitted)")
@@ -591,6 +653,7 @@ const finishSubcommand = new Command("finish")
       const { id: sessionId } = await resolveActiveSession(ocrDir, options.sessionId);
       await stateClose({ sessionId, ocrDir, abort: options.abort });
       console.log(`${sessionId}: ${options.abort ? "aborted" : "finished"}`);
+      await cleanupPrWorktree(ocrDir, sessionId);
     } catch (error) {
       exitFromStateError(error, "Failed to finish");
     }
