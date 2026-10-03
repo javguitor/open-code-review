@@ -23,6 +23,10 @@ describe("detectSourceType", () => {
     ["Users must be able to log in", "text"],
     ["line one\nline two", "text"],
     ["- [ ] users can log in", "text"],
+    ["N/A", "text"],
+    ["and/or", "text"],
+    ["1/2", "text"],
+    ["docs/readme", "text"],
   ])("%s → %s", (input, expected) => {
     expect(detectSourceType(input)).toBe(expected);
   });
@@ -33,6 +37,16 @@ describe("detectSourceType", () => {
       expect(() => detectSourceType(url)).toThrowError(expect.objectContaining({ code: "invalid-source" }));
     },
   );
+
+  it("rejects an existing directory given as a bare relative name", () => {
+    const prev = process.cwd();
+    process.chdir(dir);
+    try {
+      expect(() => detectSourceType("sub")).toThrowError(expect.objectContaining({ code: "invalid-source" }));
+    } finally {
+      process.chdir(prev);
+    }
+  });
 
   it("rejects a directory", () => {
     expect(() => detectSourceType(join(dir, "sub"))).toThrowError(
@@ -51,8 +65,10 @@ describe("detectSourceType: path-like input", () => {
     "a.yaml",
     "a.yml",
     "a.json",
-    "some\\windows\\path",
-    "docs/readme",
+    "docs/spec typo.md",
+    "./my docs/spec.md",
+    "C:\\My Docs\\req.md",
+    "config.json",
   ])("missing %s → not-found with the resolved path", (input) => {
     expect(() => detectSourceType(input)).toThrowError(
       expect.objectContaining({ code: "not-found", message: expect.stringContaining(resolve(input)) }),

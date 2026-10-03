@@ -43,6 +43,8 @@ export type FetchDeps = {
 
 export type FetchOptions = {
   source: string;
+  /** `source` is literal text read from stdin: skip detection, always a `text` source. */
+  stdin?: boolean;
   withComments?: boolean;
   session?: string;
   dryRun?: boolean;
@@ -62,7 +64,12 @@ export async function resolveSource(
   input: string,
   withComments: boolean,
   deps: FetchDeps = {},
+  forceText = false,
 ): Promise<RequirementSource> {
+  if (forceText) {
+    if (!input.trim()) throw new RequirementsError("invalid-source", "Empty requirements source");
+    return fromText(input, deps.now);
+  }
   const type = detectSourceType(input);
   input = input.trim();
   switch (type) {
@@ -145,7 +152,7 @@ export async function runFetch(
     // Resolve the session first so a bad id fails before any network call.
     const target = writing ? await resolveSessionDir(ocrDir, projectRoot, opts.session!) : null;
 
-    const source = await resolveSource(opts.source, Boolean(opts.withComments), deps);
+    const source = await resolveSource(opts.source, Boolean(opts.withComments), deps, opts.stdin);
     const md = renderSourceMarkdown(source);
     const json = toSourceJson(source, (deps.now ?? (() => new Date()))());
     const preview = md.split("\n").slice(0, PREVIEW_LINES).join("\n");
@@ -218,22 +225,34 @@ function reportFailure(result: Failure, json: boolean | undefined): never {
 
 const fetchSubcommand = new Command("fetch")
   .description("Fetch a requirements source (ClickUp, GitHub issue/PR, file, text) into a session")
-  .argument("<source>", "ClickUp task URL, GitHub issue/PR URL, file path, or literal text")
+  .argument("[source]", "ClickUp task URL, GitHub issue/PR URL, file path, or literal text")
+  .option("--stdin", "Read the source from stdin as literal text (no detection)")
   .option("--with-comments", "Include the last 50 comments")
   .option("--session <id>", "Session to write requirements/source[-n].{md,json} into")
   .option("--json", "Output one JSON object")
   .option("--dry-run", "Fetch and print; write nothing")
   .action(
     async (
-      source: string,
-      options: { withComments?: boolean; session?: string; json?: boolean; dryRun?: boolean },
+      positional: string | undefined,
+      options: { stdin?: boolean; withComments?: boolean; session?: string; json?: boolean; dryRun?: boolean },
     ) => {
       if (!options.session && !options.dryRun) {
         console.error(chalk.red("Error: pass --session <id> to store the source, or --dry-run to only print it"));
         process.exit(2);
       }
+      if (options.stdin === Boolean(positional !== undefined)) {
+        console.error(
+          chalk.red(
+            options.stdin
+              ? "Error: --stdin cannot be combined with a positional source"
+              : "Error: pass a source argument, or --stdin to read literal text from stdin",
+          ),
+        );
+        process.exit(2);
+      }
       const projectRoot = process.cwd();
       if (options.session) requireOcrSetup(projectRoot);
+      const source = options.stdin ? readFileSync(0, "utf-8") : positional!;
       const result = await runFetch(projectRoot, { source, ...options });
       if (!result.ok) reportFailure(result, options.json);
       if (options.json) {

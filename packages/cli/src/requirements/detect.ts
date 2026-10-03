@@ -31,10 +31,15 @@ export function parseGitHubUrl(input: string): GitHubRef | null {
 
 const PATH_EXT_RE = /\.(md|markdown|txt|rst|ya?ml|json)$/i;
 
-/** Single-line input that reads as a path rather than prose. */
-/** A single token (no whitespace) with a separator or a document extension — a sentence like "log in/out" is text. */
+const PATH_PREFIX_RE = /^(?:\.{1,2}\/|\/|~|[a-z]:[\\/])/i;
+
+/**
+ * Single-line input that reads as a path: it ends with a document extension or starts with a
+ * path prefix (`./`, `../`, `/`, `~`, `X:\`). Spaces are allowed then. A bare token with a `/`
+ * (`N/A`, `and/or`, `1/2`) is prose.
+ */
 function looksLikePath(input: string): boolean {
-  return !/\s/.test(input) && (/[/\\]/.test(input) || PATH_EXT_RE.test(input));
+  return !/[\r\n]/.test(input) && (PATH_EXT_RE.test(input) || PATH_PREFIX_RE.test(input));
 }
 
 /** Local path for a `file://` URL or plain path (trimmed), resolved against the cwd. */
@@ -85,8 +90,13 @@ export function detectSourceType(input: string): SourceType {
     throw new RequirementsError("not-found", `File not found: ${abs}`);
   }
   try {
-    if (statSync(trimmed).isFile()) return "file";
-  } catch {
+    const stat = statSync(trimmed);
+    if (stat.isDirectory()) {
+      throw new RequirementsError("invalid-source", `"${trimmed}" is a directory, not a file`);
+    }
+    if (stat.isFile()) return "file";
+  } catch (error) {
+    if (error instanceof RequirementsError) throw error;
     // Not a path → literal text.
   }
   return "text";

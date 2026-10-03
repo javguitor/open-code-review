@@ -280,11 +280,11 @@ The session already exists at this point (`ocr state begin` ran at the top of Ph
 ocr requirements fetch --session "$SESSION_ID" --json -- '<url-or-path>'
 # Short literal text: same form. Escape each single quote inside the value as '\''
 ocr requirements fetch --session "$SESSION_ID" --json -- '- [ ] users can log in'
-# Multi-line or long literal text: write it to a temp file (quoted heredoc, nothing expands) and pass the path
-cat > "$TMPDIR/req.md" <<'OCR_REQ_EOF'
+# Multi-line or long literal text: pipe it through --stdin with a QUOTED heredoc (nothing expands,
+# no temp file). --stdin is always a `text` source and takes no positional value.
+ocr requirements fetch --session "$SESSION_ID" --json --stdin <<'OCR_REQ'
 <pasted text>
-OCR_REQ_EOF
-ocr requirements fetch --session "$SESSION_ID" --json -- "$TMPDIR/req.md"
+OCR_REQ
 ```
 
 - Always use `-- '<value>'`: without `--`, a value starting with `-` (a pasted checklist) is parsed as an option; inside double quotes the shell would expand `$()` and backticks from pasted text. Single quotes prevent both.

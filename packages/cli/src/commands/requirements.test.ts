@@ -95,6 +95,22 @@ describe("requirements fetch", () => {
     expect(listed.ok && listed.sources).toHaveLength(1);
   });
 
+  it("stdin text writes a text source, even if it looks like a path or URL", async () => {
+    const r = await runFetch(root, { source: "docs/spec.md", stdin: true, session: "s1" });
+    expect(r.ok && r.source.type).toBe("text");
+    expect(r.ok && r.source.url).toMatch(/^text:/);
+    expect(existsSync(join(sessionDir, "requirements", "source.md"))).toBe(true);
+  });
+
+  it("the same stdin text twice upserts into one pair", async () => {
+    const text = "line one\nline two\n";
+    await runFetch(root, { source: text, stdin: true, session: "s1" });
+    const again = await runFetch(root, { source: text, stdin: true, session: "s1" });
+    expect(again.ok && again.files?.md).toBe(join(sessionDir, "requirements", "source.md"));
+    const listed = await runList(root, "s1");
+    expect(listed.ok && listed.sources).toHaveLength(1);
+  });
+
   it("a missing path is not-found and writes nothing", async () => {
     const r = await runFetch(root, { source: "./docs/typo.md", session: "s1" });
     expect(r).toMatchObject({ ok: false, code: "not-found" });

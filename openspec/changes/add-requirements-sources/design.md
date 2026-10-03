@@ -39,7 +39,10 @@ optional dependency; the CLI already owns every write to session state.
   `Updated: <iso>` + `## Description` (markdown as provided) + `## Checklists` + `##
   Custom Fields` (name: value) + `## Comments` (author, date, text; only with
   `--with-comments`). `requirements/source.json`: `{ type, id, url, title, fetched_at,
-  updated_at, author, with_comments }`. Second source → `source-2.*`. The normalized
+  updated_at, author, with_comments }`. A different source → the next free `source-<n>.*`;
+  re-fetching a URL already stored replaces its pair in place (one pair per URL), so
+  normalization never sees two versions of the same card as a conflict. Literal text
+  (positional or `--stdin`) is a `text` source keyed by a content hash. The normalized
   `requirements.md` keeps its current place at the session root (manifest unchanged
   for consumers).
 - **Decision: normalization template** `references/requirements-normalization.md`:

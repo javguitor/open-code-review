@@ -16,13 +16,13 @@
 
 - [x] 3.1 `routes/requirements.ts`: `POST /api/requirements/preview { source, withComments }` → runs `ocr requirements fetch --json --dry-run`; `GET /api/requirements/detect?pr=<url>` → candidate links from the PR body (`gh pr view --json body`). Tests with injectable runners.
 - [x] 3.2 Command form: Requirements field accepts URL/path/text; "Preview" shows title, updated date, first lines; "Use requirements from <card>" chip when the PR target has detectable links; `--with-comments` toggle. i18n.
-- [x] 3.3 Session page: requirements source banner (title, link, updated); "Check for updates" marks "Requirements changed on <date>" (dry-run fetch, cached 5 min); "Refresh requirements" offered only when starting a new round.
+- [x] 3.3 Session page: requirements source banner (title, link, updated); "Check for updates" marks "Requirements changed on <date>" (dry-run fetch forced by Check for updates; the sessions list and detail only serve the cached value, so after a restart the banner appears once Check for updates runs); "Refresh requirements" offered only when starting a new round.
 - [x] 3.4 Round page / findings: show `AC-n` references from the Requirements Assessment when present. (The round page renders `final.md`, whose Requirements Assessment table lists `AC-n`; the "Requirements" button opens the normalized `requirements.md` to look them up. No separate AC widget.)
 
 ## 4. Acceptance
 
 - [ ] 4.1 `ocr requirements fetch <clickup url> --with-comments` on a real card (token in env) → `source.md`/`source.json` correct; same for a GitHub issue URL and a local file. (GitHub PR/issue and file verified 2026-10-03; ClickUp pending: no token/card available.)
 - [x] 4.2 `/ocr:review pr:<n> --requirements <clickup url>` → `requirements.md` with numbered ACs (quoted/derived), reviewers' assessments reference `AC-n`, final "Requirements Assessment" table lists them.
-- [ ] 4.3 Dashboard: PR with a card link → chip → preview → launch; session banner; edit the card → "Check for updates" shows the change.
+- [ ] 4.3 Dashboard: PR with a card link → chip → preview → launch; session banner; edit the card → "Check for updates" shows the change. (Pending: the fork has issues disabled and no ClickUp token was available on 2026-10-03; detection, preview and staleness are covered by route tests with fake runners.)
 - [x] 4.4 Missing token → clear error in CLI and dashboard; nothing written.
-- [ ] 4.5 `nx run-many -t lint test typecheck` green; `openspec validate add-requirements-sources --strict`; OCR review of the branch before merge.
+- [x] 4.5 `nx run-many -t lint test typecheck` green; `openspec validate add-requirements-sources --strict`; OCR review of the branch before merge.
