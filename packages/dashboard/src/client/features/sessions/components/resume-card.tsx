@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Play, Terminal, RotateCcw, XCircle } from 'lucide-react'
 import { useSocket } from '../../../providers/socket-provider'
 import { cn } from '../../../lib/utils'
+import { useT } from '../../../lib/i18n'
 import { useHandoff } from '../hooks/use-agent-sessions'
 import { TerminalHandoffPanel } from './terminal-handoff-panel'
 
@@ -57,6 +58,7 @@ export function resumeVariantForNextAction(
  *     into orchestration.
  */
 export function ResumeCard({ workflowId, variant = 'paused' }: ResumeCardProps) {
+  const { t } = useT()
   const { socket } = useSocket()
   const navigate = useNavigate()
   const [handoffOpen, setHandoffOpen] = useState(false)
@@ -84,15 +86,15 @@ export function ResumeCard({ workflowId, variant = 'paused' }: ResumeCardProps) 
   const isPaused = variant === 'paused'
   const isExhausted = variant === 'exhausted'
   const headline = isExhausted
-    ? 'Automatic recovery is exhausted.'
+    ? t('sessions.resume_exhausted_headline')
     : isPaused
-      ? 'This review is paused.'
-      : 'Continue this review in your terminal.'
+      ? t('sessions.resume_paused_headline')
+      : t('sessions.resume_completed_headline')
   const subline = isExhausted
-    ? 'Forward-resume attempts ran out. Start a fresh review (artifacts are preserved) or mark this one abandoned.'
+    ? t('sessions.resume_exhausted_subline')
     : isPaused
-      ? 'Bring the AI back where it left off, or hand off the resume command to your terminal.'
-      : 'Copy the resume command and pick up the AI conversation in your own terminal.'
+      ? t('sessions.resume_paused_subline')
+      : t('sessions.resume_completed_subline')
 
   if (isExhausted) {
     return (
@@ -116,7 +118,7 @@ export function ResumeCard({ workflowId, variant = 'paused' }: ResumeCardProps) 
             )}
           >
             <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-            <span>Start fresh</span>
+            <span>{t('sessions.resume_start_fresh')}</span>
           </button>
           <button
             type="button"
@@ -129,7 +131,7 @@ export function ResumeCard({ workflowId, variant = 'paused' }: ResumeCardProps) 
             )}
           >
             <XCircle className="h-3.5 w-3.5" aria-hidden />
-            <span>Mark abandoned</span>
+            <span>{t('sessions.resume_mark_abandoned')}</span>
           </button>
         </div>
       </div>
@@ -164,7 +166,7 @@ export function ResumeCard({ workflowId, variant = 'paused' }: ResumeCardProps) 
               )}
             >
               <Play className="h-3.5 w-3.5" aria-hidden />
-              <span>Continue from where you left off</span>
+              <span>{t('sessions.resume_continue')}</span>
             </button>
           )}
           <button
@@ -181,7 +183,7 @@ export function ResumeCard({ workflowId, variant = 'paused' }: ResumeCardProps) 
             )}
           >
             <Terminal className="h-3.5 w-3.5" aria-hidden />
-            <span>Resume in terminal</span>
+            <span>{t('sessions.resume_in_terminal')}</span>
           </button>
         </div>
       </div>
@@ -195,7 +197,7 @@ export function ResumeCard({ workflowId, variant = 'paused' }: ResumeCardProps) 
 
       {/* Tiny hidden label so the handoff query has a stable mount slot.
           Prefetches when the user hovers the trigger. */}
-      <span className="sr-only">{handoff.data ? 'handoff ready' : ''}</span>
+      <span className="sr-only">{handoff.data ? t('sessions.resume_handoff_ready') : ''}</span>
     </>
   )
 }

@@ -28,6 +28,8 @@ The verdict comes from `ocr state show` (current round verdict) or, if unavailab
 
 An explicit `--state` always wins over the derived state.
 
+The posted comment is written in the `language` set in `.ocr/config.yaml` (default `en`), in that language's natural register.
+
 **Prerequisites**
 - GitHub CLI (`gh`) must be installed and authenticated
 - Must be on a branch with an open PR

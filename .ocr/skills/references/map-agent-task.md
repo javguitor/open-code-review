@@ -37,6 +37,10 @@ Trace dependencies for these files:
 
 {brief context from topology analysis — what sections are emerging, what patterns are suspected}
 
+## Language
+
+Follow `references/language-policy.md` with language = `{language}`. (Omit this section when the language is `en`.)
+
 ## Your Task
 
 For each assigned file, trace upstream and downstream dependencies:
@@ -124,6 +128,10 @@ When spawning a Requirements Mapper, provide the following context:
 ## Flow Context
 
 {summary from flow analysis — how files relate to each other}
+
+## Language
+
+Follow `references/language-policy.md` with language = `{language}`. (Omit this section when the language is `en`.)
 
 ## Your Task
 

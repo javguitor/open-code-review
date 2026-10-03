@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { X, MessageSquare, Terminal } from 'lucide-react'
 import { cn } from '../../../lib/utils'
+import { useT } from '../../../lib/i18n'
+import { RichText } from '../../../components/ui/rich-text'
 import { useChat } from '../hooks/use-chat'
 import { useAiCli } from '../../../hooks/use-ai-cli'
 import { ChatMessage, StreamingMessage } from './chat-message'
@@ -15,6 +17,7 @@ type ChatPanelProps = {
 }
 
 export function ChatPanel({ sessionId, targetType, targetId, onClose }: ChatPanelProps) {
+  const { t } = useT()
   const { isAvailable, isDisabledByConfig } = useAiCli()
   const {
     messages,
@@ -57,7 +60,7 @@ export function ChatPanel({ sessionId, targetType, targetId, onClose }: ChatPane
         <div className="flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-indigo-500" />
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-            Ask the Team
+            {t('chat.title')}
           </h2>
         </div>
         <button
@@ -76,15 +79,14 @@ export function ChatPanel({ sessionId, targetType, targetId, onClose }: ChatPane
             <Terminal className="mt-0.5 h-4 w-4 shrink-0 text-zinc-400" />
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
               {isDisabledByConfig
-                ? <>AI commands are turned off in your project config. Set <code className="rounded bg-zinc-200 px-1 py-0.5 text-[10px] dark:bg-zinc-800">ai_cli</code> to <code className="rounded bg-zinc-200 px-1 py-0.5 text-[10px] dark:bg-zinc-800">auto</code>, <code className="rounded bg-zinc-200 px-1 py-0.5 text-[10px] dark:bg-zinc-800">claude</code>, or <code className="rounded bg-zinc-200 px-1 py-0.5 text-[10px] dark:bg-zinc-800">opencode</code> in <code className="rounded bg-zinc-200 px-1 py-0.5 text-[10px] dark:bg-zinc-800">.ocr/config.yaml</code> to enable Ask the Team.</>
-                : 'Install Claude Code or OpenCode to use Ask the Team.'}
+                ? <RichText text={t('chat.ai_disabled_body')} codeClassName="rounded bg-zinc-200 px-1 py-0.5 text-[10px] dark:bg-zinc-800" />
+                : t('chat.install_cli')}
             </p>
           </div>
         )}
         {isAvailable && messages.length === 0 && !isStreaming && (
           <p className="text-center text-sm text-zinc-400 dark:text-zinc-500">
-            Ask a question about this {targetType === 'map_run' ? 'map' : 'review'} to get
-            started.
+            {t(targetType === 'map_run' ? 'chat.empty_map' : 'chat.empty_review')}
           </p>
         )}
 

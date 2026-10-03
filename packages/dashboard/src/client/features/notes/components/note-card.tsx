@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Pencil, Trash2, Check, X } from 'lucide-react'
 import type { Note } from '../hooks/use-notes'
+import { useT } from '../../../lib/i18n'
 import { formatDateTime } from '../../../lib/date-utils'
 
 type NoteCardProps = {
@@ -10,6 +11,7 @@ type NoteCardProps = {
 }
 
 export function NoteCard({ note, onUpdate, onDelete }: NoteCardProps) {
+  const { t } = useT()
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(note.content)
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false)
@@ -54,7 +56,7 @@ export function NoteCard({ note, onUpdate, onDelete }: NoteCardProps) {
             className="flex items-center gap-1 rounded-md border border-zinc-300 px-2 py-1 text-xs font-medium transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
           >
             <X className="h-3 w-3" />
-            Cancel
+            {t('notes.cancel')}
           </button>
           <button
             type="button"
@@ -63,7 +65,7 @@ export function NoteCard({ note, onUpdate, onDelete }: NoteCardProps) {
             className="flex items-center gap-1 rounded-md bg-blue-600 px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
           >
             <Check className="h-3 w-3" />
-            Save
+            {t('notes.save')}
           </button>
         </div>
       </div>
@@ -81,8 +83,8 @@ export function NoteCard({ note, onUpdate, onDelete }: NoteCardProps) {
             type="button"
             onClick={() => setIsEditing(true)}
             className="rounded-md p-1 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
-            aria-label="Edit note"
-            title="Edit note"
+            aria-label={t('notes.edit')}
+            title={t('notes.edit')}
           >
             <Pencil className="h-3.5 w-3.5" />
           </button>
@@ -93,7 +95,7 @@ export function NoteCard({ note, onUpdate, onDelete }: NoteCardProps) {
                 onClick={handleDelete}
                 className="rounded-md bg-red-600 px-2 py-0.5 text-xs font-medium text-white transition-colors hover:bg-red-700"
               >
-                Delete
+                {t('notes.delete')}
               </button>
               <button
                 type="button"
@@ -108,8 +110,8 @@ export function NoteCard({ note, onUpdate, onDelete }: NoteCardProps) {
               type="button"
               onClick={() => setIsConfirmingDelete(true)}
               className="rounded-md p-1 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950 dark:hover:text-red-400"
-              aria-label="Delete note"
-              title="Delete note"
+              aria-label={t('notes.delete_label')}
+              title={t('notes.delete_label')}
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
@@ -118,7 +120,7 @@ export function NoteCard({ note, onUpdate, onDelete }: NoteCardProps) {
       </div>
       <div className="mt-2 flex gap-3 text-[11px] text-zinc-400 dark:text-zinc-500">
         <span>{formatDateTime(note.created_at)}</span>
-        {wasEdited && <span>(edited {formatDateTime(note.updated_at)})</span>}
+        {wasEdited && <span>{t('notes.edited', { date: formatDateTime(note.updated_at) })}</span>}
       </div>
     </div>
   )

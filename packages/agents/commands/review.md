@@ -34,6 +34,7 @@ tags: [ocr, review, code-review]
 2. Load the OCR skill from `.ocr/skills/SKILL.md`
 3. Execute the 8-phase review workflow defined in `.ocr/skills/references/workflow.md`
 4. Store results in `.ocr/sessions/{date}-{branch}/`
+5. Review prose follows `language` from `.ocr/config.yaml` (default `en`); headings, labels and verdicts stay English
 
 ---
 

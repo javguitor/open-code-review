@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import type { GitHubReviewState } from '@open-code-review/platform/verdict'
+import { en } from '../i18n/en'
 import type { PostReviewStep, PrOwnership } from '../api-types'
 import {
-  REVIEW_STATE_LABELS,
   applyCheckResult,
   initialReviewState,
   isStateSelectable,
-  lockReason,
+  lockReasonKey,
 } from '../review-state'
 
 const VERDICTS: Array<[string | null | undefined, GitHubReviewState]> = [
@@ -50,33 +50,30 @@ describe('isStateSelectable', () => {
   )
 })
 
-describe('lockReason', () => {
+describe('lockReasonKey', () => {
   it('is null for another author', () => {
-    expect(lockReason('other')).toBeNull()
+    expect(lockReasonKey('other')).toBeNull()
   })
 
-  it('explains the GitHub rule for own PRs', () => {
-    expect(lockReason('own')).toBe(
-      'GitHub does not allow approving or requesting changes on your own pull request.',
-    )
+  it('points at the own-PR caption', () => {
+    expect(lockReasonKey('own')).toBe('reviews.lock_own')
   })
 
   it.each<PrOwnership | undefined>(['unknown', undefined])(
-    'reports an unknown author when ownership is %s',
+    'points at the unknown-author caption when ownership is %s',
     (ownership) => {
-      expect(lockReason(ownership)).toBe('Could not determine the pull request author.')
+      expect(lockReasonKey(ownership)).toBe('reviews.lock_unknown')
     },
   )
-})
 
-describe('REVIEW_STATE_LABELS', () => {
-  it('labels every state', () => {
-    expect(REVIEW_STATE_LABELS).toEqual({
-      approve: 'Approve',
-      'request-changes': 'Request changes',
-      comment: 'Comment',
-    })
-  })
+  it.each<PrOwnership | undefined>(['own', 'unknown', undefined])(
+    'resolves to a non-empty English caption when ownership is %s',
+    (ownership) => {
+      const key = lockReasonKey(ownership)
+      expect(key).not.toBeNull()
+      if (key !== null) expect(en[key]).not.toBe('')
+    },
+  )
 })
 
 describe('applyCheckResult', () => {

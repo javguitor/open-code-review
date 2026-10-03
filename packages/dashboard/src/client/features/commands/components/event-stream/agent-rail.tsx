@@ -16,6 +16,7 @@
 
 import type { ReactNode } from 'react'
 import { cn } from '../../../../lib/utils'
+import { useT } from '../../../../lib/i18n'
 
 type AgentRailProps = {
   agentId: string
@@ -96,14 +97,15 @@ export function getAgentColor(agentId: string): typeof PALETTE[number] | typeof 
  * Format an agentId into a human-readable display label.
  * Orchestrator is shown without a name (the rail itself is the signal).
  */
-export function formatAgentDisplayName(agentId: string): string {
-  if (agentId === 'orchestrator') return 'Orchestrator'
+export function formatAgentDisplayName(agentId: string, t: ReturnType<typeof useT>['t']): string {
+  if (agentId === 'orchestrator') return t('commands.agent_orchestrator')
   return agentId
 }
 
 export function AgentRail({ agentId, showName, displayName, children }: AgentRailProps) {
+  const { t } = useT()
   const color = getAgentColor(agentId)
-  const label = displayName ?? formatAgentDisplayName(agentId)
+  const label = displayName ?? formatAgentDisplayName(agentId, t)
 
   return (
     <div className={cn('relative pl-4', color.bg)}>

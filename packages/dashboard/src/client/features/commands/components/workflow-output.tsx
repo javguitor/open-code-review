@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { MoreHorizontal, Square, Sparkles, Users } from 'lucide-react'
 import { cn } from '../../../lib/utils'
+import { useT } from '../../../lib/i18n'
 import type { StreamEvent } from '../../../lib/api-types'
 import { EventStreamRenderer } from './event-stream/event-stream-renderer'
 
@@ -21,15 +22,16 @@ import { EventStreamRenderer } from './event-stream/event-stream-renderer'
 function statusBadgeLabel(
   status: 'running' | 'complete' | 'incomplete' | 'cancelled' | 'failed' | undefined,
   exitCode: number,
+  t: ReturnType<typeof useT>['t'],
 ): string {
-  if (status === 'complete') return 'Complete'
-  if (status === 'incomplete') return 'Incomplete'
-  if (status === 'cancelled') return 'Cancelled'
-  if (status === 'failed') return `Exit: ${exitCode}`
+  if (status === 'complete') return t('commands.outcome_complete')
+  if (status === 'incomplete') return t('commands.outcome_incomplete')
+  if (status === 'cancelled') return t('commands.outcome_cancelled')
+  if (status === 'failed') return t('commands.outcome_exit', { code: exitCode })
   // Fallback (no status from server) — exit code only.
-  if (exitCode === 0) return 'Complete'
-  if (exitCode === -2) return 'Cancelled'
-  return `Exit: ${exitCode}`
+  if (exitCode === 0) return t('commands.outcome_complete')
+  if (exitCode === -2) return t('commands.outcome_cancelled')
+  return t('commands.outcome_exit', { code: exitCode })
 }
 
 /** Tailwind color classes for each end-state. Amber for incomplete keeps */
@@ -112,6 +114,7 @@ export function WorkflowOutput({
   onCancel,
   bare,
 }: WorkflowOutputProps) {
+  const { t } = useT()
   const scrollRef = useRef<HTMLDivElement>(null)
   const [showRaw, setShowRaw] = useState(false)
 
@@ -134,6 +137,7 @@ export function WorkflowOutput({
   // dump that wrapped to two lines and read like a debug log. Raw view
   // is one click away.
   const summary = useMemo(() => parseCommandSummary(commandName), [commandName])
+  const verbLabel = summary.verb.charAt(0).toUpperCase() + summary.verb.slice(1)
 
   if (!showPanel) return null
 
@@ -149,22 +153,21 @@ export function WorkflowOutput({
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-indigo-500" />
               </span>
               <span className="truncate text-xs font-medium text-zinc-600 dark:text-zinc-300">
-                Running <span className="capitalize">{summary.verb}</span>
+                {t('commands.running_verb', { verb: verbLabel })}
               </span>
             </>
           ) : (
             <>
               <Sparkles className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
               <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                <span className="capitalize">{summary.verb}</span> output
+                {t('commands.verb_output', { verb: verbLabel })}
               </span>
             </>
           )}
           {summary.reviewerCount != null && summary.reviewerCount > 0 && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-zinc-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
               <Users className="h-2.5 w-2.5" aria-hidden />
-              {summary.reviewerCount} reviewer
-              {summary.reviewerCount === 1 ? '' : 's'}
+              {t(summary.reviewerCount === 1 ? 'commands.reviewer_count_one' : 'commands.reviewer_count_other', { count: summary.reviewerCount })}
             </span>
           )}
         </div>
@@ -180,7 +183,7 @@ export function WorkflowOutput({
               )}
             >
               <Square className="h-2.5 w-2.5" />
-              Cancel
+              {t('common.cancel')}
             </button>
           )}
           {exitCode !== null && (
@@ -191,11 +194,11 @@ export function WorkflowOutput({
               )}
               title={
                 status === 'incomplete'
-                  ? "Process exited 0 but the workflow never reached its terminal phase. Likely cause: the parent process was interrupted (e.g. macOS sleep dropped the streaming connection). Use 'Resume in terminal' to pick up where it left off."
+                  ? t('commands.incomplete_title')
                   : undefined
               }
             >
-              {statusBadgeLabel(status, exitCode)}
+              {statusBadgeLabel(status, exitCode, t)}
             </span>
           )}
           {hasTimeline && (
@@ -207,10 +210,10 @@ export function WorkflowOutput({
                 'border-zinc-300 text-zinc-500 hover:bg-zinc-100',
                 'dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800',
               )}
-              title={showRaw ? 'Show timeline' : 'Show raw output'}
+              title={showRaw ? t('commands.show_timeline') : t('commands.show_raw_output')}
             >
               <MoreHorizontal aria-hidden className="h-3 w-3" />
-              {showRaw ? 'Timeline' : 'Raw'}
+              {showRaw ? t('commands.timeline') : t('commands.raw')}
             </button>
           )}
         </div>
@@ -239,7 +242,7 @@ export function WorkflowOutput({
         {segments.length === 0 && isRunning ? (
           <div className="flex items-center gap-2 text-sm text-zinc-400">
             <span className="h-1 w-1 animate-pulse rounded-full bg-zinc-400" />
-            Waiting for output...
+            {t('commands.waiting_for_output')}
           </div>
         ) : (
           segments.map((segment, i) => {

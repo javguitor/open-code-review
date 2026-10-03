@@ -6,13 +6,15 @@ import { useIdeConfig } from '../../../hooks/use-ide-config'
 import { StatusBadge } from '../../../components/ui/status-badge'
 import { MarkdownRenderer } from '../../../components/markdown/markdown-renderer'
 import type { Finding, FindingTriage } from '../../../lib/api-types'
+import { useT } from '../../../lib/i18n'
+import type { MessageKey } from '../../../lib/i18n'
 
-const TRIAGE_OPTIONS: { value: FindingTriage; label: string }[] = [
-  { value: 'unread', label: 'Unread' },
-  { value: 'read', label: 'Read' },
-  { value: 'acknowledged', label: 'Acknowledged' },
-  { value: 'fixed', label: 'Fixed' },
-  { value: 'wont_fix', label: "Won't Fix" },
+const TRIAGE_OPTIONS: { value: FindingTriage; labelKey: MessageKey }[] = [
+  { value: 'unread', labelKey: 'status.unread' },
+  { value: 'read', labelKey: 'status.read' },
+  { value: 'acknowledged', labelKey: 'status.acknowledged' },
+  { value: 'fixed', labelKey: 'status.fixed' },
+  { value: 'wont_fix', labelKey: 'status.wont_fix' },
 ]
 
 type FindingRowProps = {
@@ -21,6 +23,7 @@ type FindingRowProps = {
 }
 
 export function FindingRow({ finding, onTriageChange }: FindingRowProps) {
+  const { t } = useT()
   const [expanded, setExpanded] = useState(false)
   const { data: config } = useIdeConfig()
 
@@ -73,7 +76,7 @@ export function FindingRow({ finding, onTriageChange }: FindingRowProps) {
               href={buildIdeLink(config.ide, config.projectRoot, finding.file_path, finding.line_start)}
               onClick={(e) => e.stopPropagation()}
               className="hover:text-zinc-900 hover:underline dark:hover:text-zinc-200"
-              title={`Open in ${config.ide}`}
+              title={t('reviews.open_in_ide', { ide: config.ide })}
             >
               {finding.file_path}
               <ExternalLink className="ml-1 inline h-3 w-3" />
@@ -98,10 +101,10 @@ export function FindingRow({ finding, onTriageChange }: FindingRowProps) {
         <td className="border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
           {finding.is_blocker ? (
             <span className="text-xs font-medium text-red-600 dark:text-red-400">
-              Yes
+              {t('reviews.yes')}
             </span>
           ) : (
-            <span className="text-xs text-zinc-400">No</span>
+            <span className="text-xs text-zinc-400">{t('reviews.no')}</span>
           )}
         </td>
         <td
@@ -113,12 +116,12 @@ export function FindingRow({ finding, onTriageChange }: FindingRowProps) {
             onChange={(e) =>
               onTriageChange(finding.id, e.target.value as FindingTriage)
             }
-            aria-label={`Triage status for ${finding.title}`}
+            aria-label={t('reviews.triage_aria', { title: finding.title })}
             className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
           >
             {TRIAGE_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
-                {opt.label}
+                {t(opt.labelKey)}
               </option>
             ))}
           </select>

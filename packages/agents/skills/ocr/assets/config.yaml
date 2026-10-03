@@ -15,6 +15,17 @@
 #   Critical constraint: All public APIs must be backwards compatible
 
 # ─────────────────────────────────────────────────────────────────────────────
+# OUTPUT LANGUAGE
+# ─────────────────────────────────────────────────────────────────────────────
+# Language of everything the reviewers write (findings, discourse, synthesis,
+# human-voice rewrite, Ask the Team) and of the dashboard interface. BCP 47
+# tag; default is English. Section headings, field labels, verdicts,
+# severities, code, paths and identifiers always stay in English — the CLI
+# and dashboard parse them.
+
+# language: en
+
+# ─────────────────────────────────────────────────────────────────────────────
 # CONTEXT DISCOVERY
 # ─────────────────────────────────────────────────────────────────────────────
 # Files to read during Phase 1 (Context Discovery). OCR merges these into

@@ -1,4 +1,5 @@
 import { cn } from '../../lib/utils'
+import { useT } from '../../lib/i18n'
 import type { SessionStatus, FindingTriage, FindingSeverity, RoundTriage } from '../../../shared/types'
 
 type BadgeVariant = SessionStatus | FindingTriage | FindingSeverity | RoundTriage | 'default'
@@ -28,13 +29,6 @@ const variantStyles: Record<BadgeVariant, string> = {
   default: 'bg-zinc-500/15 text-zinc-600 dark:text-zinc-400 border-zinc-500/25',
 }
 
-const LABELS: Partial<Record<BadgeVariant, string>> = {
-  wont_fix: "Won't Fix",
-  needs_review: 'Needs Review',
-  in_progress: 'In Progress',
-  changes_made: 'Changes Made',
-}
-
 type StatusBadgeProps = {
   variant: BadgeVariant
   label?: string
@@ -42,7 +36,8 @@ type StatusBadgeProps = {
 }
 
 export function StatusBadge({ variant, label, className }: StatusBadgeProps) {
-  const displayLabel = label ?? LABELS[variant] ?? variant.charAt(0).toUpperCase() + variant.slice(1)
+  const { t } = useT()
+  const displayLabel = label ?? t(`status.${variant}`)
 
   return (
     <span

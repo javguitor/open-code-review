@@ -1,4 +1,5 @@
 import { SessionCard } from './session-card'
+import { useT } from '../../../lib/i18n'
 import type { SessionSummary } from '../../../lib/api-types'
 
 type SessionListProps = {
@@ -6,10 +7,12 @@ type SessionListProps = {
 }
 
 export function SessionList({ sessions }: SessionListProps) {
+  const { t } = useT()
+
   if (sessions.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
-        No sessions match your filters.
+        {t('sessions.empty_filtered')}
       </p>
     )
   }

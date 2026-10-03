@@ -12,6 +12,8 @@ import {
   X,
 } from 'lucide-react'
 import { cn } from '../../../lib/utils'
+import { useT } from '../../../lib/i18n'
+import type { MessageKey } from '../../../lib/i18n'
 import { formatDateTime, formatDuration } from '../../../lib/date-utils'
 import { parseUtcDate } from '../../../lib/utils'
 import {
@@ -98,17 +100,10 @@ function getStatus(entry: CommandHistoryEntry): StatusFilter {
   return 'fail'
 }
 
-function statusLabel(s: StatusFilter): string {
-  switch (s) {
-    case 'success': return 'Success'
-    case 'fail': return 'Fail'
-    case 'cancelled': return 'Cancelled'
-    case 'incomplete': return 'Incomplete'
-    case 'running': return 'Running'
-    case 'stalled': return 'Stalled'
-    case 'orphaned': return 'Orphaned'
-    default: return 'All'
-  }
+type Translate = ReturnType<typeof useT>['t']
+
+function statusLabel(s: StatusFilter, t: Translate): string {
+  return t(`commands.status_${s}`)
 }
 
 /**
@@ -116,17 +111,17 @@ function statusLabel(s: StatusFilter): string {
  * user cancel (`-2`, "Cancelled") — both share the amber `cancelled` filter
  * bucket but read differently so an operator knows which happened.
  */
-function pillLabel(entry: CommandHistoryEntry, status: StatusFilter): string {
+function pillLabel(entry: CommandHistoryEntry, status: StatusFilter, t: Translate): string {
   if (status === 'cancelled' && entry.cancellation_reason === 'cascade') {
-    return 'Superseded'
+    return t('commands.status_superseded')
   }
-  return statusLabel(status)
+  return statusLabel(status, t)
 }
 
 /** Tooltip elaborating a non-obvious pill (e.g. why a row is "Superseded"). */
-function pillTitle(entry: CommandHistoryEntry, status: StatusFilter): string | undefined {
+function pillTitle(entry: CommandHistoryEntry, status: StatusFilter, t: Translate): string | undefined {
   if (status === 'cancelled' && entry.cancellation_reason === 'cascade') {
-    return 'Stopped because its parent workflow was closed'
+    return t('commands.superseded_title')
   }
   return undefined
 }
@@ -189,15 +184,15 @@ function compareEntries(a: CommandHistoryEntry, b: CommandHistoryEntry, field: S
 
 // ── Status filter chips ──
 
-const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'running', label: 'Running' },
-  { value: 'stalled', label: 'Stalled' },
-  { value: 'orphaned', label: 'Orphaned' },
-  { value: 'success', label: 'Success' },
-  { value: 'incomplete', label: 'Incomplete' },
-  { value: 'fail', label: 'Fail' },
-  { value: 'cancelled', label: 'Cancelled' },
+const STATUS_OPTIONS: { value: StatusFilter }[] = [
+  { value: 'all' },
+  { value: 'running' },
+  { value: 'stalled' },
+  { value: 'orphaned' },
+  { value: 'success' },
+  { value: 'incomplete' },
+  { value: 'fail' },
+  { value: 'cancelled' },
 ]
 
 // ── Sub-components ──
@@ -209,12 +204,13 @@ function SortButton({
   dir,
   onToggle,
 }: {
-  label: string
+  label: MessageKey
   field: SortField
   activeField: SortField
   dir: SortDir
   onToggle: (field: SortField) => void
 }) {
+  const { t } = useT()
   const isActive = field === activeField
   return (
     <button
@@ -227,7 +223,7 @@ function SortButton({
           : 'text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300',
       )}
     >
-      {label}
+      {t(label)}
       {isActive ? (
         dir === 'desc' ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />
       ) : (
@@ -295,6 +291,7 @@ function HistoryItem({
   onRerun: (command: string) => void
   onHandoff: (entry: CommandHistoryEntry) => void
 }) {
+  const { t } = useT()
   const [expanded, setExpanded] = useState(false)
   const [showTimeline, setShowTimeline] = useState(false)
   const status = getStatus(entry)
@@ -333,20 +330,20 @@ function HistoryItem({
           {formatDuration(entry.duration_ms)}
         </span>
         <span
-          title={pillTitle(entry, status)}
+          title={pillTitle(entry, status, t)}
           className={cn(
             'inline-flex shrink-0 items-center rounded-md border px-2 py-0.5 text-xs font-medium',
             statusPillClasses(status),
           )}
         >
-          {pillLabel(entry, status)}
+          {pillLabel(entry, status, t)}
         </span>
         {canHandoff && (
           <button
             type="button"
             onClick={() => onHandoff(entry)}
-            title="Pick up in terminal"
-            aria-label="Pick up in terminal"
+            title={t('commands.pick_up_in_terminal')}
+            aria-label={t('commands.pick_up_in_terminal')}
             className={cn(
               'shrink-0 rounded-md p-1.5 text-zinc-400 transition-colors',
               'hover:bg-zinc-100 hover:text-zinc-700',
@@ -361,7 +358,7 @@ function HistoryItem({
             type="button"
             disabled={isRunning}
             onClick={() => onRerun(entry.command)}
-            title="Re-run this command"
+            title={t('commands.rerun_title')}
             className={cn(
               'shrink-0 rounded-md p-1.5 text-zinc-400 transition-colors',
               'hover:bg-indigo-50 hover:text-indigo-600',
@@ -379,19 +376,19 @@ function HistoryItem({
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 border-b border-zinc-100 bg-zinc-50 px-4 py-2 text-[11px] dark:border-zinc-800 dark:bg-zinc-900/50">
               {entry.vendor && (
                 <>
-                  <dt className="text-zinc-500 dark:text-zinc-500">Vendor</dt>
+                  <dt className="text-zinc-500 dark:text-zinc-500">{t('commands.meta_vendor')}</dt>
                   <dd className="font-mono text-zinc-700 dark:text-zinc-300">{entry.vendor}</dd>
                 </>
               )}
               {entry.resolved_model && (
                 <>
-                  <dt className="text-zinc-500 dark:text-zinc-500">Model</dt>
+                  <dt className="text-zinc-500 dark:text-zinc-500">{t('commands.meta_model')}</dt>
                   <dd className="font-mono text-zinc-700 dark:text-zinc-300">{entry.resolved_model}</dd>
                 </>
               )}
               {entry.workflow_id && (
                 <>
-                  <dt className="text-zinc-500 dark:text-zinc-500">Workflow</dt>
+                  <dt className="text-zinc-500 dark:text-zinc-500">{t('commands.meta_workflow')}</dt>
                   <dd className="font-mono text-zinc-700 dark:text-zinc-300">{entry.workflow_id}</dd>
                 </>
               )}
@@ -403,40 +400,40 @@ function HistoryItem({
               <button
                 type="button"
                 onClick={() => onHandoff(entry)}
-                title="Copy a resume command to continue this AI session in your terminal"
+                title={t('commands.resume_title')}
                 className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
               >
                 <Terminal className="h-3.5 w-3.5" />
-                Resume in terminal
+                {t('sessions.resume_in_terminal')}
               </button>
             </div>
           )}
 
           {canShowTimeline && (
             <div className="flex items-center gap-2 border-b border-zinc-100 bg-zinc-50/50 px-4 py-2 dark:border-zinc-800 dark:bg-zinc-900/30">
-              <span className="text-[11px] text-zinc-500 dark:text-zinc-500">View:</span>
+              <span className="text-[11px] text-zinc-500 dark:text-zinc-500">{t('commands.view_label')}</span>
               <ViewToggleButton
                 active={!showTimeline}
                 onClick={() => setShowTimeline(false)}
               >
-                Raw output
+                {t('commands.raw_output')}
               </ViewToggleButton>
               <ViewToggleButton
                 active={showTimeline}
                 onClick={() => setShowTimeline(true)}
               >
-                Timeline
+                {t('commands.timeline')}
               </ViewToggleButton>
               {showTimeline && eventsQuery.isLoading && (
                 <span className="ml-auto text-[11px] text-zinc-500 dark:text-zinc-500">
-                  Loading…
+                  {t('common.loading')}…
                 </span>
               )}
               {showTimeline &&
                 !eventsQuery.isLoading &&
                 eventsQuery.data?.length === 0 && (
                   <span className="ml-auto text-[11px] text-zinc-500 dark:text-zinc-500">
-                    No timeline data captured for this run.
+                    {t('commands.no_timeline_data')}
                   </span>
                 )}
             </div>
@@ -455,12 +452,12 @@ function HistoryItem({
               // Empty timeline → fall through to the legacy raw view so the
               // user always sees something useful.
               <pre className="max-h-[300px] overflow-y-auto bg-zinc-950 px-4 py-3 font-mono text-sm leading-relaxed text-zinc-300">
-                {entry.output || 'No output recorded.'}
+                {entry.output || t('commands.no_output_recorded')}
               </pre>
             )
           ) : (
             <pre className="max-h-[300px] overflow-y-auto bg-zinc-950 px-4 py-3 font-mono text-sm leading-relaxed text-zinc-300">
-              {entry.output || 'No output recorded.'}
+              {entry.output || t('commands.no_output_recorded')}
             </pre>
           )}
         </div>
@@ -477,6 +474,7 @@ type CommandHistoryProps = {
 }
 
 export function CommandHistory({ isRunning, onRerun }: CommandHistoryProps) {
+  const { t } = useT()
   const { data: history, isLoading } = useCommandHistory()
 
   const [searchQuery, setSearchQuery] = useState('')
@@ -538,9 +536,9 @@ export function CommandHistory({ isRunning, onRerun }: CommandHistoryProps) {
       <div className="rounded-lg border border-zinc-200 dark:border-zinc-800">
         <div className="flex items-center gap-2 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
           <History className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
-          <span className="text-sm font-medium">Command History</span>
+          <span className="text-sm font-medium">{t('commands.history_title')}</span>
         </div>
-        <div className="p-4 text-center text-sm text-zinc-500 dark:text-zinc-400">Loading...</div>
+        <div className="p-4 text-center text-sm text-zinc-500 dark:text-zinc-400">{t('common.loading')}...</div>
       </div>
     )
   }
@@ -552,7 +550,7 @@ export function CommandHistory({ isRunning, onRerun }: CommandHistoryProps) {
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
         <History className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
-        <span className="text-sm font-medium">Command History</span>
+        <span className="text-sm font-medium">{t('commands.history_title')}</span>
         {hasHistory && (
           <span className="text-xs text-zinc-400 dark:text-zinc-500">
             {filtered.length === history.length
@@ -572,7 +570,7 @@ export function CommandHistory({ isRunning, onRerun }: CommandHistoryProps) {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search commands..."
+              placeholder={t('commands.search_commands')}
               className="w-full rounded-md border border-zinc-200 bg-white py-1.5 pl-8 pr-8 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder:text-zinc-500"
             />
             {searchQuery && (
@@ -605,7 +603,7 @@ export function CommandHistory({ isRunning, onRerun }: CommandHistoryProps) {
                         : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700',
                     )}
                   >
-                    {opt.label}
+                    {statusLabel(opt.value, t)}
                     <span className={cn(
                       'tabular-nums',
                       statusFilter === opt.value
@@ -621,11 +619,11 @@ export function CommandHistory({ isRunning, onRerun }: CommandHistoryProps) {
 
             {/* Sort controls */}
             <div className="flex items-center gap-3">
-              <span className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Sort</span>
-              <SortButton label="Date" field="date" activeField={sortField} dir={sortDir} onToggle={toggleSort} />
-              <SortButton label="Command" field="command" activeField={sortField} dir={sortDir} onToggle={toggleSort} />
-              <SortButton label="Duration" field="duration" activeField={sortField} dir={sortDir} onToggle={toggleSort} />
-              <SortButton label="Status" field="status" activeField={sortField} dir={sortDir} onToggle={toggleSort} />
+              <span className="text-[10px] uppercase tracking-wider text-zinc-400 dark:text-zinc-500">{t('commands.sort')}</span>
+              <SortButton label="commands.sort_date" field="date" activeField={sortField} dir={sortDir} onToggle={toggleSort} />
+              <SortButton label="commands.sort_command" field="command" activeField={sortField} dir={sortDir} onToggle={toggleSort} />
+              <SortButton label="commands.sort_duration" field="duration" activeField={sortField} dir={sortDir} onToggle={toggleSort} />
+              <SortButton label="commands.sort_status" field="status" activeField={sortField} dir={sortDir} onToggle={toggleSort} />
             </div>
           </div>
         </div>
@@ -634,11 +632,11 @@ export function CommandHistory({ isRunning, onRerun }: CommandHistoryProps) {
       {/* Results */}
       {!hasHistory ? (
         <div className="p-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
-          No commands have been run yet.
+          {t('commands.history_empty')}
         </div>
       ) : filtered.length === 0 ? (
         <div className="p-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
-          No commands match your filters.
+          {t('commands.history_no_match')}
         </div>
       ) : (
         filtered.map((entry) => (

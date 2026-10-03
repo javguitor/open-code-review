@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { X, Plus, Loader2 } from 'lucide-react'
 import { cn } from '../../../lib/utils'
+import { useT } from '../../../lib/i18n'
 import { toSlug } from '../../../lib/reviewer-utils'
 import { useSocket, useSocketEvent } from '../../../providers/socket-provider'
 
@@ -10,6 +11,7 @@ type CreateReviewerDialogProps = {
 }
 
 export function CreateReviewerDialog({ open, onClose }: CreateReviewerDialogProps) {
+  const { t } = useT()
   const { socket } = useSocket()
   const [name, setName] = useState('')
   const [focus, setFocus] = useState('')
@@ -86,7 +88,7 @@ export function CreateReviewerDialog({ open, onClose }: CreateReviewerDialogProp
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-3.5 dark:border-zinc-700">
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-            Create Reviewer
+            {t('reviewers.create_reviewer')}
           </h2>
           <button
             type="button"
@@ -103,14 +105,14 @@ export function CreateReviewerDialog({ open, onClose }: CreateReviewerDialogProp
           {/* Name */}
           <div>
             <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-              Reviewer Name
+              {t('reviewers.name_label')}
             </label>
             <input
               ref={nameRef}
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. API Design, Rust Safety, GraphQL"
+              placeholder={t('reviewers.name_placeholder')}
               disabled={runningId !== null}
               className={cn(
                 'w-full rounded-md border py-2 px-3 text-sm',
@@ -122,7 +124,7 @@ export function CreateReviewerDialog({ open, onClose }: CreateReviewerDialogProp
             />
             {slug && (
               <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
-                Slug: <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-800">{slug}</code>
+                {t('reviewers.slug')} <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-800">{slug}</code>
               </p>
             )}
           </div>
@@ -130,12 +132,12 @@ export function CreateReviewerDialog({ open, onClose }: CreateReviewerDialogProp
           {/* Focus */}
           <div>
             <label className="mb-1 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-              What should this reviewer focus on?
+              {t('reviewers.focus_label')}
             </label>
             <textarea
               value={focus}
               onChange={(e) => setFocus(e.target.value)}
-              placeholder="e.g. REST API design, backwards compatibility, versioning, error response consistency, pagination patterns"
+              placeholder={t('reviewers.focus_placeholder')}
               rows={3}
               disabled={runningId !== null}
               className={cn(
@@ -167,7 +169,7 @@ export function CreateReviewerDialog({ open, onClose }: CreateReviewerDialogProp
               onClick={onClose}
               className="rounded-md bg-indigo-600 px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-700"
             >
-              Done
+              {t('common.done')}
             </button>
           ) : (
             <>
@@ -177,7 +179,7 @@ export function CreateReviewerDialog({ open, onClose }: CreateReviewerDialogProp
                 disabled={runningId !== null}
                 className="rounded-md border border-zinc-300 px-4 py-1.5 text-xs font-medium transition-colors hover:bg-zinc-100 disabled:opacity-30 dark:border-zinc-700 dark:hover:bg-zinc-800"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
@@ -188,12 +190,12 @@ export function CreateReviewerDialog({ open, onClose }: CreateReviewerDialogProp
                 {runningId !== null ? (
                   <>
                     <Loader2 className="h-3 w-3 animate-spin" />
-                    Creating...
+                    {t('reviewers.creating')}
                   </>
                 ) : (
                   <>
                     <Plus className="h-3 w-3" />
-                    Create
+                    {t('reviewers.create')}
                   </>
                 )}
               </button>

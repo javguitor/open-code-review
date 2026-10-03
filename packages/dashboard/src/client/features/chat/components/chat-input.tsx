@@ -1,6 +1,8 @@
 import { useCallback, useRef, useState } from 'react'
 import { SendHorizontal } from 'lucide-react'
 import { cn } from '../../../lib/utils'
+import { useT } from '../../../lib/i18n'
+import type { MessageKey } from '../../../lib/i18n'
 import type { ChatTargetType } from '../../../lib/api-types'
 
 type ChatInputProps = {
@@ -10,12 +12,13 @@ type ChatInputProps = {
   targetType: ChatTargetType
 }
 
-const placeholders: Record<ChatTargetType, string> = {
-  map_run: 'Ask about this map...',
-  review_round: 'Ask about this review...',
+const placeholders: Record<ChatTargetType, MessageKey> = {
+  map_run: 'chat.placeholder_map',
+  review_round: 'chat.placeholder_review',
 }
 
 export function ChatInput({ onSend, isStreaming, disabled, targetType }: ChatInputProps) {
+  const { t } = useT()
   const [value, setValue] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -56,7 +59,7 @@ export function ChatInput({ onSend, isStreaming, disabled, targetType }: ChatInp
           adjustHeight()
         }}
         onKeyDown={handleKeyDown}
-        placeholder={placeholders[targetType]}
+        placeholder={t(placeholders[targetType])}
         rows={1}
         className={cn(
           'flex-1 resize-none rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm',

@@ -1,4 +1,5 @@
 import { cn } from '../../lib/utils'
+import { useT } from '../../lib/i18n'
 
 type ProgressBarProps = {
   value: number
@@ -15,6 +16,7 @@ export function ProgressBar({
   showLabel = false,
   size = 'md',
 }: ProgressBarProps) {
+  const { t } = useT()
   const percentage = max > 0 ? Math.round((value / max) * 100) : 0
   const clampedPercentage = Math.min(100, Math.max(0, percentage))
 
@@ -29,7 +31,7 @@ export function ProgressBar({
         aria-valuenow={value}
         aria-valuemin={0}
         aria-valuemax={max}
-        aria-label={`${value} of ${max} (${clampedPercentage}%)`}
+        aria-label={t('layout.progress_label', { value, max, percent: clampedPercentage })}
       >
         <div
           className={cn(

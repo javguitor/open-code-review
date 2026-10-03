@@ -20,6 +20,10 @@
 # Files to read during Phase 1 (Context Discovery). OCR merges these into
 # the review context automatically.
 
+# Output language for everything the reviewers write and for the dashboard UI.
+# Structural headings, labels, verdicts, code and paths stay English (parsed).
+language: es
+
 context_discovery:
   # OpenSpec integration - pull project context and active specs
   openspec:

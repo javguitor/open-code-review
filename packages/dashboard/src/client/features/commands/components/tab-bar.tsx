@@ -1,4 +1,5 @@
 import { X, Ban, CheckCircle2, XCircle } from 'lucide-react'
+import { useT } from '../../../lib/i18n'
 import { cn } from '../../../lib/utils'
 import type { CommandTab } from '../../../providers/command-state-provider'
 
@@ -10,13 +11,14 @@ type TabBarProps = {
 }
 
 export function TabBar({ tabs, activeTabId, onSelectTab, onDismissTab }: TabBarProps) {
+  const { t } = useT()
   if (tabs.length === 0) return null
 
   return (
     <div className="flex items-center gap-0.5 overflow-x-auto border-b border-zinc-200 bg-zinc-50 px-2 dark:border-zinc-800 dark:bg-zinc-900">
       {tabs.map((tab) => {
         const isActive = tab.executionId === activeTabId
-        const label = tab.command.replace(/^ocr\s+/, '').split(/\s+/)[0] ?? 'command'
+        const label = tab.command.replace(/^ocr\s+/, '').split(/\s+/)[0] ?? t('commands.tab_fallback_label')
 
         return (
           <button

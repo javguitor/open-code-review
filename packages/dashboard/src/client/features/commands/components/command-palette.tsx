@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Play, ShieldAlert, Sparkles } from 'lucide-react'
+import { useT } from '../../../lib/i18n'
+import type { MessageKey } from '../../../lib/i18n'
 import { cn } from '../../../lib/utils'
 import { useReviewers } from '../hooks/use-reviewers'
 import { ReviewerDefaults, type ReviewerSelection } from './reviewer-defaults'
@@ -10,15 +12,15 @@ import { ReviewerDialog } from './reviewer-dialog'
 type CommandParam = {
   name: string
   type: 'text' | 'toggle'
-  label: string
-  placeholder?: string
+  label: MessageKey
+  placeholder?: MessageKey
 }
 
 type CommandDef = {
   id: string
   command: string
-  label: string
-  description: string
+  label: MessageKey
+  description: MessageKey
   params: CommandParam[]
 }
 
@@ -26,23 +28,23 @@ const COMMANDS: CommandDef[] = [
   {
     id: 'review',
     command: 'ocr review',
-    label: 'Review',
-    description: 'Run multi-agent AI code review',
+    label: 'commands.cmd_review_label',
+    description: 'commands.cmd_review_description',
     params: [
-      { name: 'target', type: 'text', label: 'Target', placeholder: 'staged (default)' },
-      { name: 'requirements', type: 'text', label: 'Requirements', placeholder: 'spec.md or describe what to focus on...' },
-      { name: 'fresh', type: 'toggle', label: 'Fresh start' },
+      { name: 'target', type: 'text', label: 'commands.param_target', placeholder: 'commands.param_target_placeholder' },
+      { name: 'requirements', type: 'text', label: 'commands.param_requirements', placeholder: 'commands.param_requirements_placeholder' },
+      { name: 'fresh', type: 'toggle', label: 'commands.param_fresh' },
     ],
   },
   {
     id: 'map',
     command: 'ocr map',
-    label: 'Map',
-    description: 'Generate a Code Review Map for large changesets',
+    label: 'commands.cmd_map_label',
+    description: 'commands.cmd_map_description',
     params: [
-      { name: 'target', type: 'text', label: 'Target', placeholder: 'staged (default)' },
-      { name: 'requirements', type: 'text', label: 'Requirements', placeholder: 'spec.md or describe what to focus on...' },
-      { name: 'fresh', type: 'toggle', label: 'Fresh start' },
+      { name: 'target', type: 'text', label: 'commands.param_target', placeholder: 'commands.param_target_placeholder' },
+      { name: 'requirements', type: 'text', label: 'commands.param_requirements', placeholder: 'commands.param_requirements_placeholder' },
+      { name: 'fresh', type: 'toggle', label: 'commands.param_fresh' },
     ],
   },
 ]
@@ -245,6 +247,7 @@ type CommandPaletteProps = {
 }
 
 export function CommandPalette({ isRunning, runningCount, onRunCommand, prefill, onPrefillConsumed }: CommandPaletteProps) {
+  const { t } = useT()
   const [selectedId, setSelectedId] = useState(COMMANDS[0]?.id ?? '')
   const [paramValues, setParamValues] = useState<Record<string, string | boolean>>({})
   const [confirming, setConfirming] = useState(false)
@@ -404,7 +407,7 @@ export function CommandPalette({ isRunning, runningCount, onRunCommand, prefill,
                 : 'text-zinc-600 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-800',
             )}
           >
-            {cmd.label}
+            {t(cmd.label)}
           </button>
         ))}
       </div>
@@ -412,12 +415,12 @@ export function CommandPalette({ isRunning, runningCount, onRunCommand, prefill,
       {/* Security notice */}
       <div className="flex items-start gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
         <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        <span>Commands run an AI agent with full read/write and shell access to your project. Only run in trusted environments.</span>
+        <span>{t('commands.security_notice')}</span>
       </div>
 
       {/* Form body */}
       <div className="space-y-4 bg-white px-5 py-4 dark:bg-zinc-900/50">
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">{selectedCommand.description}</p>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">{t(selectedCommand.description)}</p>
 
         {/* Dynamic fields */}
         <div className="space-y-3">
@@ -425,11 +428,11 @@ export function CommandPalette({ isRunning, runningCount, onRunCommand, prefill,
             param.type === 'text' ? (
               <div key={param.name} className="flex items-center gap-3">
                 <label className="w-28 shrink-0 text-right text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                  {param.label}
+                  {t(param.label)}
                 </label>
                 <input
                   type="text"
-                  placeholder={param.placeholder}
+                  placeholder={param.placeholder ? t(param.placeholder) : undefined}
                   disabled={isRunning}
                   value={(paramValues[param.name] as string) ?? ''}
                   onChange={(e) => setParam(param.name, e.target.value)}
@@ -453,7 +456,7 @@ export function CommandPalette({ isRunning, runningCount, onRunCommand, prefill,
                     onChange={(e) => setParam(param.name, e.target.checked)}
                     className="h-3.5 w-3.5 rounded border-zinc-300 text-indigo-500 focus:ring-indigo-400 dark:border-zinc-600"
                   />
-                  {param.label}
+                  {t(param.label)}
                 </label>
               </div>
             ),
@@ -486,10 +489,10 @@ export function CommandPalette({ isRunning, runningCount, onRunCommand, prefill,
             )}
           >
             <Play className="h-3.5 w-3.5" />
-            Run {selectedCommand.label}
+            {t('commands.run_command', { command: t(selectedCommand.label) })}
             {runningCount != null && runningCount > 0 && (
               <span className="ml-1.5 rounded-full bg-indigo-500/20 px-1.5 text-[10px] font-normal text-indigo-300">
-                {runningCount} running
+                {t('commands.running_count', { count: runningCount })}
               </span>
             )}
           </button>
@@ -500,9 +503,9 @@ export function CommandPalette({ isRunning, runningCount, onRunCommand, prefill,
       {confirming && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/95 backdrop-blur-sm dark:bg-zinc-900/95">
           <div className="flex flex-col items-center gap-3 px-4">
-            <p className="text-sm font-medium">Run {selectedCommand.label}?</p>
+            <p className="text-sm font-medium">{t('commands.run_command_confirm', { command: t(selectedCommand.label) })}</p>
             <p className="max-w-[260px] text-center text-xs text-zinc-500 dark:text-zinc-400">
-              This will spawn a Claude Code session that may take several minutes.
+              {t('commands.spawn_session_notice')}
             </p>
             <code className="max-w-[320px] truncate rounded bg-zinc-100 px-2 py-1 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
               {buildCommandString()}
@@ -513,7 +516,7 @@ export function CommandPalette({ isRunning, runningCount, onRunCommand, prefill,
                 onClick={() => setConfirming(false)}
                 className="rounded-md border border-zinc-300 px-4 py-1.5 text-xs font-medium transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
@@ -521,7 +524,7 @@ export function CommandPalette({ isRunning, runningCount, onRunCommand, prefill,
                 className="flex items-center gap-1 rounded-md bg-indigo-600 px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-700"
               >
                 <Play className="h-3 w-3" />
-                Start
+                {t('commands.start')}
               </button>
             </div>
           </div>

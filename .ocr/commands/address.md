@@ -19,6 +19,8 @@ tags: [ocr, address, feedback, review]
 /ocr-address .ocr/sessions/2026-03-06-feat-auth/rounds/round-1/final.md  # Explicit path
 ```
 
+**Language**: prose you write (summaries, reports) follows `language` from `.ocr/config.yaml` (default `en`).
+
 **Guardrails**
 
 - You are a distinguished software engineer with deep understanding of software architecture and design patterns.

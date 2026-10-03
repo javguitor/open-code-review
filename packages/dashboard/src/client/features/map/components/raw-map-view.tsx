@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { FileCode, X } from 'lucide-react'
+import { useT } from '../../../lib/i18n'
 import { MarkdownRenderer } from '../../../components/markdown'
 import { useMapArtifact } from '../hooks/use-map-run'
 
@@ -8,6 +9,7 @@ type RawMapViewProps = {
 }
 
 export function RawMapView({ sessionId }: RawMapViewProps) {
+  const { t } = useT()
   const [open, setOpen] = useState(false)
   const { data: artifact, isLoading } = useMapArtifact(sessionId)
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -31,7 +33,7 @@ export function RawMapView({ sessionId }: RawMapViewProps) {
         className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
       >
         <FileCode className="h-3.5 w-3.5" />
-        View Raw Map
+        {t('map.view_raw')}
       </button>
 
       {open && (
@@ -50,12 +52,12 @@ export function RawMapView({ sessionId }: RawMapViewProps) {
           >
             <div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
               <h3 id="raw-map-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-                Raw Map Output
+                {t('map.raw_output_title')}
               </h3>
               <button
                 onClick={close}
                 className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-                aria-label="Close"
+                aria-label={t('common.close')}
               >
                 <X className="h-5 w-5" />
               </button>
@@ -64,13 +66,13 @@ export function RawMapView({ sessionId }: RawMapViewProps) {
             <div className="flex-1 overflow-y-auto px-6 py-4">
               {isLoading ? (
                 <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                  Loading map content...
+                  {t('map.loading_content')}
                 </p>
               ) : artifact?.content ? (
                 <MarkdownRenderer content={artifact.content} />
               ) : (
                 <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                  No map content available.
+                  {t('map.no_content')}
                 </p>
               )}
             </div>

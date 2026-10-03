@@ -5,6 +5,7 @@ import { FileSearch, Map, Loader2 } from 'lucide-react'
 import { cn, fetchApi } from '../../../lib/utils'
 import { useSocketEvent } from '../../../providers/socket-provider'
 import { StatusBadge } from '../../../components/ui/status-badge'
+import { useT } from '../../../lib/i18n'
 import type { SessionSummary, ReviewRound, MapRun, SessionStatus } from '../../../lib/api-types'
 
 type SessionTabsProps = {
@@ -14,6 +15,7 @@ type SessionTabsProps = {
 type Tab = 'review' | 'map'
 
 export function SessionTabs({ session }: SessionTabsProps) {
+  const { t } = useT()
   const hasReview = session.has_review
   const hasMap = session.has_map
 
@@ -21,16 +23,16 @@ export function SessionTabs({ session }: SessionTabsProps) {
   const [activeTab, setActiveTab] = useState<Tab>(defaultTab)
 
   const tabs: { id: Tab; label: string; icon: typeof FileSearch; visible: boolean }[] = [
-    { id: 'review', label: 'Review', icon: FileSearch, visible: hasReview },
-    { id: 'map', label: 'Map', icon: Map, visible: hasMap },
+    { id: 'review', label: t('sessions.workflow_review'), icon: FileSearch, visible: hasReview },
+    { id: 'map', label: t('sessions.workflow_map'), icon: Map, visible: hasMap },
   ]
 
-  const visibleTabs = tabs.filter((t) => t.visible)
+  const visibleTabs = tabs.filter((tab) => tab.visible)
 
   if (visibleTabs.length === 0) {
     return (
       <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        No review or map data yet.
+        {t('sessions.tabs_empty')}
       </p>
     )
   }
@@ -68,6 +70,7 @@ export function SessionTabs({ session }: SessionTabsProps) {
 }
 
 function ReviewTabContent({ sessionId, status }: { sessionId: string; status: SessionStatus }) {
+  const { t } = useT()
   const queryClient = useQueryClient()
 
   // Refresh when artifacts are created/updated (reviewer outputs, final.md)
@@ -88,7 +91,7 @@ function ReviewTabContent({ sessionId, status }: { sessionId: string; status: Se
     return (
       <p className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
         <Loader2 className="h-4 w-4 animate-spin" />
-        Loading rounds...
+        {t('sessions.loading_rounds')}
       </p>
     )
   }
@@ -97,8 +100,8 @@ function ReviewTabContent({ sessionId, status }: { sessionId: string; status: Se
     return (
       <p className="text-sm text-zinc-500 dark:text-zinc-400">
         {status === 'closed'
-          ? 'This session was closed without completing any review rounds.'
-          : 'Review in progress — no completed rounds yet.'}
+          ? t('sessions.rounds_none_closed')
+          : t('sessions.rounds_none_active')}
       </p>
     )
   }
@@ -112,7 +115,7 @@ function ReviewTabContent({ sessionId, status }: { sessionId: string; status: Se
           className="flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800/50"
         >
           <FileSearch className="h-4 w-4 text-zinc-400" />
-          <span className="text-zinc-900 dark:text-zinc-100">Round {round.round_number}</span>
+          <span className="text-zinc-900 dark:text-zinc-100">{t('sessions.round_label', { number: round.round_number })}</span>
           <div className="ml-auto flex items-center gap-2">
             {round.progress && (
               <StatusBadge variant={round.progress.status} />
@@ -128,6 +131,7 @@ function ReviewTabContent({ sessionId, status }: { sessionId: string; status: Se
 }
 
 function MapTabContent({ sessionId, status }: { sessionId: string; status: SessionStatus }) {
+  const { t } = useT()
   const queryClient = useQueryClient()
 
   // Refresh when map artifacts are created/updated
@@ -148,7 +152,7 @@ function MapTabContent({ sessionId, status }: { sessionId: string; status: Sessi
     return (
       <p className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
         <Loader2 className="h-4 w-4 animate-spin" />
-        Loading runs...
+        {t('sessions.loading_runs')}
       </p>
     )
   }
@@ -157,8 +161,8 @@ function MapTabContent({ sessionId, status }: { sessionId: string; status: Sessi
     return (
       <p className="text-sm text-zinc-500 dark:text-zinc-400">
         {status === 'closed'
-          ? 'This session was closed without completing any map runs.'
-          : 'Map in progress — no completed runs yet.'}
+          ? t('sessions.runs_none_closed')
+          : t('sessions.runs_none_active')}
       </p>
     )
   }
@@ -172,7 +176,7 @@ function MapTabContent({ sessionId, status }: { sessionId: string; status: Sessi
           className="flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800/50"
         >
           <Map className="h-4 w-4 text-zinc-400" />
-          <span className="text-zinc-900 dark:text-zinc-100">Run {run.run_number}</span>
+          <span className="text-zinc-900 dark:text-zinc-100">{t('sessions.run_label', { number: run.run_number })}</span>
         </Link>
       ))}
     </div>

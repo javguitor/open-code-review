@@ -2,13 +2,8 @@ import {
   reviewStateFromVerdict,
   type GitHubReviewState,
 } from '@open-code-review/platform/verdict'
+import type { MessageKey } from './i18n'
 import type { PostReviewStep, PrOwnership } from './api-types'
-
-export const REVIEW_STATE_LABELS: Record<GitHubReviewState, string> = {
-  approve: 'Approve',
-  'request-changes': 'Request changes',
-  comment: 'Comment',
-}
 
 /**
  * Pre-selected state: the verdict-derived one only when the PR is someone
@@ -30,13 +25,10 @@ export function isStateSelectable(
   return state === 'comment' || ownership === 'other'
 }
 
-/** Why the gated states are disabled, or null when nothing is locked. */
-export function lockReason(ownership: PrOwnership | undefined): string | null {
+/** Dictionary key for why the gated states are disabled, or null when nothing is locked. */
+export function lockReasonKey(ownership: PrOwnership | undefined): MessageKey | null {
   if (ownership === 'other') return null
-  if (ownership === 'own') {
-    return 'GitHub does not allow approving or requesting changes on your own pull request.'
-  }
-  return 'Could not determine the pull request author.'
+  return ownership === 'own' ? 'reviews.lock_own' : 'reviews.lock_unknown'
 }
 
 /**

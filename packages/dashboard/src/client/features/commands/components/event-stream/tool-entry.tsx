@@ -14,6 +14,7 @@
 import { useState } from 'react'
 import { Check, ChevronRight, CircleAlert, Loader2, Wrench, X } from 'lucide-react'
 import { cn } from '../../../../lib/utils'
+import { useT } from '../../../../lib/i18n'
 import {
   selectToolSummary,
   selectToolSummaryFallback,
@@ -39,6 +40,7 @@ export function ToolEntry({
   output,
   status,
 }: ToolEntryProps) {
+  const { t } = useT()
   const [expanded, setExpanded] = useState(false)
   const summary = selectToolSummary(name, input) ?? selectToolSummaryFallback(input)
 
@@ -82,7 +84,7 @@ export function ToolEntry({
       {expanded && (
         <div className="ml-7 mt-1 space-y-2">
           {/* Input */}
-          <ExpandedSection label="Input">
+          <ExpandedSection label={t('commands.tool_input')}>
             <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-md bg-zinc-100 px-3 py-2 font-mono text-[11px] leading-relaxed text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
               {formatInput(input, inputPartial)}
             </pre>
@@ -90,7 +92,7 @@ export function ToolEntry({
 
           {/* Output (when finished) */}
           {output !== undefined && (
-            <ExpandedSection label={status === 'error' ? 'Error output' : 'Output'}>
+            <ExpandedSection label={status === 'error' ? t('commands.tool_error_output') : t('commands.tool_output')}>
               <pre
                 className={cn(
                   'overflow-x-auto whitespace-pre-wrap break-words rounded-md px-3 py-2 font-mono text-[11px] leading-relaxed',
@@ -99,7 +101,7 @@ export function ToolEntry({
                     : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300',
                 )}
               >
-                {output || '(empty)'}
+                {output || t('commands.tool_output_empty')}
               </pre>
             </ExpandedSection>
           )}
@@ -110,10 +112,11 @@ export function ToolEntry({
 }
 
 function StatusIcon({ status }: { status: ToolStatus }) {
+  const { t } = useT()
   if (status === 'running') {
     return (
       <Loader2
-        aria-label="Running"
+        aria-label={t('commands.tool_status_running')}
         className="h-3.5 w-3.5 shrink-0 animate-spin text-indigo-500 dark:text-indigo-400"
       />
     )
@@ -121,7 +124,7 @@ function StatusIcon({ status }: { status: ToolStatus }) {
   if (status === 'done') {
     return (
       <Check
-        aria-label="Done"
+        aria-label={t('common.done')}
         className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400"
       />
     )
@@ -129,14 +132,14 @@ function StatusIcon({ status }: { status: ToolStatus }) {
   if (status === 'error') {
     return (
       <X
-        aria-label="Error"
+        aria-label={t('common.error')}
         className="h-3.5 w-3.5 shrink-0 text-red-500 dark:text-red-400"
       />
     )
   }
   return (
     <CircleAlert
-      aria-label="Pending"
+      aria-label={t('commands.tool_status_pending')}
       className="h-3.5 w-3.5 shrink-0 text-zinc-400 dark:text-zinc-500"
     />
   )

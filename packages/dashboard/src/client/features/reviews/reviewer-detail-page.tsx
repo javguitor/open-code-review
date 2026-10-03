@@ -7,8 +7,10 @@ import { useQuery } from '@tanstack/react-query'
 import type { Artifact } from '../../lib/api-types'
 import { fetchApi } from '../../lib/utils'
 import { REVIEWER_ICONS } from './constants'
+import { useT } from '../../lib/i18n'
 
 export function ReviewerDetailPage() {
+  const { t } = useT()
   const {
     id: sessionId,
     round: roundStr,
@@ -49,7 +51,7 @@ export function ReviewerDetailPage() {
   })
 
   if (isLoading) {
-    return <p className="text-sm text-zinc-500 dark:text-zinc-400">Loading reviewer...</p>
+    return <p className="text-sm text-zinc-500 dark:text-zinc-400">{t('reviews.loading_reviewer')}</p>
   }
 
   if (!reviewer) {
@@ -60,9 +62,9 @@ export function ReviewerDetailPage() {
           className="mb-4 inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to round
+          {t('reviews.back_to_round')}
         </Link>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Reviewer not found.</p>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">{t('reviews.reviewer_not_found')}</p>
       </div>
     )
   }
@@ -76,7 +78,7 @@ export function ReviewerDetailPage() {
         className="inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300"
       >
         <ArrowLeft className="h-4 w-4" />
-        Back to round {roundNumber}
+        {t('reviews.back_to_round_n', { number: roundNumber })}
       </Link>
 
       <div className="flex items-center gap-3">
@@ -91,8 +93,9 @@ export function ReviewerDetailPage() {
             )}
           </h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            {reviewer.finding_count} finding
-            {reviewer.finding_count !== 1 ? 's' : ''}
+            {t(reviewer.finding_count === 1 ? 'reviews.finding_count_one' : 'reviews.finding_count_other', {
+              count: reviewer.finding_count,
+            })}
           </p>
         </div>
       </div>
@@ -101,7 +104,7 @@ export function ReviewerDetailPage() {
       {contentQuery.data && (
         <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-4 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            Reviewer Output
+            {t('reviews.reviewer_output')}
           </h2>
           <MarkdownRenderer content={contentQuery.data} />
         </div>
@@ -111,7 +114,7 @@ export function ReviewerDetailPage() {
       {reviewer.findings.length > 0 && (
         <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="mb-4 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-            Findings ({reviewer.findings.length})
+            {t('reviews.findings_count', { count: reviewer.findings.length })}
           </h2>
           <FindingsTable findings={reviewer.findings} />
         </div>

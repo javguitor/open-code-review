@@ -67,6 +67,7 @@ docs/API_STANDARDS.md
 ```python
 def discover_context():
     config = read_yaml('.ocr/config.yaml')
+    language = config.get('language', 'en')
     discovered = []
     
     # Priority 1: OCR config context
@@ -122,6 +123,9 @@ def discover_context():
                 'content': read(file)
             })
     
+    # Output language (not a context source): emitted as `## Output Language: {language}`
+    discovered.append({'source': 'language', 'content': f'## Output Language: {language}'})
+
     return merge_with_attribution(discovered)
 ```
 
@@ -191,6 +195,8 @@ context: |
 ### Important
 - Silent error handling (catch without action)
 - Missing user-facing error messages
+
+## Output Language: en
 ```
 
 ## No Context Found

@@ -5,6 +5,7 @@ import { cn } from '../../../lib/utils'
 import { useIdeConfig } from '../../../hooks/use-ide-config'
 import { useSocket } from '../../../providers/socket-provider'
 import { useCommandState } from '../../../providers/command-state-provider'
+import { useT } from '../../../lib/i18n'
 
 type AddressFeedbackPopoverProps = {
   sessionId: string
@@ -27,6 +28,7 @@ const PORTABLE_PROMPT = (path: string) => `Review the feedback in \`${path}\` an
 GUARDRAILS: Do NOT blindly accept every piece of feedback. Corroborate against actual code first. If feedback is incorrect, decline with evidence. If the suggested fix is suboptimal, propose a better alternative.`
 
 export function AddressFeedbackPopover({ sessionId, roundNumber }: AddressFeedbackPopoverProps) {
+  const { t } = useT()
   const [open, setOpen] = useState(false)
   const dialogRef = useRef<HTMLDivElement>(null)
 
@@ -55,7 +57,7 @@ export function AddressFeedbackPopover({ sessionId, roundNumber }: AddressFeedba
         className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
       >
         <Play className="h-3.5 w-3.5" />
-        Address Feedback
+        {t('reviews.address_feedback')}
       </button>
 
       {open && (
@@ -72,7 +74,7 @@ export function AddressFeedbackPopover({ sessionId, roundNumber }: AddressFeedba
             <button
               onClick={close}
               className="absolute right-4 top-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-              aria-label="Close dialog"
+              aria-label={t('common.close_dialog')}
             >
               <X className="h-4 w-4" />
             </button>
@@ -104,6 +106,7 @@ function RunModeContent({
   finalPath: string
   onClose: () => void
 }) {
+  const { t } = useT()
   const [notes, setNotes] = useState('')
   const [confirming, setConfirming] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -144,24 +147,24 @@ function RunModeContent({
     <div>
       <div className="p-6 pb-0">
         <h3 id="address-feedback-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-          Address Feedback
+          {t('reviews.address_feedback')}
         </h3>
         <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-          Run an AI agent to corroborate, validate, and implement changes from this review — in the dashboard or your own terminal.
+          {t('reviews.address_run_desc')}
         </p>
       </div>
 
       {/* Security notice */}
       <div className="mx-6 mt-4 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
         <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        <span>This runs an AI agent with full read/write and shell access to your project.</span>
+        <span>{t('reviews.address_security_notice')}</span>
       </div>
 
       <div className="space-y-4 p-6">
         {/* Review path */}
         <div>
           <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-            Review
+            {t('reviews.review')}
           </label>
           <code className="mt-1 block w-full break-all rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
             {finalPath}
@@ -171,12 +174,12 @@ function RunModeContent({
         {/* Additional notes */}
         <div>
           <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-            Additional notes <span className="font-normal text-zinc-400 dark:text-zinc-500">(optional)</span>
+            {t('reviews.additional_notes')} <span className="font-normal text-zinc-400 dark:text-zinc-500">{t('reviews.optional')}</span>
           </label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="e.g. Focus on the blockers first, skip style nits..."
+            placeholder={t('reviews.notes_placeholder')}
             rows={3}
             className={cn(
               'mt-1 w-full rounded-md border px-3 py-2 text-sm',
@@ -206,7 +209,7 @@ function RunModeContent({
                 )}
               >
                 <Play className="h-3.5 w-3.5" />
-                Run in Dashboard
+                {t('reviews.run_in_dashboard')}
               </button>
             ) : (
               <button
@@ -214,7 +217,7 @@ function RunModeContent({
                 className="flex flex-1 items-center justify-center gap-2 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
               >
                 <Play className="h-3.5 w-3.5" />
-                Confirm
+                {t('reviews.confirm')}
               </button>
             )}
 
@@ -225,12 +228,12 @@ function RunModeContent({
               {copied ? (
                 <>
                   <Check className="h-3.5 w-3.5" />
-                  Copied!
+                  {t('reviews.copied')}
                 </>
               ) : (
                 <>
                   <ClipboardCopy className="h-3.5 w-3.5" />
-                  Copy to Terminal
+                  {t('reviews.copy_to_terminal')}
                 </>
               )}
             </button>
@@ -240,7 +243,7 @@ function RunModeContent({
             onClick={onClose}
             className="w-full py-1 text-sm text-zinc-500 transition-colors hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
         </div>
       </div>
@@ -257,6 +260,7 @@ function CopyModeContent({
   finalPath: string
   onClose: () => void
 }) {
+  const { t } = useT()
   const [includePrompt, setIncludePrompt] = useState(true)
   const [copied, setCopied] = useState(false)
 
@@ -273,16 +277,15 @@ function CopyModeContent({
   return (
     <div className="p-6">
       <h3 id="address-feedback-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-        Address Feedback
+        {t('reviews.address_feedback')}
       </h3>
       <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-        Copy the review path and AI prompt to paste into any AI coding tool
-        (Claude Code, Cursor, Windsurf, Copilot, etc.).
+        {t('reviews.address_copy_desc')}
       </p>
 
       <div className="mt-4">
         <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-          Review path
+          {t('reviews.review_path')}
         </label>
         <code className="mt-1 block w-full break-all rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
           {finalPath}
@@ -296,7 +299,7 @@ function CopyModeContent({
           onChange={(e) => setIncludePrompt(e.target.checked)}
           className="h-3.5 w-3.5 rounded border-zinc-300 text-indigo-500 focus:ring-indigo-400 dark:border-zinc-600"
         />
-        Include AI prompt
+        {t('reviews.include_prompt')}
       </label>
 
       {includePrompt && (
@@ -312,7 +315,7 @@ function CopyModeContent({
           onClick={onClose}
           className="rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
         >
-          Cancel
+          {t('common.cancel')}
         </button>
         <button
           onClick={handleCopy}
@@ -321,12 +324,12 @@ function CopyModeContent({
           {copied ? (
             <>
               <Check className="h-3.5 w-3.5" />
-              Copied!
+              {t('reviews.copied')}
             </>
           ) : (
             <>
               <ClipboardCopy className="h-3.5 w-3.5" />
-              Copy
+              {t('reviews.copy')}
             </>
           )}
         </button>

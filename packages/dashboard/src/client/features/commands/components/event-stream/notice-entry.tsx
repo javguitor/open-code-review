@@ -10,6 +10,7 @@
 
 import { Info, AlertTriangle } from 'lucide-react'
 import { cn } from '../../../../lib/utils'
+import { useT } from '../../../../lib/i18n'
 
 type NoticeEntryProps = {
   level: 'info' | 'warning'
@@ -17,6 +18,7 @@ type NoticeEntryProps = {
 }
 
 export function NoticeEntry({ level, message }: NoticeEntryProps) {
+  const { t } = useT()
   const isWarning = level === 'warning'
   const Icon = isWarning ? AlertTriangle : Info
   return (
@@ -47,7 +49,7 @@ export function NoticeEntry({ level, message }: NoticeEntryProps) {
                 : 'text-sky-700 dark:text-sky-400',
             )}
           >
-            {isWarning ? 'Warning' : 'Notice'}
+            {isWarning ? t('commands.notice_warning') : t('commands.notice_info')}
           </span>
           <p
             className={cn(

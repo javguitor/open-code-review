@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { Check, ChevronDown, List } from 'lucide-react'
 import { cn } from '../../lib/utils'
+import { useT } from '../../lib/i18n'
 
 export type ModelSelectOption = {
   /** The selected value passed to onChange. Empty string is the synthetic "(default)" option. */
@@ -69,7 +70,7 @@ export function ModelSelect({
   options,
   onChange,
   freeText = false,
-  freeTextPlaceholder = 'Type model id…',
+  freeTextPlaceholder,
   disabled = false,
   className,
   allowCustom = false,
@@ -77,6 +78,8 @@ export function ModelSelect({
   defaultOpen = false,
   onOpenChange,
 }: ModelSelectProps) {
+  const { t } = useT()
+  const placeholder = freeTextPlaceholder ?? t('layout.model_placeholder')
   const [open, setOpenState] = useState(defaultOpen)
   // User clicked "Custom…" — show the free-text input with a way back.
   const [customMode, setCustomMode] = useState(false)
@@ -101,11 +104,11 @@ export function ModelSelect({
   const isKnown = options.some((o) => o.id === value)
   const listOptions: ModelSelectOption[] = [
     ...(value && !isKnown
-      ? [{ id: value, label: value, detail: '(custom)' }]
+      ? [{ id: value, label: value, detail: t('layout.model_custom_detail') }]
       : []),
     ...options,
     ...(allowCustom && !freeText
-      ? [{ id: CUSTOM_OPTION_ID, label: 'Custom…', detail: 'type any model id' }]
+      ? [{ id: CUSTOM_OPTION_ID, label: t('layout.model_custom_option'), detail: t('layout.model_custom_option_detail') }]
       : []),
   ]
 
@@ -201,7 +204,7 @@ export function ModelSelect({
           ref={customInputRef}
           type="text"
           value={value}
-          placeholder={freeTextPlaceholder}
+          placeholder={placeholder}
           disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {
@@ -224,8 +227,8 @@ export function ModelSelect({
           <button
             type="button"
             onClick={() => setCustomMode(false)}
-            aria-label="Back to model list"
-            title="Back to model list"
+            aria-label={t('layout.model_back_to_list')}
+            title={t('layout.model_back_to_list')}
             className={cn(
               'shrink-0 rounded-md border p-1.5 text-zinc-500 transition',
               'border-zinc-200 hover:bg-zinc-50 hover:text-zinc-700',
@@ -239,7 +242,7 @@ export function ModelSelect({
     )
   }
 
-  const triggerLabel = selected?.label ?? freeTextPlaceholder
+  const triggerLabel = selected?.label ?? placeholder
   const triggerDetail = selected?.detail
 
   return (
@@ -301,7 +304,7 @@ export function ModelSelect({
         >
           {listOptions.length === 0 ? (
             <div className="px-3 py-2 text-xs text-zinc-500 dark:text-zinc-400">
-              No models available.
+              {t('layout.model_none_available')}
             </div>
           ) : (
             listOptions.map((opt, idx) => {

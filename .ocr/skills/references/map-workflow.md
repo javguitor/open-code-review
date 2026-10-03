@@ -455,6 +455,8 @@ See `references/map-personas/flow-analyst.md` for persona details.
 
 ### Map Output Format
 
+Map prose follows the configured `language` (`references/language-policy.md`); headings and table columns stay English.
+
 See `references/map-template.md` for the complete template.
 
 ### Phase 5 Checkpoint

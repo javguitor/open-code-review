@@ -14,6 +14,7 @@ type IdeConfig = {
   workspaceName: string
   gitBranch: string | null
   aiCli: AiCliStatus
+  language: string
 }
 
 export function useIdeConfig() {

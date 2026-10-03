@@ -13,6 +13,7 @@
 import { useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '../../../../lib/utils'
+import { useT } from '../../../../lib/i18n'
 
 type ThinkingEntryProps = {
   /** Concatenated thinking_delta text for one thinking block. */
@@ -28,6 +29,7 @@ function firstNonEmptyLine(text: string): string {
 }
 
 export function ThinkingEntry({ text }: ThinkingEntryProps) {
+  const { t } = useT()
   const [expanded, setExpanded] = useState(false)
   const preview = firstNonEmptyLine(text)
 
@@ -57,7 +59,7 @@ export function ThinkingEntry({ text }: ThinkingEntryProps) {
             </span>
           ) : (
             <span className="line-clamp-1 not-italic text-[12px] tracking-wide text-zinc-400 dark:text-zinc-500">
-              <span className="italic">Thinking · </span>
+              <span className="italic">{t('commands.thinking')} · </span>
               <span className="italic">{preview}</span>
             </span>
           )}

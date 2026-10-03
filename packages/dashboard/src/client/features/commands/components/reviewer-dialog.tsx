@@ -11,8 +11,8 @@ import {
   PenLine,
 } from "lucide-react";
 import { cn } from "../../../lib/utils";
+import { useT } from "../../../lib/i18n";
 import {
-  TIER_CONFIG,
   filterReviewers,
   groupByTier,
 } from "../../../lib/reviewer-utils";
@@ -23,9 +23,6 @@ import { ModelSelect, type ModelSelectOption } from "../../../components/ui/mode
 import { ModelSourceHint } from "../../../components/ui/model-source-hint";
 import type { ReviewerMeta, ReviewerTier } from "../hooks/use-reviewers";
 import type { ReviewerSelection } from "./reviewer-defaults";
-
-const DEFAULT_LABEL = "(default model)";
-const DEFAULT_DETAIL = "Use the host CLI's default";
 
 // ── Props ──
 
@@ -50,6 +47,7 @@ export function ReviewerDialog({
   onApply,
   onClose,
 }: ReviewerDialogProps) {
+  const { t } = useT();
   const [search, setSearch] = useState("");
   const [selection, setSelection] = useState<Map<string, number>>(new Map());
   const [collapsedTiers, setCollapsedTiers] = useState<Set<ReviewerTier>>(
@@ -77,7 +75,7 @@ export function ReviewerDialog({
   );
   const modelOptions: ModelSelectOption[] = useMemo(() => {
     const opts: ModelSelectOption[] = [
-      { id: "", label: DEFAULT_LABEL, detail: DEFAULT_DETAIL },
+      { id: "", label: t("commands.default_model_label"), detail: t("commands.default_model_detail") },
     ];
     if (modelList?.models) {
       for (const m of modelList.models) {
@@ -90,7 +88,7 @@ export function ReviewerDialog({
       }
     }
     return opts;
-  }, [modelList]);
+  }, [modelList, t]);
   const modelListEmpty = !modelsLoading && (modelList?.models?.length ?? 0) === 0;
 
   // Sync selection from props when dialog opens
@@ -294,7 +292,7 @@ export function ReviewerDialog({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-3.5 dark:border-zinc-700">
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-            Select Reviewers
+            {t("commands.select_reviewers")}
           </h2>
           <button
             type="button"
@@ -314,7 +312,7 @@ export function ReviewerDialog({
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search reviewers..."
+              placeholder={t("commands.search_reviewers")}
               className={cn(
                 "w-full rounded-md border py-1.5 pl-8 pr-3 text-sm",
                 "border-zinc-200 bg-zinc-50 placeholder:text-zinc-400",
@@ -329,13 +327,12 @@ export function ReviewerDialog({
         <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-5 py-3">
           {grouped.length === 0 && ephemeralEntries.length === 0 && (
             <p className="py-8 text-center text-sm text-zinc-400 dark:text-zinc-500">
-              No reviewers match your search.
+              {t("commands.no_reviewers_match")}
             </p>
           )}
 
           {grouped.map(([tier, items]) => {
             const isCollapsed = collapsedTiers.has(tier);
-            const config = TIER_CONFIG[tier];
 
             return (
               <div key={tier} className="mb-4 last:mb-0">
@@ -350,7 +347,7 @@ export function ReviewerDialog({
                   ) : (
                     <ChevronDown className="h-3 w-3" />
                   )}
-                  {config.label}
+                  {t(`commands.tier_${tier}`)}
                   <span className="font-normal text-zinc-300 dark:text-zinc-600">
                     ({items.length})
                   </span>
@@ -410,7 +407,7 @@ export function ReviewerDialog({
                                 </span>
                                 {r.tier === "persona" && (
                                   <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-900/50 dark:text-violet-300">
-                                    Persona
+                                    {t("commands.persona_badge")}
                                   </span>
                                 )}
                               </div>
@@ -456,8 +453,8 @@ export function ReviewerDialog({
                                   toggleAdvanced(r.id);
                                 }}
                                 aria-expanded={advancedOpen.has(r.id)}
-                                aria-label="Advanced model overrides"
-                                title="Advanced — model overrides for this run"
+                                aria-label={t("commands.advanced_overrides_aria")}
+                                title={t("commands.advanced_overrides_title")}
                                 className={cn(
                                   "shrink-0 rounded p-1 transition-colors",
                                   advancedOpen.has(r.id)
@@ -513,7 +510,7 @@ export function ReviewerDialog({
                               {r.known_for && (
                                 <p className="mb-1.5">
                                   <span className="font-semibold text-zinc-600 dark:text-zinc-300">
-                                    Known for:{" "}
+                                    {t("commands.known_for")}{" "}
                                   </span>
                                   <span className="text-zinc-500 dark:text-zinc-400">
                                     {r.known_for}
@@ -554,7 +551,7 @@ export function ReviewerDialog({
             {ephemeralEntries.length > 0 && (
               <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-amber-500 dark:text-amber-400">
                 <PenLine className="h-3 w-3" />
-                One-off Reviewers
+                {t("commands.one_off_reviewers")}
                 <span className="font-normal text-amber-400 dark:text-amber-600">
                   ({ephemeralEntries.length})
                 </span>
@@ -628,7 +625,7 @@ export function ReviewerDialog({
               >
                 <Plus className="h-4 w-4 shrink-0" />
                 <span className="text-sm">
-                  Describe a one-off reviewer for this review...
+                  {t("commands.describe_one_off")}
                 </span>
               </button>
             ) : (
@@ -641,7 +638,7 @@ export function ReviewerDialog({
                 )}
               >
                 <label className="mb-1.5 block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                  What should this reviewer focus on?
+                  {t("commands.one_off_focus_question")}
                 </label>
                 <textarea
                   ref={ephemeralTextareaRef}
@@ -658,7 +655,7 @@ export function ReviewerDialog({
                       setEphemeralDraft("");
                     }
                   }}
-                  placeholder="e.g. Error handling in the auth flow, accessibility compliance, review as a junior developer"
+                  placeholder={t("commands.one_off_placeholder")}
                   rows={2}
                   className={cn(
                     "w-full resize-none rounded-md border px-3 py-2 text-sm",
@@ -669,8 +666,7 @@ export function ReviewerDialog({
                 />
                 <div className="mt-2 flex items-center justify-between">
                   <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
-                    For this review only &mdash; won&apos;t be saved to your
-                    library.
+                    {t("commands.one_off_note")}
                   </p>
                   <div className="flex gap-1.5">
                     <button
@@ -681,7 +677,7 @@ export function ReviewerDialog({
                       }}
                       className="rounded-md px-3 py-1 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                     >
-                      Cancel
+                      {t("common.cancel")}
                     </button>
                     <button
                       type="button"
@@ -690,7 +686,7 @@ export function ReviewerDialog({
                       className="flex items-center gap-1 rounded-md bg-amber-500 px-3 py-1 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-50"
                     >
                       <Plus className="h-3 w-3" />
-                      Add to Team
+                      {t("commands.add_to_team")}
                     </button>
                   </div>
                 </div>
@@ -703,7 +699,7 @@ export function ReviewerDialog({
         <div className="flex items-center justify-between gap-3 border-t border-zinc-200 px-5 py-3 dark:border-zinc-700">
           <div className="min-w-0">
             <span className="text-xs text-zinc-400 dark:text-zinc-500">
-              {selectedCount} reviewer{selectedCount !== 1 ? "s" : ""} selected
+              {t(selectedCount === 1 ? "commands.reviewers_selected_one" : "commands.reviewers_selected_other", { count: selectedCount })}
             </span>
             <ModelSourceHint modelList={modelList} />
           </div>
@@ -713,14 +709,14 @@ export function ReviewerDialog({
               onClick={onClose}
               className="rounded-md border border-zinc-300 px-4 py-1.5 text-xs font-medium transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               type="button"
               onClick={handleApply}
               className="rounded-md bg-indigo-600 px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-indigo-700"
             >
-              Apply
+              {t("commands.apply")}
             </button>
           </div>
         </div>
@@ -756,6 +752,7 @@ function AdvancedModelSection({
   onUniformChange,
   onInstanceChange,
 }: AdvancedModelSectionProps) {
+  const { t } = useT();
   const uniqueModels = new Set(models);
   const isUniform = uniqueModels.size <= 1;
   const [mode, setMode] = useState<"uniform" | "per-instance">(
@@ -775,7 +772,7 @@ function AdvancedModelSection({
     >
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-          Model override (this run)
+          {t("commands.model_override_title")}
         </span>
         {count > 1 && (
           <div className="inline-flex items-center gap-0.5 rounded-md border border-zinc-200 p-0.5 dark:border-zinc-700">
@@ -793,7 +790,7 @@ function AdvancedModelSection({
                   : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200",
               )}
             >
-              Same model
+              {t("commands.same_model")}
             </button>
             <button
               type="button"
@@ -806,7 +803,7 @@ function AdvancedModelSection({
                   : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200",
               )}
             >
-              Per reviewer
+              {t("commands.per_reviewer")}
             </button>
           </div>
         )}
@@ -818,7 +815,7 @@ function AdvancedModelSection({
           options={modelOptions}
           freeText={freeText}
           allowCustom
-          ariaLabel={`Model for ${personaName}`}
+          ariaLabel={t("commands.model_for", { name: personaName })}
           onChange={(v) => onUniformChange(v || null)}
         />
       ) : (
@@ -833,7 +830,7 @@ function AdvancedModelSection({
                 options={modelOptions}
                 freeText={freeText}
                 allowCustom
-                ariaLabel={`Model for ${personaName}-${i + 1}`}
+                ariaLabel={t("commands.model_for", { name: `${personaName}-${i + 1}` })}
                 onChange={(v) => onInstanceChange(i, v || null)}
               />
             </div>
@@ -843,7 +840,7 @@ function AdvancedModelSection({
 
       {freeText && (
         <p className="text-[10px] text-zinc-500 dark:text-zinc-500">
-          Your AI CLI didn't return a model list. Type any model id it accepts.
+          {t("commands.no_model_list")}
         </p>
       )}
     </div>

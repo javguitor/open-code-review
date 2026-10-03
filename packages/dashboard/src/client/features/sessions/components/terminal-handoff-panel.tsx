@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, Copy, Terminal, X, AlertCircle, AlertTriangle } from 'lucide-react'
 import { cn } from '../../../lib/utils'
+import { useT } from '../../../lib/i18n'
 import { useHandoff } from '../hooks/use-agent-sessions'
 import type {
   CaptureDiagnostics,
@@ -25,6 +26,7 @@ function vendorLabelFor(vendor: string | null | undefined): string {
 }
 
 export function TerminalHandoffPanel({ workflowId, onClose }: TerminalHandoffPanelProps) {
+  const { t } = useT()
   const { data, isLoading, error } = useHandoff(workflowId ?? undefined)
   const dialogRef = useRef<HTMLDivElement>(null)
 
@@ -93,28 +95,28 @@ export function TerminalHandoffPanel({ workflowId, onClose }: TerminalHandoffPan
               id="handoff-title"
               className="text-sm font-semibold text-zinc-900 dark:text-zinc-100"
             >
-              Pick up this review in your terminal
+              {t('sessions.handoff_title')}
             </h2>
             <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
               {outcome ? (
                 <>
-                  AI CLI: <span className="font-medium">{vendorLabelFor(headerVendor)}</span>
+                  {t('sessions.handoff_ai_cli')} <span className="font-medium">{vendorLabelFor(headerVendor)}</span>
                   {headerProjectDir && (
                     <>
                       <span className="mx-1">·</span>
-                      Project: <span className="font-mono">{headerProjectDir}</span>
+                      {t('sessions.handoff_project')} <span className="font-mono">{headerProjectDir}</span>
                     </>
                   )}
                 </>
               ) : (
-                'Loading…'
+                t('sessions.handoff_loading')
               )}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t('common.close')}
             className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
           >
             <X className="h-4 w-4" />
@@ -124,13 +126,13 @@ export function TerminalHandoffPanel({ workflowId, onClose }: TerminalHandoffPan
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {isLoading && (
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">Loading handoff details…</p>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">{t('sessions.handoff_loading_details')}</p>
           )}
 
           {error && (
             <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>Couldn't load handoff details. {error.message}</span>
+              <span>{t('sessions.handoff_error', { message: error.message })}</span>
             </div>
           )}
 
@@ -159,33 +161,35 @@ function ResumableBody({
   outcome: ResumableOutcome
   projectDir: string
 }) {
+  const { t } = useT()
   const vendorLabel = vendorLabelFor(outcome.vendor)
   const stepOne = `cd ${projectDir}`
   const stepTwo = outcome.vendorCommand
-  const stepTwoLabel = `Resume directly in ${vendorLabel}`
+  const stepTwoLabel = t('sessions.handoff_step_resume', { vendor: vendorLabel })
 
   return (
     <div className="space-y-4">
       <CommandStep
         index={1}
-        label="Open the project directory"
+        label={t('sessions.handoff_step_open_dir')}
         command={stepOne}
-        copyAriaLabel="Copy cd command"
+        copyAriaLabel={t('sessions.handoff_copy_cd')}
       />
       <CommandStep
         index={2}
         label={stepTwoLabel}
         command={stepTwo}
-        copyAriaLabel="Copy resume command"
+        copyAriaLabel={t('sessions.handoff_copy_resume')}
       />
 
       <div className="border-t border-zinc-200 pt-3 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
         <p>
-          Requires <span className="font-medium">{vendorLabel}</span> on your{' '}
+          {t('sessions.handoff_requires_before')} <span className="font-medium">{vendorLabel}</span>{' '}
+          {t('sessions.handoff_requires_after')}{' '}
           <span className="font-mono">$PATH</span>
           {!outcome.hostBinaryAvailable && (
             <>
-              {' '}— we couldn't see it from the dashboard. Install it to resume in your terminal.
+              {' '}{t('sessions.handoff_binary_missing')}
             </>
           )}
           .
@@ -204,6 +208,7 @@ function ResumableBody({
 type UnresumableOutcome = Extract<ResumeOutcome, { kind: 'unresumable' }>
 
 function UnresumableBody({ outcome }: { outcome: UnresumableOutcome }) {
+  const { t } = useT()
   const { microcopy } = outcome.diagnostics
   return (
     <div className="space-y-4">
@@ -213,11 +218,11 @@ function UnresumableBody({ outcome }: { outcome: UnresumableOutcome }) {
           <div className="space-y-1">
             <p className="font-medium">{microcopy.headline}</p>
             <p className="text-xs opacity-90">
-              <span className="font-medium">Why: </span>
+              <span className="font-medium">{t('sessions.handoff_why')} </span>
               {microcopy.cause}
             </p>
             <p className="text-xs opacity-90">
-              <span className="font-medium">Try: </span>
+              <span className="font-medium">{t('sessions.handoff_try')} </span>
               {microcopy.remediation}
             </p>
           </div>
@@ -236,6 +241,7 @@ function DiagnosticsBlock({
   diagnostics: CaptureDiagnostics
   reason: UnresumableOutcome['reason']
 }) {
+  const { t } = useT()
   const [copied, setCopied] = useState(false)
   const text = [
     `reason:                  ${reason}`,
@@ -261,7 +267,7 @@ function DiagnosticsBlock({
     <div className="rounded-md border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/50">
       <div className="mb-2 flex items-center justify-between">
         <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
-          Diagnostic data
+          {t('sessions.handoff_diagnostic_data')}
         </p>
         <button
           type="button"
@@ -271,12 +277,12 @@ function DiagnosticsBlock({
           {copied ? (
             <>
               <Check className="h-3 w-3" />
-              Copied
+              {t('sessions.handoff_copied')}
             </>
           ) : (
             <>
               <Copy className="h-3 w-3" />
-              Copy for issue report
+              {t('sessions.handoff_copy_for_report')}
             </>
           )}
         </button>
@@ -320,6 +326,7 @@ type CopyButtonProps = {
 }
 
 function CopyButton({ text, ariaLabel }: CopyButtonProps) {
+  const { t } = useT()
   const [copied, setCopied] = useState(false)
   return (
     <button
@@ -347,12 +354,12 @@ function CopyButton({ text, ariaLabel }: CopyButtonProps) {
       {copied ? (
         <>
           <Check className="h-3.5 w-3.5" />
-          <span aria-live="polite">Copied</span>
+          <span aria-live="polite">{t('sessions.handoff_copied')}</span>
         </>
       ) : (
         <>
           <Copy className="h-3.5 w-3.5" />
-          <span>Copy</span>
+          <span>{t('sessions.handoff_copy')}</span>
         </>
       )}
     </button>
@@ -364,6 +371,7 @@ type CopyBothButtonProps = {
 }
 
 function CopyBothButton({ commands }: CopyBothButtonProps) {
+  const { t } = useT()
   const [copied, setCopied] = useState(false)
   return (
     <button
@@ -387,12 +395,12 @@ function CopyBothButton({ commands }: CopyBothButtonProps) {
       {copied ? (
         <>
           <Check className="h-3.5 w-3.5" />
-          <span aria-live="polite">Copied both</span>
+          <span aria-live="polite">{t('sessions.handoff_copied_both')}</span>
         </>
       ) : (
         <>
           <Copy className="h-3.5 w-3.5" />
-          <span>Copy both</span>
+          <span>{t('sessions.handoff_copy_both')}</span>
         </>
       )}
     </button>

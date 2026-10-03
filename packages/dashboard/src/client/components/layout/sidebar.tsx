@@ -6,13 +6,14 @@ import { OcrLogoIcon } from '../ocr-logo'
 import { useSocket } from '../../providers/socket-provider'
 import { useCommandState } from '../../providers/command-state-provider'
 import { useIdeConfig } from '../../hooks/use-ide-config'
+import { useT } from '../../lib/i18n'
 
 const NAV_ITEMS = [
-  { to: '/', label: 'Home', icon: Home },
-  { to: '/commands', label: 'Commands', icon: Terminal },
-  { to: '/reviewers', label: 'Team', icon: Users },
-  { to: '/sessions', label: 'Sessions', icon: GitBranch },
-  { to: '/reviews', label: 'Reviews', icon: FileSearch },
+  { to: '/', labelKey: 'nav.home', icon: Home },
+  { to: '/commands', labelKey: 'nav.commands', icon: Terminal },
+  { to: '/reviewers', labelKey: 'nav.team', icon: Users },
+  { to: '/sessions', labelKey: 'nav.sessions', icon: GitBranch },
+  { to: '/reviews', labelKey: 'nav.reviews', icon: FileSearch },
 ] as const
 
 const STATUS_COLORS: Record<string, string> = {
@@ -24,6 +25,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export function Sidebar() {
   const location = useLocation()
+  const { t } = useT()
   const { status } = useSocket()
   const { runningCount } = useCommandState()
   const { data: config } = useIdeConfig()
@@ -79,7 +81,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-1 p-2">
-        {NAV_ITEMS.map(({ to, label, icon: Icon }) => {
+        {NAV_ITEMS.map(({ to, labelKey, icon: Icon }) => {
           const active =
             to === '/' ? location.pathname === '/' : location.pathname.startsWith(to)
           return (
@@ -94,7 +96,7 @@ export function Sidebar() {
               )}
             >
               <Icon className="h-4 w-4" />
-              {label}
+              {t(labelKey)}
               {to === '/commands' && runningCount > 0 && (
                 <span className="ml-auto inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-indigo-500 px-1.5 text-[10px] font-semibold text-white">
                   {runningCount}
@@ -108,14 +110,14 @@ export function Sidebar() {
       <div className="border-t border-zinc-200 p-3 dark:border-zinc-800">
         <div
           role="status"
-          aria-label={`Connection status: ${status}`}
+          aria-label={t('layout.connection_label', { status: t(`layout.connection_${status}`) })}
           className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400"
         >
           <div
             className={cn('h-2 w-2 rounded-full', STATUS_COLORS[status])}
             aria-hidden="true"
           />
-          <span className="capitalize">{status}</span>
+          <span>{t(`layout.connection_${status}`)}</span>
         </div>
       </div>
     </aside>

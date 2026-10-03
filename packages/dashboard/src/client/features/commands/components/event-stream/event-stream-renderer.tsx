@@ -30,6 +30,7 @@
 import { Fragment, useMemo } from 'react'
 import { ArrowDown, Sparkles, FileSearch } from 'lucide-react'
 import { cn } from '../../../../lib/utils'
+import { useT } from '../../../../lib/i18n'
 import type { StreamEvent } from '../../../../lib/api-types'
 import { AgentRail } from './agent-rail'
 import { MessageEntry } from './message-entry'
@@ -261,6 +262,7 @@ export function EventStreamRenderer({
   isRunning,
   className,
 }: EventStreamRendererProps) {
+  const { t } = useT()
   const blocks = useMemo(() => reduceEventsToBlocks(events), [events])
   const { scrollRef, isAtBottom, jumpToBottom } = useStickToBottom([
     blocks.length,
@@ -320,7 +322,7 @@ export function EventStreamRenderer({
           )}
         >
           <ArrowDown aria-hidden className="h-3 w-3" />
-          Jump to live
+          {t('commands.jump_to_live')}
         </button>
       )}
     </div>
@@ -344,6 +346,7 @@ export function EventStreamRenderer({
  * empty-state vocabulary instead of the previous bare-paragraph dump.
  */
 function EmptyState({ isRunning }: { isRunning: boolean }) {
+  const { t } = useT()
   if (isRunning) {
     return (
       <div className="flex max-w-sm flex-col items-center gap-3 text-center">
@@ -358,12 +361,10 @@ function EmptyState({ isRunning }: { isRunning: boolean }) {
         </span>
         <div className="space-y-1">
           <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-            Spinning up the orchestrator
+            {t('commands.spinning_up')}
           </p>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Tool calls and reviewer output will appear here as the
-            workflow progresses. The first response usually arrives
-            within a few seconds.
+            {t('commands.spinning_up_hint')}
           </p>
         </div>
       </div>
@@ -377,11 +378,10 @@ function EmptyState({ isRunning }: { isRunning: boolean }) {
       </span>
       <div className="space-y-1">
         <p className="text-sm font-medium text-zinc-600 dark:text-zinc-300">
-          No structured events captured
+          {t('commands.no_events_title')}
         </p>
         <p className="text-xs text-zinc-500 dark:text-zinc-500">
-          This run completed without emitting timeline events. The
-          legacy raw output may still contain its result.
+          {t('commands.no_events_hint')}
         </p>
       </div>
     </div>

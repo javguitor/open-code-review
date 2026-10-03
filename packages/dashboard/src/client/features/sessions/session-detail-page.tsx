@@ -11,10 +11,12 @@ import { LivenessHeader } from './components/liveness-header'
 import { ResumeCard } from './components/resume-card'
 import { fetchApi, parseUtcDate } from '../../lib/utils'
 import { formatDate } from '../../lib/date-utils'
+import { useT } from '../../lib/i18n'
+import { phaseLabel } from './lib/phase-label'
 import type { OrchestrationEvent } from '../../lib/api-types'
 
 // Phase names must match the CLI's `ocr state advance --phase` values exactly.
-// Display labels are derived by replacing hyphens with spaces and capitalizing.
+// Display labels come from the `sessions.phase_*` dictionary keys.
 const REVIEW_PHASES = [
   'context',
   'change-context',
@@ -35,15 +37,8 @@ const MAP_PHASES = [
   'complete',
 ]
 
-/** Human-readable label from a CLI phase name. */
-function phaseLabel(name: string): string {
-  return name
-    .split('-')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ')
-}
-
 function buildPhases(
+  t: Parameters<typeof phaseLabel>[1],
   workflowType: string,
   _currentPhase: string,
   phaseNumber: number,
@@ -55,20 +50,20 @@ function buildPhases(
   // Workflow reached its final phase — all complete, regardless of session status.
   // (The session may still be active because another workflow is in progress.)
   if (phaseNumber >= totalPhases) {
-    return phaseNames.map((name) => ({ name: phaseLabel(name), status: 'complete' as const }))
+    return phaseNames.map((name) => ({ name: phaseLabel(name, t), status: 'complete' as const }))
   }
 
   // Session closed before this workflow finished — show progress + skipped
   if (status === 'closed') {
     return phaseNames.map((name, i) => ({
-      name: phaseLabel(name),
+      name: phaseLabel(name, t),
       status: i + 1 <= phaseNumber ? 'complete' as const : 'skipped' as const,
     }))
   }
 
   // Active session, workflow in progress
   return phaseNames.map((name, i) => ({
-    name: phaseLabel(name),
+    name: phaseLabel(name, t),
     status: i + 1 < phaseNumber
       ? 'complete' as const
       : i + 1 === phaseNumber
@@ -78,6 +73,7 @@ function buildPhases(
 }
 
 export function SessionDetailPage() {
+  const { t } = useT()
   const { id } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
   const { data: session, isLoading } = useSession(id ?? '')
@@ -112,7 +108,7 @@ export function SessionDetailPage() {
   })
 
   if (isLoading) {
-    return <p className="text-sm text-zinc-500 dark:text-zinc-400">Loading session...</p>
+    return <p className="text-sm text-zinc-500 dark:text-zinc-400">{t('sessions.loading_session')}</p>
   }
 
   if (!session) {
@@ -123,17 +119,17 @@ export function SessionDetailPage() {
           className="mb-4 inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to sessions
+          {t('sessions.back_to_sessions')}
         </Link>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Session not found.</p>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">{t('sessions.not_found')}</p>
       </div>
     )
   }
 
   const hasBoth = session.has_review && session.has_map
   const workflowLabel = hasBoth
-    ? 'Review + Map'
-    : session.has_map ? 'Map' : 'Review'
+    ? t('sessions.workflow_review_map')
+    : session.has_map ? t('sessions.workflow_map') : t('sessions.workflow_review')
 
   return (
     <div className="space-y-6">
@@ -142,7 +138,7 @@ export function SessionDetailPage() {
         className="inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-300"
       >
         <ArrowLeft className="h-4 w-4" />
-        Back to sessions
+        {t('sessions.back_to_sessions')}
       </Link>
 
       {/* Liveness header (Spec 2) — self-hides when there are no agent_sessions or status is idle */}
@@ -185,27 +181,28 @@ export function SessionDetailPage() {
 
         <div className="mt-6">
           <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            Progress
+            {t('sessions.progress')}
           </h3>
           {hasBoth ? (
             <div className="space-y-3">
               <div>
                 <div className="mb-1 flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
                   <FileSearch className="h-3.5 w-3.5" />
-                  <span>Review</span>
+                  <span>{t('sessions.workflow_review')}</span>
                 </div>
-                <PhaseTimeline phases={buildPhases('review', session.review_phase, session.review_phase_number, session.status)} />
+                <PhaseTimeline phases={buildPhases(t, 'review', session.review_phase, session.review_phase_number, session.status)} />
               </div>
               <div>
                 <div className="mb-1 flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
                   <Map className="h-3.5 w-3.5" />
-                  <span>Map</span>
+                  <span>{t('sessions.workflow_map')}</span>
                 </div>
-                <PhaseTimeline phases={buildPhases('map', session.map_phase, session.map_phase_number, session.status)} />
+                <PhaseTimeline phases={buildPhases(t, 'map', session.map_phase, session.map_phase_number, session.status)} />
               </div>
             </div>
           ) : (
             <PhaseTimeline phases={buildPhases(
+              t,
               session.has_map ? 'map' : 'review',
               session.has_map ? session.map_phase : session.review_phase,
               session.has_map ? session.map_phase_number : session.review_phase_number,
@@ -223,12 +220,12 @@ export function SessionDetailPage() {
       {/* Event Log */}
       <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
         <h2 className="mb-4 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          Event Log
+          {t('sessions.event_log')}
         </h2>
         {eventsQuery.isLoading ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">Loading events...</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">{t('sessions.loading_events')}</p>
         ) : (eventsQuery.data ?? []).length === 0 ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">No events recorded.</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">{t('sessions.no_events')}</p>
         ) : (
           <div className="space-y-2">
             {(eventsQuery.data ?? []).map((event) => (
@@ -245,12 +242,12 @@ export function SessionDetailPage() {
                   </span>
                   {event.phase && (
                     <span className="ml-2 text-zinc-500 dark:text-zinc-400">
-                      Phase: {event.phase}
+                      {t('sessions.event_phase', { phase: event.phase })}
                     </span>
                   )}
                   {event.round != null && (
                     <span className="ml-2 text-zinc-500 dark:text-zinc-400">
-                      Round: {event.round}
+                      {t('sessions.event_round', { round: event.round })}
                     </span>
                   )}
                 </div>

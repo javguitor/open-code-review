@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Check, ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '../../../lib/utils'
+import { useT } from '../../../lib/i18n'
 import type { ChatToolStatus } from '../../../lib/api-types'
 
 type AgentActivityProps = {
@@ -11,6 +12,7 @@ type AgentActivityProps = {
 const COLLAPSED_LIMIT = 3
 
 export function AgentActivity({ currentStatus, history }: AgentActivityProps) {
+  const { t } = useT()
   const [expanded, setExpanded] = useState(false)
 
   // Completed = all history items except the current one
@@ -40,7 +42,7 @@ export function AgentActivity({ currentStatus, history }: AgentActivityProps) {
               ) : (
                 <ChevronRight className="h-3 w-3" />
               )}
-              {expanded ? 'Collapse' : `${hiddenCount} more step${hiddenCount !== 1 ? 's' : ''}`}
+              {expanded ? t('chat.collapse') : t(hiddenCount === 1 ? 'chat.more_steps_one' : 'chat.more_steps_other', { count: hiddenCount })}
             </button>
           )}
 

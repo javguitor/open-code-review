@@ -3,6 +3,8 @@ import { GitBranch, FileSearch, Map, Clock } from 'lucide-react'
 import { StatusBadge } from '../../../components/ui/status-badge'
 import { formatShortDate, formatElapsed } from '../../../lib/date-utils'
 import { cn } from '../../../lib/utils'
+import { useT } from '../../../lib/i18n'
+import { phaseLabel } from '../lib/phase-label'
 import type { SessionSummary } from '../../../lib/api-types'
 
 type SessionCardProps = {
@@ -47,32 +49,29 @@ function verdictStyle(verdict: string): string {
 }
 
 /** Statuses that indicate the user has addressed the review. */
-const RESOLVED_STATUSES = new Set(['changes_made', 'acknowledged', 'dismissed'])
+const RESOLVED_STATUSES = ['changes_made', 'acknowledged', 'dismissed'] as const
+type ResolvedStatus = (typeof RESOLVED_STATUSES)[number]
 
-const TRIAGE_LABELS: Record<string, string> = {
-  changes_made: 'Changes Made',
-  acknowledged: 'Acknowledged',
-  dismissed: 'Dismissed',
+function isResolvedStatus(value: string | null): value is ResolvedStatus {
+  return RESOLVED_STATUSES.some((status) => status === value)
 }
 
 export function SessionCard({ session }: SessionCardProps) {
+  const { t } = useT()
   const hasBoth = session.has_review && session.has_map
   const workflowLabel = hasBoth
-    ? 'Review + Map'
-    : session.has_map ? 'Map' : 'Review'
+    ? t('sessions.workflow_review_map')
+    : session.has_map ? t('sessions.workflow_map') : t('sessions.workflow_review')
 
   // Show the primary workflow's phase in the card
   const displayPhase = session.has_review
     ? session.review_phase
     : session.map_phase
-  const phaseLabel = displayPhase
-    .split('-')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ')
+  const displayPhaseLabel = phaseLabel(displayPhase, t)
 
   // Determine if the latest review round has been triaged as resolved
   const roundStatus = session.latest_round_status
-  const isResolved = roundStatus != null && RESOLVED_STATUSES.has(roundStatus)
+  const resolvedStatus = isResolvedStatus(roundStatus) ? roundStatus : null
 
   return (
     <Link
@@ -98,10 +97,10 @@ export function SessionCard({ session }: SessionCardProps) {
         <span className="text-zinc-300 dark:text-zinc-700">|</span>
         {session.latest_verdict ? (
           <span className="flex items-center gap-1.5">
-            {isResolved ? (
+            {resolvedStatus ? (
               // Show the triage status instead of the raw verdict
               <span className="inline-flex items-center rounded bg-zinc-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-zinc-500 dark:text-zinc-400">
-                {TRIAGE_LABELS[roundStatus!] ?? roundStatus}
+                {t(`status.${resolvedStatus}`)}
               </span>
             ) : (
               <>
@@ -110,14 +109,14 @@ export function SessionCard({ session }: SessionCardProps) {
                 </span>
                 {session.latest_blocker_count > 0 && (
                   <span className="inline-flex items-center rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:text-red-400">
-                    {session.latest_blocker_count} blocker{session.latest_blocker_count !== 1 ? 's' : ''}
+                    {t(session.latest_blocker_count === 1 ? 'sessions.blocker_one' : 'sessions.blocker_other', { count: session.latest_blocker_count })}
                   </span>
                 )}
               </>
             )}
           </span>
         ) : (
-          <span>Phase: {phaseLabel}</span>
+          <span>{t('sessions.card_phase', { phase: displayPhaseLabel })}</span>
         )}
       </div>
 

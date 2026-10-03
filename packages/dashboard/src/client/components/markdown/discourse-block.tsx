@@ -1,5 +1,7 @@
 import { Handshake, Swords, Link2, Lightbulb, MessageCircle } from 'lucide-react'
 import { cn } from '../../lib/utils'
+import { useT } from '../../lib/i18n'
+import type { MessageKey } from '../../lib/i18n'
 import { MarkdownRenderer } from './markdown-renderer'
 
 type DiscourseType = 'AGREE' | 'CHALLENGE' | 'CONNECT' | 'SURFACE'
@@ -9,6 +11,8 @@ type DiscourseConfig = {
   borderColor: string
   bgColor: string
   label: string
+  /** Dictionary key for the UI label; `label` stays the English fallback / raw type. */
+  labelKey?: MessageKey
 }
 
 type DiscourseBlockProps = {
@@ -27,24 +31,28 @@ const DISCOURSE_CONFIG: Record<DiscourseType, DiscourseConfig> = {
     borderColor: 'border-l-emerald-500',
     bgColor: 'bg-emerald-500/5',
     label: 'Agree',
+    labelKey: 'reviews.discourse_agree',
   },
   CHALLENGE: {
     icon: Swords,
     borderColor: 'border-l-red-500',
     bgColor: 'bg-red-500/5',
     label: 'Challenge',
+    labelKey: 'reviews.discourse_challenge',
   },
   CONNECT: {
     icon: Link2,
     borderColor: 'border-l-blue-500',
     bgColor: 'bg-blue-500/5',
     label: 'Connect',
+    labelKey: 'reviews.discourse_connect',
   },
   SURFACE: {
     icon: Lightbulb,
     borderColor: 'border-l-amber-500',
     bgColor: 'bg-amber-500/5',
     label: 'Surface',
+    labelKey: 'reviews.discourse_surface',
   },
 }
 
@@ -58,16 +66,21 @@ const UNKNOWN_DISCOURSE_CONFIG: DiscourseConfig = {
   borderColor: 'border-l-zinc-400',
   bgColor: 'bg-zinc-500/5',
   label: 'Discourse',
+  labelKey: 'reviews.discourse_unknown',
 }
 
 export function resolveDiscourseConfig(type: string): DiscourseConfig {
   const known = DISCOURSE_CONFIG[type as DiscourseType]
   if (known) return known
   const label = type.trim()
-  return { ...UNKNOWN_DISCOURSE_CONFIG, label: label || UNKNOWN_DISCOURSE_CONFIG.label }
+  // A raw (model-written) type is shown verbatim; only the blank fallback is localized.
+  return label
+    ? { ...UNKNOWN_DISCOURSE_CONFIG, label, labelKey: undefined }
+    : UNKNOWN_DISCOURSE_CONFIG
 }
 
 export function DiscourseBlock({ type, content, reviewer, className }: DiscourseBlockProps) {
+  const { t } = useT()
   const config = resolveDiscourseConfig(type)
   const Icon = config.icon
 
@@ -83,7 +96,7 @@ export function DiscourseBlock({ type, content, reviewer, className }: Discourse
       <div className="mb-2 flex items-center gap-2">
         <Icon className="h-4 w-4 text-zinc-600 dark:text-zinc-400" />
         <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          {config.label}
+          {config.labelKey ? t(config.labelKey) : config.label}
         </span>
         {reviewer && (
           <span className="text-xs text-zinc-500 dark:text-zinc-400">

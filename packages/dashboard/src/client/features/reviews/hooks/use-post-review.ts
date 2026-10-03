@@ -3,6 +3,7 @@ import { useSocket, useSocketEvent } from '../../../providers/socket-provider'
 import type { GitHubReviewState } from '@open-code-review/platform/verdict'
 import type { PostReviewStep, PostCheckResult, PostSubmitResult, ChatToolStatus } from '../../../lib/api-types'
 import { applyCheckResult, initialReviewState } from '../../../lib/review-state'
+import { useT } from '../../../lib/i18n'
 
 export type ActivityLogEntry = {
   tool: string
@@ -35,6 +36,7 @@ type UsePostReviewReturn = {
 
 export function usePostReview(verdict: string | null): UsePostReviewReturn {
   const { socket } = useSocket()
+  const { t } = useT()
 
   const [step, setStep] = useState<PostReviewStep>('idle')
   const [checkResult, setCheckResult] = useState<PostCheckResult | null>(null)
@@ -100,10 +102,10 @@ export function usePostReview(verdict: string | null): UsePostReviewReturn {
         )
       } else {
         setReviewState(initialReviewState(verdictRef.current, data.ownership))
-        setError(data.error ?? 'GitHub check failed')
+        setError(data.error ?? t('reviews.gh_check_failed'))
         setStep('error')
       }
-    }, []),
+    }, [t]),
   )
 
   // ── Streaming tokens ──
@@ -178,9 +180,9 @@ export function usePostReview(verdict: string | null): UsePostReviewReturn {
     'post:save-result',
     useCallback((data) => {
       if (!data.success) {
-        setError(data.error ?? 'Failed to save draft')
+        setError(data.error ?? t('reviews.save_draft_failed'))
       }
-    }, []),
+    }, [t]),
   )
 
   // ── Submit result ──

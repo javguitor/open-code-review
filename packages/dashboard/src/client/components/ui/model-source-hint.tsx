@@ -1,6 +1,7 @@
 import { Info } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import type { ModelListResponse } from '../../lib/api-types'
+import { useT } from '../../lib/i18n'
 
 /**
  * Discloses when model pickers are showing the bundled fallback list rather
@@ -16,6 +17,7 @@ export function ModelSourceHint({
   modelList?: ModelListResponse
   className?: string
 }) {
+  const { t } = useT()
   if (!modelList || modelList.source !== 'bundled') return null
   const reason = modelList.nativeUnavailableReason
   return (
@@ -27,8 +29,9 @@ export function ModelSourceHint({
     >
       <Info className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
       <span>
-        Model list is a bundled fallback{reason ? <> — {reason}</> : null}. Use
-        “Custom…” to enter any model id your CLI accepts.
+        {reason
+          ? t('layout.model_source_hint_reason', { reason })
+          : t('layout.model_source_hint')}
       </span>
     </p>
   )

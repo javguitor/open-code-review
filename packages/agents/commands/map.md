@@ -145,6 +145,8 @@ If not configured, defaults are used.
 
 ## Output
 
+Map prose follows `language` from `.ocr/config.yaml` (default `en`); headings and table columns stay English.
+
 The final `map.md` contains:
 - **Executive Summary**: Narrative hypothesis about changeset intent
 - **Sections**: Logical groupings with checkboxes for each file
