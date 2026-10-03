@@ -1,6 +1,6 @@
 ## 1. Schema and CLI (foundations)
 
-- [ ] 1.1 Migration 16: `review_findings` + `flagged_by TEXT`, `evidence TEXT`, `verification_status TEXT CHECK(IN ('pending','reproduced','supported','dismissed'))`, `verification_note TEXT`, `verified_at TEXT`; rebuild `user_finding_progress` with the widened status CHECK + `reason TEXT`, `decided_at TEXT`; new `finding_revisions(id, finding_id FK CASCADE, field, old_value, new_value, reason, source CHECK(IN ('user','chat','verifier')), conversation_id, created_at)`; indexes. Tests: migrate a v15 fixture with progress rows; CHECKs enforced.
+- [ ] 1.1 Migration 17: `review_findings` + `flagged_by TEXT`, `evidence TEXT`, `verification_status TEXT CHECK(IN ('pending','reproduced','supported','dismissed'))`, `verification_note TEXT`, `verified_at TEXT`; rebuild `user_finding_progress` with the widened status CHECK + `reason TEXT`, `decided_at TEXT`; new `finding_revisions(id, finding_id FK CASCADE, field, old_value, new_value, reason, source CHECK(IN ('user','chat','verifier')), conversation_id, created_at)`; indexes. Tests: migrate a v15 fixture with progress rows; CHECKs enforced.
 - [ ] 1.2 `round-meta.ts`: optional `flagged_by: string[]` and `evidence: string` per finding (validated, sanitized); types.
 - [ ] 1.3 `packages/cli/src/commands/finding.ts`: `ocr finding verify --id --status --note [--file]`, `ocr finding revise --id --field severity|category --value --reason --source user|chat|verifier [--conversation]`, `ocr finding show --id` (JSON). Each write = finding update + revision row in one transaction. Tests against a real db.
 
@@ -15,7 +15,7 @@
 
 - [ ] 3.1 `routes/findings.ts`: `PATCH /api/findings/:id/decision { status, reason? }` (reason required for dismissed/wont_fix) → progress + revision(source user); `POST /api/findings/:id/revise { field, value, reason, source, conversation_id? }`; `GET /api/findings/:id/revisions`. `routes/reviews.ts` findings include current values, progress, verification, `flagged_by`, `evidence`, `previous_round_decision` hint. Tests.
 - [ ] 3.2 Verify command: `packages/agents/commands/verify.md` + `references/verifier-task.md`; `command-runner.ts` accepts `verify <finding-id>` (tracked execution, phase-less); the task ends with `ocr finding verify …`. `nx run cli:update`.
-- [ ] 3.3 Chat proposals: context builder documents the ```ocr-proposal``` block; `chat-handler.ts` extracts/validates blocks from the final message and stores `proposals_json` on the message (migration 16 column); invalid → ignored (logged). Tests with scripted adapter output.
+- [ ] 3.3 Chat proposals: context builder documents the ```ocr-proposal``` block; `chat-handler.ts` extracts/validates blocks from the final message and stores `proposals_json` on the message (migration 17 column); invalid → ignored (logged). Tests with scripted adapter output.
 - [ ] 3.4 `final-template.md` + `language-policy.md` (+ TS copy, drift test): optional `**Evidence**:` label; Phase 7 JSON example includes `evidence`.
 
 ## 4. Workbench UI

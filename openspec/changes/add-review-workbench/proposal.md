@@ -68,7 +68,7 @@ syntax highlighting (plain monospace diff; a highlighter can come later).
   (ADDED "Diff Artifact"), `slash-commands` (ADDED "Verify Command"), `cli` (ADDED
   "Finding Commands").
 - Affected code:
-  - `packages/shared/persistence`: migration 16 (`review_findings` columns,
+  - `packages/shared/persistence`: migration 17 (`review_findings` columns,
     `user_finding_progress` columns + widened CHECK via table rebuild, `finding_revisions`),
     `round-meta.ts` optional fields, types.
   - `packages/cli`: `commands/finding.ts` (`verify`, `revise`, `show`).
