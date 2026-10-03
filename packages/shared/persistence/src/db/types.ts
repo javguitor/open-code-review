@@ -23,6 +23,12 @@ export type SessionRow = {
   started_at: string;
   updated_at: string;
   session_dir: string;
+  /** Reviewed refs; NULL for sessions that did not review a PR target. */
+  base_ref: string | null;
+  head_ref: string | null;
+  head_sha: string | null;
+  pr_number: number | null;
+  pr_url: string | null;
 };
 
 export type InsertSessionParams = {
@@ -34,6 +40,11 @@ export type InsertSessionParams = {
   current_round?: number;
   current_map_run?: number;
   session_dir: string;
+  base_ref?: string;
+  head_ref?: string;
+  head_sha?: string;
+  pr_number?: number;
+  pr_url?: string;
 };
 
 export type UpdateSessionParams = Partial<
@@ -46,7 +57,14 @@ export type UpdateSessionParams = Partial<
     | "current_map_run"
     | "updated_at"
   >
->;
+> & {
+  // Reviewed refs: only the ones passed are written (never cleared to NULL).
+  base_ref?: string;
+  head_ref?: string;
+  head_sha?: string;
+  pr_number?: number;
+  pr_url?: string;
+};
 
 // ── Event types ──
 

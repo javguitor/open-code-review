@@ -1078,6 +1078,23 @@ describe("computeRoundCounts", () => {
 // dropping the irrelevant session/DB scaffolding.
 
 describe("validateRoundMeta", () => {
+  it("accepts an optional string head_sha and keeps it", () => {
+    const sha = "a".repeat(40);
+    const meta = validateRoundMeta({ schema_version: 1, verdict: "APPROVE", reviewers: [], head_sha: sha });
+    expect(meta.head_sha).toBe(sha);
+  });
+
+  it("accepts round meta without head_sha", () => {
+    const meta = validateRoundMeta({ schema_version: 1, verdict: "APPROVE", reviewers: [] });
+    expect(meta.head_sha).toBeUndefined();
+  });
+
+  it("rejects a non-string head_sha", () => {
+    expect(() =>
+      validateRoundMeta({ schema_version: 1, verdict: "APPROVE", reviewers: [], head_sha: 123 }),
+    ).toThrow("head_sha must be a string");
+  });
+
   it("throws on invalid schema_version", () => {
     expect(() =>
       validateRoundMeta({ schema_version: 99, verdict: "APPROVE", reviewers: [] }),

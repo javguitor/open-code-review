@@ -117,6 +117,10 @@ export function validateRoundMeta(meta: unknown): RoundMeta {
     }
   }
 
+  if (obj.head_sha !== undefined && typeof obj.head_sha !== "string") {
+    throw new Error("round-meta.json head_sha must be a string");
+  }
+
   // Validate optional synthesis_counts
   if (obj.synthesis_counts !== undefined) {
     if (!obj.synthesis_counts || typeof obj.synthesis_counts !== "object") {

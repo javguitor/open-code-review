@@ -263,6 +263,13 @@ function parseRawJson(raw: string, label: string): unknown {
 export async function stateInit(params: InitParams): Promise<string> {
   const { sessionId, branch, workflowType, sessionDir, ocrDir } = params;
   const db = await ensureDatabase(ocrDir);
+  const refs = {
+    base_ref: params.baseRef,
+    head_ref: params.headRef,
+    head_sha: params.headSha,
+    pr_number: params.prNumber,
+    pr_url: params.prUrl,
+  };
 
   const existing = getSession(db, sessionId);
 
@@ -314,6 +321,7 @@ export async function stateInit(params: InitParams): Promise<string> {
         current_phase: initialPhase,
         phase_number: 1,
         current_round: nextRound,
+        ...refs,
       });
 
       insertEvent(db, {
@@ -344,6 +352,7 @@ export async function stateInit(params: InitParams): Promise<string> {
       current_round: 1,
       current_map_run: 1,
       session_dir: sessionDir,
+      ...refs,
     });
 
     insertEvent(db, {
@@ -628,6 +637,11 @@ export async function stateShow(
       current_map_run: session.current_map_run,
       started_at: session.started_at,
       updated_at: session.updated_at,
+      base_ref: session.base_ref,
+      head_ref: session.head_ref,
+      head_sha: session.head_sha,
+      pr_number: session.pr_number,
+      pr_url: session.pr_url,
     },
     events: events.map((e) => ({
       id: e.id,
@@ -666,6 +680,11 @@ export async function stateList(
     current_map_run: s.current_map_run,
     started_at: s.started_at,
     updated_at: s.updated_at,
+    base_ref: s.base_ref,
+    head_ref: s.head_ref,
+    head_sha: s.head_sha,
+    pr_number: s.pr_number,
+    pr_url: s.pr_url,
   }));
 }
 

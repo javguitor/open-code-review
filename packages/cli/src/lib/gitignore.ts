@@ -13,7 +13,7 @@ const START_MARKER =
   "# OCR:START — managed by open-code-review (do not edit this block)";
 const END_MARKER = "# OCR:END";
 
-const MANAGED_ENTRIES = ["sessions/", "data/", "*.db-shm", "*.db-wal"];
+const MANAGED_ENTRIES = ["sessions/", "data/", "worktrees/", "*.db-shm", "*.db-wal"];
 
 /**
  * Lines from previous OCR-generated defaults that are now superseded

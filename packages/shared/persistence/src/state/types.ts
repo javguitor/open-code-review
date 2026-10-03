@@ -32,6 +32,12 @@ export type InitParams = {
   workflowType: WorkflowType;
   sessionDir: string;
   ocrDir: string;
+  /** Reviewed refs of a PR target; on an existing session only those passed are updated. */
+  baseRef?: string;
+  headRef?: string;
+  headSha?: string;
+  prNumber?: number;
+  prUrl?: string;
 };
 
 export type TransitionParams = {
@@ -108,6 +114,8 @@ export type RoundMeta = {
   reviewers: RoundMetaReviewer[];
   /** Post-synthesis counts matching final.md. Preferred over derived counts. */
   synthesis_counts?: SynthesisCounts;
+  /** Commit the round reviewed (PR targets). */
+  head_sha?: string;
 };
 
 export type RoundCompleteParams =
@@ -288,6 +296,11 @@ export type ShowResult = {
     current_map_run: number;
     started_at: string;
     updated_at: string;
+    base_ref: string | null;
+    head_ref: string | null;
+    head_sha: string | null;
+    pr_number: number | null;
+    pr_url: string | null;
   };
   events: Array<{
     id: number;

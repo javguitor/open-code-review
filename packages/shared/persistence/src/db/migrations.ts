@@ -505,6 +505,28 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    version: 15,
+    description:
+      "Add nullable reviewed-ref columns (base_ref, head_ref, head_sha, pr_number, pr_url) to sessions for PR-targeted reviews",
+    // Nullable with no defaults: sessions created before this migration (or
+    // for non-PR targets) simply carry NULLs, so every existing reader keeps
+    // working. Guarded so re-application is idempotent.
+    run: (db) => {
+      const columns: Array<[string, string]> = [
+        ["base_ref", "TEXT"],
+        ["head_ref", "TEXT"],
+        ["head_sha", "TEXT"],
+        ["pr_number", "INTEGER"],
+        ["pr_url", "TEXT"],
+      ];
+      for (const [name, type] of columns) {
+        if (!columnExists(db, "sessions", name)) {
+          db.run(`ALTER TABLE sessions ADD COLUMN ${name} ${type};`);
+        }
+      }
+    },
+  },
 ];
 
 /** Whether `table` currently has a column named `column` (for idempotent DDL). */
