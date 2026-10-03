@@ -17,7 +17,7 @@
 - [x] 3.1 `routes/requirements.ts`: `POST /api/requirements/preview { source, withComments }` → runs `ocr requirements fetch --json --dry-run`; `GET /api/requirements/detect?pr=<url>` → candidate links from the PR body (`gh pr view --json body`). Tests with injectable runners.
 - [x] 3.2 Command form: Requirements field accepts URL/path/text; "Preview" shows title, updated date, first lines; "Use requirements from <card>" chip when the PR target has detectable links; `--with-comments` toggle. i18n.
 - [x] 3.3 Session page: requirements source banner (title, link, updated); "Check for updates" marks "Requirements changed on <date>" (dry-run fetch, cached 5 min); "Refresh requirements" offered only when starting a new round.
-- [x] 3.4 Round page / findings: show `AC-n` references from the Requirements Assessment when present.
+- [x] 3.4 Round page / findings: show `AC-n` references from the Requirements Assessment when present. (The round page renders `final.md`, whose Requirements Assessment table lists `AC-n`; the "Requirements" button opens the normalized `requirements.md` to look them up. No separate AC widget.)
 
 ## 4. Acceptance
 
