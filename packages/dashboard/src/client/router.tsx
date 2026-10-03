@@ -11,6 +11,7 @@ import { MapRunPage } from './features/map/map-run-page'
 import { RoundPage } from './features/reviews/round-page'
 import { ReviewerDetailPage } from './features/reviews/reviewer-detail-page'
 import { ReviewsPage } from './features/reviews/reviews-page'
+import { WorkbenchPage } from './features/workbench/workbench-page'
 import { SettingsPage } from './features/settings/settings-page'
 
 function NotFoundPage() {
@@ -38,6 +39,7 @@ export const router = createBrowserRouter([
       { path: 'sessions', element: withErrorBoundary(<SessionsPage />), errorElement: <RouteErrorFallback /> },
       { path: 'sessions/:id', element: withErrorBoundary(<SessionDetailPage />), errorElement: <RouteErrorFallback /> },
       { path: 'sessions/:id/reviews/:round', element: withErrorBoundary(<RoundPage />), errorElement: <RouteErrorFallback /> },
+      { path: 'sessions/:id/reviews/:round/workbench', element: withErrorBoundary(<WorkbenchPage />), errorElement: <RouteErrorFallback /> },
       {
         path: 'sessions/:id/reviews/:round/reviewers/:reviewerId',
         element: withErrorBoundary(<ReviewerDetailPage />),

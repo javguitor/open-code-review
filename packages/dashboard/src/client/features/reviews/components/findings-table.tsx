@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Filter } from 'lucide-react'
-import type { Finding, FindingSeverity, FindingTriage } from '../../../lib/api-types'
+import type { FindingSeverity } from '../../../lib/api-types'
+import { DECISION_STATUSES, type DecisionStatus, type RoundFinding } from '../types'
+import { currentStatus } from '../decisions'
+import { DECISION_LABEL_KEY } from '../labels'
 import { useUpdateFindingStatus } from '../hooks/use-reviews'
 import { FindingRow } from './finding-row'
 import { SortableHeader } from '../../../components/ui/sortable-header'
@@ -38,17 +41,13 @@ const SEVERITY_FILTER_OPTIONS: { value: FindingSeverity | 'all'; labelKey: Messa
   { value: 'info', labelKey: 'status.info' },
 ]
 
-const TRIAGE_FILTER_OPTIONS: { value: FindingTriage | 'all'; labelKey: MessageKey }[] = [
+const TRIAGE_FILTER_OPTIONS: { value: DecisionStatus | 'all'; labelKey: MessageKey }[] = [
   { value: 'all', labelKey: 'reviews.all' },
-  { value: 'unread', labelKey: 'status.unread' },
-  { value: 'read', labelKey: 'status.read' },
-  { value: 'acknowledged', labelKey: 'status.acknowledged' },
-  { value: 'fixed', labelKey: 'status.fixed' },
-  { value: 'wont_fix', labelKey: 'status.wont_fix' },
+  ...DECISION_STATUSES.map((value) => ({ value, labelKey: DECISION_LABEL_KEY[value] })),
 ]
 
 type FindingsTableProps = {
-  findings: Finding[]
+  findings: RoundFinding[]
   /** While the findings query is in flight, render a loading affordance instead
    *  of an ambiguous "no findings" empty state. */
   isLoading?: boolean
@@ -59,7 +58,7 @@ export function FindingsTable({ findings, isLoading = false }: FindingsTableProp
   const [sortField, setSortField] = useState<SortField>('severity')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [severityFilter, setSeverityFilter] = useState<FindingSeverity | 'all'>('all')
-  const [triageFilter, setTriageFilter] = useState<FindingTriage | 'all'>('all')
+  const [triageFilter, setTriageFilter] = useState<DecisionStatus | 'all'>('all')
 
   const updateStatus = useUpdateFindingStatus()
 
@@ -78,10 +77,7 @@ export function FindingsTable({ findings, isLoading = false }: FindingsTableProp
       result = result.filter((f) => f.severity === severityFilter)
     }
     if (triageFilter !== 'all') {
-      result = result.filter((f) => {
-        const status = f.progress?.status ?? 'unread'
-        return status === triageFilter
-      })
+      result = result.filter((f) => currentStatus(f) === triageFilter)
     }
     return result
   }, [findings, severityFilter, triageFilter])
@@ -110,8 +106,8 @@ export function FindingsTable({ findings, isLoading = false }: FindingsTableProp
     [findings],
   )
 
-  function handleTriageChange(findingId: number, status: FindingTriage) {
-    updateStatus.mutate({ findingId, status })
+  function handleTriageChange(findingId: number, status: DecisionStatus, reason?: string) {
+    updateStatus.mutate({ findingId, status, reason })
   }
 
   // Loading: the query is still in flight. Distinct from a genuinely empty round.
@@ -158,7 +154,7 @@ export function FindingsTable({ findings, isLoading = false }: FindingsTableProp
           <select
             value={triageFilter}
             onChange={(e) =>
-              setTriageFilter(e.target.value as FindingTriage | 'all')
+              setTriageFilter(e.target.value as DecisionStatus | 'all')
             }
             className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
           >
@@ -179,6 +175,12 @@ export function FindingsTable({ findings, isLoading = false }: FindingsTableProp
           {t(degradedCount === 1 ? 'reviews.degraded_one' : 'reviews.degraded_other', {
             count: degradedCount,
           })}
+        </p>
+      )}
+
+      {updateStatus.isError && (
+        <p role="alert" className="mb-3 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-400">
+          {t('reviews.decision_failed', { error: updateStatus.error.message })}
         </p>
       )}
 

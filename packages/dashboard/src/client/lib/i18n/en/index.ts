@@ -16,6 +16,7 @@ import { home } from './home'
 import { settings } from './settings'
 import { post } from './post'
 import { requirements } from './requirements'
+import { workbench } from './workbench'
 
 const en = {
   ...common,
@@ -33,6 +34,7 @@ const en = {
   ...settings,
   ...post,
   ...requirements,
+  ...workbench,
 }
 
 export type MessageKey = keyof typeof en

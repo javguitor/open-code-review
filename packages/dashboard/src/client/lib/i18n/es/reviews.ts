@@ -146,6 +146,24 @@ const reviews = {
   'reviews.discourse_connect': 'Conexión',
   'reviews.discourse_surface': 'Aportación',
   'reviews.discourse_unknown': 'Discusión',
+
+  // Workbench / decisions
+  'reviews.open_workbench': 'Abrir mesa de trabajo',
+  'reviews.synthesis_value': 'síntesis: {value}',
+  'reviews.synthesis_title': 'La síntesis decía {value}; revisado desde entonces',
+  'reviews.category_blocker': 'Bloqueante',
+  'reviews.category_should_fix': 'Debería corregirse',
+  'reviews.category_suggestion': 'Sugerencia',
+  'reviews.category_style': 'Estilo',
+  'reviews.status_confirmed': 'Confirmado',
+  'reviews.verdict_after_decisions': 'Veredicto tras tus decisiones',
+  'reviews.synthesis_verdict': 'Veredicto de la síntesis',
+  'reviews.open_counts': 'Abiertos: {blockers} bloqueantes, {should_fix} a corregir, {suggestions} sugerencias',
+  'reviews.decision_reason_label': '¿Por qué {status}?',
+  'reviews.decision_reason_placeholder': 'Motivo (obligatorio)',
+  'reviews.decision_save': 'Guardar',
+  'reviews.decision_cancel': 'Cancelar',
+  'reviews.decision_failed': 'No se pudo guardar la decisión: {error}',
 }
 
 export { reviews }

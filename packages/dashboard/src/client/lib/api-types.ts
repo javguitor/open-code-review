@@ -124,7 +124,15 @@ export type ReviewRound = {
   parsed_at: string | null
   reviewer_outputs: ReviewerOutput[]
   progress?: RoundProgress | null
+  /** Counts on current (possibly revised) severities. */
+  current_counts?: RoundCounts
+  /** Same counts excluding findings decided dismissed / wont_fix / fixed. */
+  open_counts?: RoundCounts
+  /** Verdict recomputed from `open_counts`; null when the round has no verdict. */
+  verdict_after_decisions?: string | null
 }
+
+export type RoundCounts = { blockers: number; should_fix: number; suggestions: number }
 
 export type ReviewerOutput = {
   id: number
@@ -479,3 +487,118 @@ export type PostWorktreeOutcome =
 
 /** Server `chat:notice` payload. */
 export type ChatNotice = { conversationId: string; sessionId: string; code: 'worktree-missing' | 'worktree-unknown' }
+
+// ── Review workbench ──
+
+export type DiffLine = {
+  type: 'ctx' | 'add' | 'del'
+  oldNo: number | null
+  newNo: number | null
+  text: string
+  noNewline?: boolean
+}
+
+export type DiffHunk = {
+  oldStart: number
+  oldLines: number
+  newStart: number
+  newLines: number
+  header: string
+  lines: DiffLine[]
+}
+
+export type DiffFileStatus = 'added' | 'deleted' | 'modified' | 'renamed' | 'binary'
+
+export type DiffFile = {
+  oldPath: string | null
+  newPath: string | null
+  status: DiffFileStatus
+  oldMode?: string
+  newMode?: string
+  additions: number
+  deletions: number
+  hunks: DiffHunk[]
+}
+
+export type DiffFileSummary = Omit<DiffFile, 'hunks'> & { hunk_count: number }
+
+/** Response of `GET /api/sessions/:id/rounds/:n/diff` (404 `{error:'no-diff'}` when none was saved). */
+export type DiffResponse =
+  | { truncated: false; files: DiffFile[] }
+  | { truncated: true; files: DiffFileSummary[] }
+
+/** Response of `GET /api/sessions/:id/rounds/:n/file?path=&from=&to=`. */
+export type FileSlice = {
+  path: string
+  from: number
+  to: number
+  total_lines: number
+  lines: { no: number; text: string }[]
+}
+
+export type DecisionStatus =
+  | 'unread'
+  | 'read'
+  | 'acknowledged'
+  | 'confirmed'
+  | 'dismissed'
+  | 'fixed'
+  | 'wont_fix'
+
+export type VerificationStatus = 'pending' | 'reproduced' | 'supported' | 'dismissed'
+
+export type FindingDecision = {
+  status: DecisionStatus
+  reason: string | null
+  decided_at: string | null
+}
+
+export type PreviousRoundDecision = {
+  finding_id: number
+  round_number: number
+  status: DecisionStatus
+  reason: string | null
+  decided_at: string
+}
+
+/** One row of `GET /api/sessions/:id/rounds/:n/findings` (current values + provenance). */
+export type FindingView = {
+  id: number
+  reviewer_output_id: number
+  title: string
+  severity: FindingSeverity
+  category: string | null
+  synthesis_severity: FindingSeverity
+  synthesis_category: string | null
+  file_path: string | null
+  line_start: number | null
+  line_end: number | null
+  summary: string | null
+  is_blocker: number
+  parsed_at: string | null
+  flagged_by: string[]
+  evidence: string | null
+  verification_status: VerificationStatus | null
+  verification_note: string | null
+  verified_at: string | null
+  verification_file: string | null
+  decision: FindingDecision | null
+  progress?: FindingProgress | null
+  revision_count: number
+  previous_round_decision: PreviousRoundDecision | null
+}
+
+export type FindingRevision = {
+  id: number
+  finding_id: number
+  field: 'severity' | 'category'
+  old_value: string | null
+  new_value: string | null
+  reason: string
+  source: 'user' | 'chat' | 'verifier'
+  conversation_id: string | null
+  created_at: string
+}
+
+/** Response of `GET /api/findings/:id`. */
+export type FindingDetail = FindingView & { revisions: FindingRevision[] }

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { X, MessageSquare, Terminal } from 'lucide-react'
 import { cn } from '../../../lib/utils'
 import { useT } from '../../../lib/i18n'
@@ -7,19 +7,26 @@ import { useChat } from '../hooks/use-chat'
 import { useAiCli } from '../../../hooks/use-ai-cli'
 import { ChatMessage, StreamingMessage } from './chat-message'
 import { ChatInput } from './chat-input'
+import { useApplyProposal } from '../hooks/use-apply-proposal'
 import type { ChatTargetType } from '../../../lib/api-types'
+import type { ProposalFindingInfo } from '../types'
 
 type ChatPanelProps = {
   sessionId: string
   targetType: ChatTargetType
   targetId: number
   onClose: () => void
+  /** Text the input starts with (handed over by the workbench). */
+  initialInput?: string
+  /** Round findings, so proposal cards can show a title and old -> new values. */
+  findings?: ProposalFindingInfo[]
 }
 
-export function ChatPanel({ sessionId, targetType, targetId, onClose }: ChatPanelProps) {
+export function ChatPanel({ sessionId, targetType, targetId, onClose, initialInput, findings }: ChatPanelProps) {
   const { t } = useT()
   const { isAvailable, isDisabledByConfig } = useAiCli()
   const {
+    conversationId,
     messages,
     sendMessage,
     isStreaming,
@@ -29,6 +36,9 @@ export function ChatPanel({ sessionId, targetType, targetId, onClose }: ChatPane
     error,
     worktreeNotice,
   } = useChat(sessionId, targetType, targetId)
+
+  const applyProposal = useApplyProposal(sessionId, conversationId)
+  const findingsById = useMemo(() => new Map((findings ?? []).map((f) => [f.id, f])), [findings])
 
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -92,7 +102,12 @@ export function ChatPanel({ sessionId, targetType, targetId, onClose }: ChatPane
         )}
 
         {messages.map((msg) => (
-          <ChatMessage key={msg.id} message={msg} />
+          <ChatMessage
+            key={msg.id}
+            message={msg}
+            findings={findingsById}
+            onApplyProposal={targetType === 'review_round' ? applyProposal : undefined}
+          />
         ))}
 
         {isStreaming && (
@@ -117,7 +132,7 @@ export function ChatPanel({ sessionId, targetType, targetId, onClose }: ChatPane
       </div>
 
       {/* Input */}
-      <ChatInput onSend={sendMessage} isStreaming={isStreaming} disabled={!isAvailable} targetType={targetType} />
+      <ChatInput onSend={sendMessage} isStreaming={isStreaming} disabled={!isAvailable} targetType={targetType} initialValue={initialInput} />
     </div>
   )
 }

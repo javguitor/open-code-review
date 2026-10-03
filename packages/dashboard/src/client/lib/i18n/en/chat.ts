@@ -17,6 +17,18 @@ const chat = {
   'chat.empty_review': 'Ask a question about this review to get started.',
   'chat.worktree_missing': 'Worktree removed — answering from the checkout',
   'chat.worktree_unknown': 'Could not check the worktree — answering from the checkout',
+  'chat.proposal_title': 'Proposed change to finding #{id}',
+  'chat.proposal_unknown_finding': 'Finding not loaded',
+  'chat.proposal_field_severity': 'Severity',
+  'chat.proposal_field_category': 'Category',
+  'chat.proposal_field_status': 'Status',
+  'chat.proposal_no_changes': 'Already matches the current values',
+  'chat.proposal_apply': 'Apply',
+  'chat.proposal_discard': 'Discard',
+  'chat.proposal_applying': 'Applying...',
+  'chat.proposal_applied': 'Applied',
+  'chat.proposal_failed': 'Failed: {error}',
+  'chat.proposal_retry': 'Retry',
 }
 
 export { chat }

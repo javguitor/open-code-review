@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSocket, useSocketEvent } from '../../../providers/socket-provider'
-import type { ChatMessage, ChatNotice, ChatTargetType, ChatToolStatus } from '../../../lib/api-types'
+import type { ChatNotice, ChatTargetType, ChatToolStatus } from '../../../lib/api-types'
+import type { ChatDonePayload, ChatEntry, ChatMessageRow } from '../types'
+import { toChatEntry } from '../proposals'
 
 type UseChatReturn = {
-  messages: ChatMessage[]
+  conversationId: string
+  messages: ChatEntry[]
   sendMessage: (text: string) => void
   isStreaming: boolean
   streamingContent: string
@@ -22,7 +25,7 @@ export function useChat(
   const { socket } = useSocket()
   const conversationId = `chat-${sessionId}-${targetType}-${targetId}`
 
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [messages, setMessages] = useState<ChatEntry[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
   const [toolStatus, setToolStatus] = useState<ChatToolStatus | null>(null)
@@ -39,12 +42,12 @@ export function useChat(
   }, [socket, conversationId])
 
   // Receive history response
-  useSocketEvent<{ conversationId: string; messages: ChatMessage[] }>(
+  useSocketEvent<{ conversationId: string; messages: ChatMessageRow[] }>(
     'chat:history:result',
     useCallback(
       (data) => {
         if (data.conversationId !== conversationId) return
-        setMessages(data.messages)
+        setMessages(data.messages.map(toChatEntry))
       },
       [conversationId],
     ),
@@ -82,17 +85,18 @@ export function useChat(
   )
 
   // Streaming complete
-  useSocketEvent<{ conversationId: string }>(
+  useSocketEvent<ChatDonePayload>(
     'chat:done',
     useCallback(
       (data) => {
         if (data.conversationId !== conversationId) return
-        const assistantMsg: ChatMessage = {
-          id: Date.now(),
+        const assistantMsg: ChatEntry = {
+          id: data.messageId ?? Date.now(),
           conversation_id: conversationId,
           role: 'assistant',
           content: streamingRef.current,
           created_at: new Date().toISOString(),
+          proposals: Array.isArray(data.proposals) ? data.proposals : [],
         }
         setMessages((prev) => [...prev, assistantMsg])
         setIsStreaming(false)
@@ -137,12 +141,13 @@ export function useChat(
     (text: string) => {
       if (!socket || !text.trim() || isStreaming) return
 
-      const userMsg: ChatMessage = {
+      const userMsg: ChatEntry = {
         id: Date.now(),
         conversation_id: conversationId,
         role: 'user',
         content: text.trim(),
         created_at: new Date().toISOString(),
+        proposals: [],
       }
       setMessages((prev) => [...prev, userMsg])
       setIsStreaming(true)
@@ -163,5 +168,5 @@ export function useChat(
     [socket, conversationId, sessionId, targetType, targetId, isStreaming],
   )
 
-  return { messages, sendMessage, isStreaming, streamingContent, toolStatus, toolHistory, error, worktreeNotice }
+  return { conversationId, messages, sendMessage, isStreaming, streamingContent, toolStatus, toolHistory, error, worktreeNotice }
 }

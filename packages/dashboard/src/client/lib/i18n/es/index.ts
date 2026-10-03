@@ -14,6 +14,7 @@ import { home } from './home'
 import { settings } from './settings'
 import { post } from './post'
 import { requirements } from './requirements'
+import { workbench } from './workbench'
 
 // Typed as a full Record so a key missing from any namespace module is a compile error.
 export const es: Record<MessageKey, string> = {
@@ -32,4 +33,5 @@ export const es: Record<MessageKey, string> = {
   ...settings,
   ...post,
   ...requirements,
+  ...workbench,
 }
