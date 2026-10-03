@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   CANONICAL_VERDICTS,
+  GITHUB_REVIEW_STATES,
   isCanonicalVerdict,
+  isGitHubReviewState,
   normalizeVerdict,
+  reviewStateFromVerdict,
   type CanonicalVerdict,
 } from "../index.js";
 
@@ -67,6 +70,41 @@ describe("normalizeVerdict", () => {
     for (const s of samples) {
       const result: CanonicalVerdict | null = normalizeVerdict(s);
       if (result !== null) expect(isCanonicalVerdict(result)).toBe(true);
+    }
+  });
+});
+
+describe("reviewStateFromVerdict", () => {
+  it("maps each canonical verdict to its GitHub review state", () => {
+    expect(reviewStateFromVerdict("APPROVE")).toBe("approve");
+    expect(reviewStateFromVerdict("REQUEST CHANGES")).toBe("request-changes");
+    expect(reviewStateFromVerdict("NEEDS DISCUSSION")).toBe("comment");
+  });
+
+  it("falls back to comment for null, undefined, empty and unknown values", () => {
+    expect(reviewStateFromVerdict(null)).toBe("comment");
+    expect(reviewStateFromVerdict(undefined)).toBe("comment");
+    expect(reviewStateFromVerdict("")).toBe("comment");
+    expect(reviewStateFromVerdict("SHIP IT")).toBe("comment");
+  });
+
+  it("ignores surrounding whitespace", () => {
+    expect(reviewStateFromVerdict("  APPROVE \n")).toBe("approve");
+    expect(reviewStateFromVerdict("\tREQUEST CHANGES ")).toBe("request-changes");
+  });
+});
+
+describe("isGitHubReviewState", () => {
+  it("accepts exactly the three review states", () => {
+    expect(GITHUB_REVIEW_STATES).toEqual(["approve", "request-changes", "comment"]);
+    for (const s of GITHUB_REVIEW_STATES) {
+      expect(isGitHubReviewState(s)).toBe(true);
+    }
+  });
+
+  it("rejects other strings and non-strings", () => {
+    for (const v of ["APPROVE", "request_changes", "", null, undefined, 1, {}]) {
+      expect(isGitHubReviewState(v)).toBe(false);
     }
   });
 });

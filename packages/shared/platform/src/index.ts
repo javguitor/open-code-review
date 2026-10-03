@@ -16,10 +16,13 @@ export type { ExecBinaryAsyncOptions, ExecError } from "./spawn.js";
 
 export {
   CANONICAL_VERDICTS,
+  GITHUB_REVIEW_STATES,
   isCanonicalVerdict,
+  isGitHubReviewState,
   normalizeVerdict,
+  reviewStateFromVerdict,
 } from "./verdict.js";
-export type { CanonicalVerdict } from "./verdict.js";
+export type { CanonicalVerdict, GitHubReviewState } from "./verdict.js";
 
 export {
   ALLOWED_INJECT_KEYS,
