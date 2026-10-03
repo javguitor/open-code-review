@@ -7,6 +7,11 @@
  * Section headings, field labels, verdicts, severities, categories, code,
  * paths and identifiers always stay in English: the CLI and dashboard parse
  * them.
+ *
+ * `posting.language` is a second, independent tag: the language of the review
+ * text posted to GitHub (human review summary, inline comment labels, the
+ * "Other comments" heading), read by the PR author. Unset, empty or invalid, it
+ * falls back to `language`.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -60,6 +65,35 @@ export function getOutputLanguage(ocrDir: string): string {
   } catch {
     return DEFAULT_OUTPUT_LANGUAGE;
   }
+}
+
+/**
+ * `posting.language` as configured, or `null` when unset, empty, invalid or
+ * the file is unreadable. Never throws. The settings UI uses it to tell
+ * "same as language" apart from an explicit choice.
+ */
+export function getPostingLanguageRaw(ocrDir: string): string | null {
+  const configPath = join(ocrDir, "config.yaml");
+  if (!existsSync(configPath)) return null;
+
+  try {
+    const parsed: unknown = parseYaml(readFileSync(configPath, "utf-8"));
+    const posting = isRecord(parsed) ? parsed.posting : undefined;
+    if (!isRecord(posting) || typeof posting.language !== "string") return null;
+    const tag = posting.language.trim();
+    return LANGUAGE_TAG.test(tag) ? tag.toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+
+/**
+ * Language of the review text posted to GitHub: `posting.language` when it is
+ * a valid tag, otherwise `getOutputLanguage`. Never throws.
+ */
+export function getPostingLanguage(ocrDir: string): string {
+  return getPostingLanguageRaw(ocrDir) ?? getOutputLanguage(ocrDir);
 }
 
 /**

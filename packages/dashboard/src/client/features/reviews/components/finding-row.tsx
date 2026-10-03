@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import type { KeyboardEvent } from 'react'
 import { ChevronRight, ExternalLink } from 'lucide-react'
 import { cn, buildIdeLink } from '../../../lib/utils'
-import { useIdeConfig } from '../../../hooks/use-ide-config'
+import { useCodeRoot } from '../../../hooks/use-code-root'
 import { StatusBadge } from '../../../components/ui/status-badge'
 import { MarkdownRenderer } from '../../../components/markdown/markdown-renderer'
 import { useT } from '../../../lib/i18n'
@@ -28,7 +28,7 @@ export function FindingRow({ finding, onTriageChange }: FindingRowProps) {
   // A status that needs a reason waits here until the user types one.
   const [pending, setPending] = useState<DecisionStatus | null>(null)
   const [reason, setReason] = useState('')
-  const { data: config } = useIdeConfig()
+  const { config, codeRoot } = useCodeRoot()
 
   const toggle = useCallback(() => setExpanded((v) => !v), [])
 
@@ -126,7 +126,7 @@ export function FindingRow({ finding, onTriageChange }: FindingRowProps) {
         <td className="border-b border-zinc-200 px-4 py-2 font-mono text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
           {finding.file_path && config ? (
             <a
-              href={buildIdeLink(config.ide, config.projectRoot, finding.file_path, finding.line_start)}
+              href={buildIdeLink(config.ide, codeRoot, finding.file_path, finding.line_start)}
               onClick={(e) => e.stopPropagation()}
               className="hover:text-zinc-900 hover:underline dark:hover:text-zinc-200"
               title={t('reviews.open_in_ide', { ide: config.ide })}
@@ -141,7 +141,7 @@ export function FindingRow({ finding, onTriageChange }: FindingRowProps) {
         <td className="border-b border-zinc-200 px-4 py-2 tabular-nums text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
           {finding.file_path && config && finding.line_start != null ? (
             <a
-              href={buildIdeLink(config.ide, config.projectRoot, finding.file_path, finding.line_start)}
+              href={buildIdeLink(config.ide, codeRoot, finding.file_path, finding.line_start)}
               onClick={(e) => e.stopPropagation()}
               className="hover:text-zinc-900 hover:underline dark:hover:text-zinc-200"
             >

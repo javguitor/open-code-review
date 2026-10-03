@@ -44,7 +44,8 @@ export function parseUtcDate(dateStr: string): Date {
   return new Date(dateStr.replace(' ', 'T') + 'Z')
 }
 
-export type IdeType = 'vscode' | 'cursor' | 'windsurf' | 'jetbrains' | 'sublime'
+export const IDE_TYPES = ['vscode', 'cursor', 'windsurf', 'jetbrains', 'sublime', 'zed'] as const
+export type IdeType = (typeof IDE_TYPES)[number]
 
 export function buildIdeLink(
   ide: IdeType,
@@ -66,6 +67,9 @@ export function buildIdeLink(
       return `cursor://file/${uriPath}:${line}:${col}`
     case 'windsurf':
       return `windsurf://file/${uriPath}:${line}:${col}`
+    case 'zed':
+      // zed://file/<abs path>:<line>:<col> — same shape as the VS Code family
+      return `zed://file/${uriPath}:${line}:${col}`
     case 'jetbrains':
       return `jetbrains://open?file=${encodeURIComponent(absPath)}&line=${line}`
     case 'sublime':

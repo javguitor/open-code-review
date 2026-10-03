@@ -200,7 +200,7 @@ ocr state begin \
 # PR targets (pr:<n> or a PR URL) add the reviewed refs resolved in Phase 0
 # (`references/pr-target.md`). Re-running for a new round updates them.
 #   --base-ref "$BASE_REF" --head-ref "$HEAD_REF" --head-sha "$HEAD_SHA" \
-#   --pr-number "$PR_NUMBER" --pr-url "$PR_URL"
+#   --pr-number "$PR_NUMBER" --pr-url "$PR_URL" --pr-author "$PR_AUTHOR"
 
 # Transition to context phase
 ocr state advance --phase "context"

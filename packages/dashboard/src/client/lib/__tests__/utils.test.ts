@@ -216,6 +216,18 @@ describe('buildIdeLink', () => {
     })
   })
 
+  // ── Zed ──
+
+  describe('zed', () => {
+    it('builds a zed://file/<abs path>:<line>:<col> link', () => {
+      expect(buildIdeLink('zed', root, relFile, 12, 5)).toBe(`zed://file${absFile}:12:5`)
+    })
+
+    it('defaults line and column to 1', () => {
+      expect(buildIdeLink('zed', root, relFile)).toBe(`zed://file${absFile}:1:1`)
+    })
+  })
+
   // ── Path handling edge cases ──
 
   describe('path handling', () => {

@@ -45,7 +45,7 @@ describe('readReviewersMeta — icon backfill (issue #28)', () => {
   })
 
   it('returns empty result when the file is absent', () => {
-    expect(readReviewersMeta(ocrDir)).toEqual({ reviewers: [], defaults: [] })
+    expect(readReviewersMeta(ocrDir)).toEqual({ reviewers: [], defaults: [], default_team: [] })
   })
 
   it('derives defaults from is_default', () => {
@@ -54,5 +54,38 @@ describe('readReviewersMeta — icon backfill (issue #28)', () => {
       { id: 'frontend', name: 'F', tier: 'specialist', icon: 'layout', description: 'd', focus_areas: [], is_default: false, is_builtin: true },
     ])
     expect(readReviewersMeta(ocrDir).defaults).toEqual(['architect'])
+  })
+})
+
+describe('readReviewersMeta — default_team', () => {
+  const reviewer = (id: string, is_default: boolean) =>
+    ({ id, name: id, tier: 'holistic', icon: 'blocks', description: 'd', focus_areas: [], is_default, is_builtin: true })
+
+  it('reads counts from config.yaml, ignoring comments', () => {
+    writeMeta([reviewer('principal', true), reviewer('quality', true), reviewer('testing', false)])
+    writeFileSync(
+      join(ocrDir, 'config.yaml'),
+      'default_team:\n  principal: 2    # Holistic\n  quality: 2\n  # security: 1\n',
+    )
+    expect(readReviewersMeta(ocrDir).default_team).toEqual([
+      { id: 'principal', count: 2 },
+      { id: 'quality', count: 2 },
+    ])
+  })
+
+  it('falls back to the default ids with count 1 when default_team is absent', () => {
+    writeMeta([reviewer('principal', true), reviewer('quality', true), reviewer('testing', false)])
+    writeFileSync(join(ocrDir, 'config.yaml'), 'language: es\n')
+    expect(readReviewersMeta(ocrDir).default_team).toEqual([
+      { id: 'principal', count: 1 },
+      { id: 'quality', count: 1 },
+    ])
+  })
+
+  it('falls back when config.yaml is missing or invalid', () => {
+    writeMeta([reviewer('principal', true)])
+    expect(readReviewersMeta(ocrDir).default_team).toEqual([{ id: 'principal', count: 1 }])
+    writeFileSync(join(ocrDir, 'config.yaml'), 'default_team: [not, a, map]\n')
+    expect(readReviewersMeta(ocrDir).default_team).toEqual([{ id: 'principal', count: 1 }])
   })
 })

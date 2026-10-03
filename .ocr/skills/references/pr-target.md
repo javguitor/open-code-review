@@ -77,6 +77,7 @@ Otherwise use a worktree:
 | `head_ref` | the local ref that was reviewed, `refs/ocr/pr/<n>` (the PR head branch name is `branch`) |
 | `head_sha` | the sha verified after the fetch (equals `headRefOid`) |
 | `pr_number`, `pr_url` | from `gh pr view` |
+| `pr_author` | `author.login` from the same `gh pr view` call (the GitHub login, no `@`) |
 | `code_root` | the worktree path, or the checkout when in place |
 
 Diff: the patch command (defined in `workflow.md` Phase 2) with target `origin/<baseRefName>...refs/ocr/pr/<n>`, run in the main checkout (no `cd` needed).

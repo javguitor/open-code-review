@@ -8,7 +8,7 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs'
-import { dirname, isAbsolute, join } from 'node:path'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { Router } from 'express'
 import type { Database } from '@open-code-review/persistence'
 import { getWorktreeConfig } from '@open-code-review/config/worktree-config'
@@ -24,6 +24,8 @@ import {
   getRoundProgress,
 } from '../db.js'
 import { getPrHead, PrHeadLookupError } from '../services/pr-head.js'
+import { getPrAuthor } from '../services/pr-author.js'
+import { codeRootForSession, type RunCli } from '../services/worktrees.js'
 import {
   getRequirementsHead,
   isLookupable,
@@ -266,6 +268,10 @@ export type SessionsRouterDeps = {
   getPrHead?: typeof getPrHead
   /** Injectable so tests need no `ocr requirements fetch`. */
   getRequirementsHead?: GetRequirementsHead
+  /** Injectable so tests need no `gh`. */
+  getPrAuthor?: typeof getPrAuthor
+  /** Injectable so tests need no `ocr worktree list`. */
+  runCli?: RunCli
 }
 
 // ── Router ──
@@ -276,10 +282,25 @@ export function createSessionsRouter(db: Database, deps: SessionsRouterDeps = {}
   const getReqHead: GetRequirementsHead = deps.getRequirementsHead ??
     ((url, opts) => getRequirementsHead(url, { ...opts, ocrDir: deps.ocrDir ?? '.ocr' }))
 
+  const getAuthor = deps.getPrAuthor ?? getPrAuthor
+
+  /** Stored author, else (PR sessions only) the cached/looked-up one. */
+  const prAuthor = async (s: SessionRow, cacheOnly: boolean): Promise<string | null> => {
+    if (s.pr_author) return s.pr_author
+    return s.pr_url ? getAuthor(s.pr_url, { cacheOnly }) : null
+  }
+
   const worktreePath = (s: SessionRow): string | null => {
     if (!deps.ocrDir || s.pr_number === null) return null
     const path = join(getWorktreeConfig(deps.ocrDir).dir, `pr-${s.pr_number}`)
     return existsSync(path) ? path : null
+  }
+
+  /** Absolute dir finding paths resolve against: the PR worktree when present, else the repo root. */
+  const codeRootFields = async (s: SessionRow): Promise<{ code_root: string; code_root_is_worktree: boolean }> => {
+    if (!deps.ocrDir) return { code_root: resolve('.'), code_root_is_worktree: false }
+    const root = await codeRootForSession(deps.ocrDir, s, { run: deps.runCli })
+    return { code_root: resolve(root.path), code_root_is_worktree: root.isWorktree }
   }
 
   // GET /api/sessions — List all sessions, sorted by updated_at desc
@@ -297,7 +318,10 @@ export function createSessionsRouter(db: Database, deps: SessionsRouterDeps = {}
         Promise.all(sessions.map((s) => computeStale(s, getHead, lookup(s)))),
         Promise.all(sessions.map((s) => computeRequirements(s, deps.ocrDir, getReqHead, { cacheOnly: true }))),
       ])
-      res.json(sessions.map((s, i) => ({ ...enrichSession(db, s), ...stale[i], ...reqs[i] })))
+      const authors = await Promise.all(sessions.map((s) => prAuthor(s, true)))
+      res.json(
+        sessions.map((s, i) => ({ ...enrichSession(db, s), ...stale[i], ...reqs[i], pr_author: authors[i] ?? null })),
+      )
     } catch (err) {
       console.error('Failed to fetch sessions:', err)
       res.status(500).json({ error: 'Failed to fetch sessions' })
@@ -318,6 +342,8 @@ export function createSessionsRouter(db: Database, deps: SessionsRouterDeps = {}
         // Never spawn the CLI on a page load: only POST /check-updates forces a lookup.
         ...(await computeRequirements(session, deps.ocrDir, getReqHead, { cacheOnly: true })),
         worktree_path: worktreePath(session),
+        pr_author: await prAuthor(session, false),
+        ...(await codeRootFields(session)),
       })
     } catch (err) {
       console.error('Failed to fetch session:', err)

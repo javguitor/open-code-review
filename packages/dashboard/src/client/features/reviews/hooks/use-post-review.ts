@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSocket, useSocketEvent } from '../../../providers/socket-provider'
 import type { GitHubReviewState } from '@open-code-review/platform/verdict'
-import type { PostReviewStep, PostCheckResult, PostSubmitResult, ChatToolStatus } from '../../../lib/api-types'
+import type { PostReviewStep, PostCheckResult, PostSubmitResult, PostPreviewResult, ChatToolStatus } from '../../../lib/api-types'
+import type { SubmitPayload } from '../../../lib/post-preview'
 import { applyCheckResult, initialReviewState } from '../../../lib/review-state'
 import { useT } from '../../../lib/i18n'
 
@@ -20,6 +21,9 @@ type UsePostReviewReturn = {
   activityLog: ActivityLogEntry[]
   elapsedSeconds: number
   postResult: PostSubmitResult | null
+  /** What `post:submit` would publish for the round (null until the server answers). */
+  preview: PostPreviewResult | null
+  requestPreview: (sessionId: string, roundNumber: number) => void
   error: string | null
   needsRecheck: boolean
   reviewState: GitHubReviewState
@@ -28,7 +32,7 @@ type UsePostReviewReturn = {
   generate: (sessionId: string, roundNumber: number) => void
   cancelGeneration: (sessionId: string, roundNumber: number) => void
   saveDraft: (sessionId: string, roundNumber: number, content: string) => void
-  submitToGitHub: (prNumber: number, content: string, state: GitHubReviewState) => void
+  submitToGitHub: (payload: SubmitPayload) => void
   recheck: () => void
   reset: () => void
   setStep: (step: PostReviewStep) => void
@@ -45,6 +49,7 @@ export function usePostReview(verdict: string | null): UsePostReviewReturn {
   const [toolStatus, setToolStatus] = useState<ChatToolStatus | null>(null)
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([])
   const [postResult, setPostResult] = useState<PostSubmitResult | null>(null)
+  const [preview, setPreview] = useState<PostPreviewResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [reviewState, setReviewState] = useState<GitHubReviewState>('comment')
   const [needsRecheck, setNeedsRecheck] = useState(false)
@@ -62,6 +67,7 @@ export function usePostReview(verdict: string | null): UsePostReviewReturn {
   // Step the in-flight submit started from, restored on a needs-recheck failure
   const submitOriginRef = useRef<PostReviewStep>('ready')
   const lastSessionIdRef = useRef<string | null>(null)
+  const lastRoundRef = useRef<number | null>(null)
 
   const streamingRef = useRef('')
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
@@ -140,6 +146,14 @@ export function usePostReview(verdict: string | null): UsePostReviewReturn {
     }, []),
   )
 
+  // ── Preview of what will be published (summary + inline comments) ──
+  useSocketEvent<PostPreviewResult>(
+    'post:preview-result',
+    useCallback((data) => {
+      setPreview(data)
+    }, []),
+  )
+
   // ── Generation done ──
   useSocketEvent<{ content: string }>(
     'post:done',
@@ -149,7 +163,13 @@ export function usePostReview(verdict: string | null): UsePostReviewReturn {
       setToolStatus(null)
       streamingRef.current = ''
       setStep('preview')
-    }, []),
+      // The skill also wrote the inline comments file: ask for the full preview
+      const sessionId = lastSessionIdRef.current
+      const round = lastRoundRef.current
+      if (socket && sessionId && round !== null) {
+        socket.emit('post:preview', { sessionId, roundNumber: round })
+      }
+    }, [socket]),
   )
 
   // ── Generation cancelled ──
@@ -233,13 +253,26 @@ export function usePostReview(verdict: string | null): UsePostReviewReturn {
     }
   }, [checkGitHub, socket])
 
+  const requestPreview = useCallback(
+    (sessionId: string, roundNumber: number) => {
+      if (!socket) return
+      lastSessionIdRef.current = sessionId
+      lastRoundRef.current = roundNumber
+      socket.emit('post:preview', { sessionId, roundNumber })
+    },
+    [socket],
+  )
+
   const generate = useCallback(
     (sessionId: string, roundNumber: number) => {
       if (!socket) return
+      lastSessionIdRef.current = sessionId
+      lastRoundRef.current = roundNumber
       setStep('generating')
       setError(null)
       setStreamingContent('')
       setGeneratedContent('')
+      setPreview(null)
       setToolStatus(null)
       setActivityLog([])
       streamingRef.current = ''
@@ -265,12 +298,12 @@ export function usePostReview(verdict: string | null): UsePostReviewReturn {
   )
 
   const submitToGitHub = useCallback(
-    (prNumber: number, content: string, state: GitHubReviewState) => {
+    (payload: SubmitPayload) => {
       if (!socket) return
       submitOriginRef.current = stepRef.current
       setStep('posting')
       setError(null)
-      socket.emit('post:submit', { prNumber, content, state })
+      socket.emit('post:submit', payload)
     },
     [socket],
   )
@@ -283,6 +316,7 @@ export function usePostReview(verdict: string | null): UsePostReviewReturn {
     setToolStatus(null)
     setActivityLog([])
     setPostResult(null)
+    setPreview(null)
     setError(null)
     setReviewState('comment')
     setNeedsRecheck(false)
@@ -298,6 +332,8 @@ export function usePostReview(verdict: string | null): UsePostReviewReturn {
     activityLog,
     elapsedSeconds,
     postResult,
+    preview,
+    requestPreview,
     error,
     needsRecheck,
     reviewState,

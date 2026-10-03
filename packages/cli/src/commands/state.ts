@@ -274,6 +274,7 @@ const showSubcommand = new Command("show")
         ["Head SHA:  ", s.head_sha],
         ["PR:        ", s.pr_number],
         ["PR URL:    ", s.pr_url],
+        ["PR author: ", s.pr_author],
         ["Reqs URL:  ", s.requirements_source_url],
         ["Reqs date: ", s.requirements_updated_at],
       ];
@@ -445,6 +446,7 @@ const beginSubcommand = new Command("begin")
     return Number(v);
   })
   .option("--pr-url <url>", "Pull request URL")
+  .option("--pr-author <login>", "GitHub login of the pull request author")
   .option("--requirements-url <url>", "URL of the requirements source (ClickUp card, issue, ...)")
   .option("--requirements-updated-at <iso>", "Provider's last-updated timestamp of the requirements source")
   .option("--json", "Output the result as JSON")
@@ -461,6 +463,7 @@ const beginSubcommand = new Command("begin")
       headSha?: string;
       prNumber?: number;
       prUrl?: string;
+      prAuthor?: string;
       dashboardUid?: string;
       json?: boolean;
     }) => {
@@ -482,6 +485,7 @@ const beginSubcommand = new Command("begin")
           headSha: options.headSha,
           prNumber: options.prNumber,
           prUrl: options.prUrl,
+          prAuthor: options.prAuthor,
           requirementsUrl: options.requirementsUrl,
           requirementsUpdatedAt: options.requirementsUpdatedAt,
         });

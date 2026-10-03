@@ -10,6 +10,7 @@ import { SessionTabs } from './components/session-tabs'
 import { LivenessHeader } from './components/liveness-header'
 import { ResumeCard } from './components/resume-card'
 import { StaleBadge } from './components/stale-badge'
+import { PrAuthor } from './components/pr-author'
 import { WorktreePanel } from './components/worktree-panel'
 import { RequirementsBlock } from '../requirements/components/requirements-block'
 import { fetchApi, parseUtcDate } from '../../lib/utils'
@@ -188,6 +189,7 @@ export function SessionDetailPage() {
             <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1">
               <dt className="text-zinc-500 dark:text-zinc-400">{t('sessions.pr_title')}</dt>
               <dd><a href={session.pr_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline dark:text-blue-400">#{session.pr_number}</a></dd>
+              {session.pr_author && (<><dt className="text-zinc-500 dark:text-zinc-400">{t('sessions.pr_author')}</dt><dd><PrAuthor login={session.pr_author} /></dd></>)}
               {session.base_ref && (<><dt className="text-zinc-500 dark:text-zinc-400">{t('sessions.pr_base')}</dt><dd>{session.base_ref}</dd></>)}
               {session.head_ref && (<><dt className="text-zinc-500 dark:text-zinc-400">{t('sessions.pr_head')}</dt><dd>{session.head_ref}</dd></>)}
               {session.head_sha && (<><dt className="text-zinc-500 dark:text-zinc-400">{t('sessions.pr_reviewed_commit')}</dt><dd className="font-mono">{session.head_sha.slice(0, 7)}</dd></>)}

@@ -7,11 +7,32 @@ import { readFileSync, existsSync, watch, type FSWatcher } from 'node:fs'
 import { join } from 'node:path'
 import type { Server as SocketIOServer } from 'socket.io'
 import { defaultIconFor } from '@open-code-review/platform'
+import { loadTeamConfig } from '@open-code-review/config/team-config'
 import type { ReviewerMeta } from '../../shared/types.js'
 
 type ReviewersResponse = {
   reviewers: ReviewerMeta[]
   defaults: string[]
+  /** `default_team` of config.yaml as id → instance count (config order). */
+  default_team: Array<{ id: string; count: number }>
+}
+
+/**
+ * Counts per persona from `.ocr/config.yaml` `default_team`, or `null` when the
+ * config is absent, unparsable or has no team (the caller then falls back to
+ * one instance per default id). Parsed with the CLI's own parser so the palette
+ * shows exactly what a no-`--team` run resolves.
+ */
+function readDefaultTeam(ocrDir: string): Array<{ id: string; count: number }> | null {
+  try {
+    const counts = new Map<string, number>()
+    for (const inst of loadTeamConfig(ocrDir).team) {
+      counts.set(inst.persona, (counts.get(inst.persona) ?? 0) + 1)
+    }
+    return counts.size === 0 ? null : [...counts].map(([id, count]) => ({ id, count }))
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -25,7 +46,7 @@ type RawReviewerMeta = Omit<ReviewerMeta, 'icon'> & { icon?: string }
 export function readReviewersMeta(ocrDir: string): ReviewersResponse {
   const metaPath = join(ocrDir, 'reviewers-meta.json')
   if (!existsSync(metaPath)) {
-    return { reviewers: [], defaults: [] }
+    return { reviewers: [], defaults: [], default_team: [] }
   }
 
   try {
@@ -40,9 +61,10 @@ export function readReviewersMeta(ocrDir: string): ReviewersResponse {
       icon: r.icon || defaultIconFor(r.id, r.tier),
     }))
     const defaults = reviewers.filter((r) => r.is_default).map((r) => r.id)
-    return { reviewers, defaults }
+    const default_team = readDefaultTeam(ocrDir) ?? defaults.map((id) => ({ id, count: 1 }))
+    return { reviewers, defaults, default_team }
   } catch {
-    return { reviewers: [], defaults: [] }
+    return { reviewers: [], defaults: [], default_team: [] }
   }
 }
 

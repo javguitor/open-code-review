@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { parseDocument } from "yaml";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ConfigWriteError, setConfigValues } from "../config-writer.js";
-import { getOutputLanguage } from "../language-config.js";
+import { getOutputLanguage, getPostingLanguage } from "../language-config.js";
 import { getWorktreeConfig } from "../worktree-config.js";
 
 let ocrDir: string;
@@ -106,6 +106,7 @@ describe("setConfigValues", () => {
     const cases: [string, Record<string, string>, string][] = [
       ["invalid language", { language: "not a tag!" }, "language"],
       ["invalid cleanup", { "worktrees.cleanup": "sometimes" }, "worktrees.cleanup"],
+      ["invalid posting language", { "posting.language": "not a tag!" }, "posting.language"],
       ["empty dir", { "worktrees.dir": "   " }, "worktrees.dir"],
       ["unknown key", { default_team: "x" }, "default_team"],
       ["valid key alongside an unknown one", { language: "es", ai_cli: "x" }, "ai_cli"],
@@ -127,6 +128,29 @@ describe("setConfigValues", () => {
     expect(() => setConfigValues(ocrDir, { language: "es" })).toThrow(ConfigWriteError);
     expect(read()).toBe(bad);
     expect(readdirSync(ocrDir)).toEqual(["config.yaml"]);
+  });
+});
+
+describe("setConfigValues posting.language", () => {
+  it("creates the posting block when absent, keeping everything else", () => {
+    writeFileSync(configPath, SAMPLE);
+    const text = setConfigValues(ocrDir, { "posting.language": "en" });
+    expect(text).toBe(`${SAMPLE}posting:\n  language: en\n`);
+    expect(parseDocument(text).toJS().posting).toEqual({ language: "en" });
+  });
+
+  it("updates an existing posting.language and preserves comments", () => {
+    const before = "# top\nlanguage: es # ui\nposting:\n  # who reads it\n  language: es # gh\n";
+    writeFileSync(configPath, before);
+    setConfigValues(ocrDir, { "posting.language": "en" });
+    expect(read()).toBe(before.replace("language: es # gh", "language: en # gh"));
+  });
+
+  it("allows the empty string (same as language)", () => {
+    writeFileSync(configPath, "language: es\nposting:\n  language: en\n");
+    setConfigValues(ocrDir, { "posting.language": "" });
+    expect(parseDocument(read()).toJS().posting).toEqual({ language: "" });
+    expect(getPostingLanguage(ocrDir)).toBe("es");
   });
 });
 

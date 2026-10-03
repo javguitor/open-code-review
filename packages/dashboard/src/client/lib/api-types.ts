@@ -1,5 +1,6 @@
 import type { GitHubReviewState } from '@open-code-review/platform/verdict'
 import type { SessionStatus, WorkflowType, FindingTriage, FindingSeverity, ChatTargetType, RoundTriage, PostReviewStep } from '../../shared/types'
+import type { IdeType } from './utils'
 
 export type { SessionStatus, WorkflowType, FindingTriage, FindingSeverity, ChatTargetType, RoundTriage, PostReviewStep }
 
@@ -36,6 +37,12 @@ export type SessionSummary = {
   pr_head_sha: string | null
   /** Detail endpoint only: where the PR worktree lives. */
   worktree_path?: string | null
+  /** GitHub login of the PR author; null for non-PR sessions or when unknown (older sessions). */
+  pr_author?: string | null
+  /** Detail endpoint only: absolute root finding links are built against (PR worktree when it exists, else the repo root). */
+  code_root?: string
+  /** Detail endpoint only: `code_root` is the PR worktree (false = the worktree is gone or the session is not a PR). */
+  code_root_is_worktree?: boolean
   // Requirements source recorded for the session (null when none)
   requirements_source_url: string | null
   requirements_updated_at: string | null
@@ -122,6 +129,8 @@ export type ReviewRound = {
   should_fix_count: number
   final_md_path: string | null
   parsed_at: string | null
+  /** GitHub login of the PR author (reviews list); null for non-PR sessions or unknown. */
+  pr_author?: string | null
   reviewer_outputs: ReviewerOutput[]
   progress?: RoundProgress | null
   /** Counts on current (possibly revised) severities. */
@@ -434,6 +443,32 @@ export type PostSubmitResult =
     }
   | { success: false; error: string; code?: 'needs-recheck' | 'invalid-payload' }
 
+/** Severity of an inline comment of the human review (`final-human-comments.json`). */
+export type PostCommentSeverity = 'blocking' | 'should_fix' | 'optional' | 'nit'
+
+export type PostPreviewComment = {
+  path: string
+  line: number
+  start_line?: number
+  side: 'RIGHT' | 'LEFT'
+  severity: PostCommentSeverity
+  body: string
+}
+
+/** `post:preview-result`: what `post:submit` would publish for a round. */
+export type PostPreviewResult = {
+  /** Summary body (moved comments already appended under their heading). */
+  body: string
+  /** The human summary alone, without the moved comments (what the user edits and sends). */
+  summary: string
+  /** Comments anchored to lines present in the round's diff. */
+  inline: PostPreviewComment[]
+  /** Comments whose line is not in the diff; already folded into `body`. */
+  moved: PostPreviewComment[]
+  /** `final-human.md` exists (false = `body` is the team `final.md`). */
+  hasHuman: boolean
+}
+
 export type WorktreeCleanup = 'keep' | 'on-close' | 'after-post'
 
 /** Allow-listed settings of `GET`/`PATCH /api/config` (GET also returns project/IDE/AI CLI fields). */
@@ -447,6 +482,10 @@ export type ConfigSettings = {
     cleanup: WorktreeCleanup
   }
   language: string
+  /** `posting.language` as written in config.yaml; null when unset (same as `language`). */
+  posting_language: string | null
+  /** Editor that finding links open (`dashboard.ide`, else detected). */
+  ide: IdeType
   integrations: { clickup_token: 'configured' | 'missing' }
 }
 
@@ -454,6 +493,7 @@ export type ConfigSettings = {
 export type ConfigPatchBody = {
   worktrees?: { dir?: string; cleanup?: WorktreeCleanup }
   language?: string
+  posting?: { language: string }
 }
 
 /** `GET /api/sessions/:id/worktree` (404 for non-PR sessions). */

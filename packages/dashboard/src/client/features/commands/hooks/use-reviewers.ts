@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchApi } from '../../../lib/utils'
 import { useSocketEvent } from '../../../providers/socket-provider'
+import type { TeamEntry } from '../../../lib/default-team'
 import type { ReviewerMeta, ReviewerTier } from '../../../../shared/types.js'
 
 export type { ReviewerMeta, ReviewerTier }
@@ -8,6 +9,8 @@ export type { ReviewerMeta, ReviewerTier }
 type ReviewersResponse = {
   reviewers: ReviewerMeta[]
   defaults: string[]
+  /** Reviewer id → count parsed from `.ocr/config.yaml` `default_team`. */
+  default_team?: TeamEntry[]
 }
 
 export function useReviewers() {
@@ -26,6 +29,7 @@ export function useReviewers() {
   return {
     reviewers: data?.reviewers ?? [],
     defaults: data?.defaults ?? [],
+    defaultTeam: data?.default_team,
     isLoaded: !isLoading,
   }
 }

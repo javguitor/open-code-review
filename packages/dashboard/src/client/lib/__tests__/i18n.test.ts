@@ -12,6 +12,7 @@ const INTENTIONAL_DIVERGENCE: ReadonlySet<string> = new Set<string>([
   'reviewers.tier_custom', // singular "Personalizado"; the twins are plural
   'sessions.liveness_stalled', // "Detenida" (sesión) vs "Detenido" (comando)
   'sessions.liveness_orphaned', // "Huérfana" (sesión) vs "Huérfano" (comando)
+  'post.severity_should_fix', // mirrors the posted comment prefix "Importante:"; the category key is the verb phrase "Debería corregirse"
   'sessions.phase_complete', // "Completada" (fase) vs "Completado" (resultado)
 ])
 

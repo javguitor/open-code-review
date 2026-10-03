@@ -107,7 +107,18 @@ describe('PATCH /api/config', () => {
     expect(body).toEqual({
       worktrees: { dir: abs, dir_raw: abs, exists: true, cleanup: 'after-post' },
       language: 'es',
+      posting_language: null,
     })
+  })
+
+  it('writes and reports posting.language, and rejects an invalid one', async () => {
+    const ok = await api('PATCH', { posting: { language: 'en' } })
+    expect(ok.status).toBe(200)
+    expect(ok.body.posting_language).toBe('en')
+    const bad = await api('PATCH', { posting: { language: 'not a tag!' } })
+    expect(bad.status).toBe(400)
+    expect(bad.body.key).toBe('posting.language')
+    expect((await api('PATCH', { posting: { language: '' } })).body.posting_language).toBeNull()
   })
 
   it('preserves comments and unrelated keys in the file', async () => {
@@ -129,5 +140,27 @@ describe('PATCH /api/config', () => {
       expect(status).toBe(400)
     }
     expect(readFileSync(join(ocrDir, 'config.yaml'), 'utf-8')).toBe(YAML)
+  })
+})
+
+describe('PATCH /api/config/ide', () => {
+  async function patchIde(ide: string) {
+    const { port } = server.address() as AddressInfo
+    const res = await fetch(`http://127.0.0.1:${port}/api/config/ide`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ide }),
+    })
+    return res.status
+  }
+
+  it('accepts zed and persists it', async () => {
+    expect(await patchIde('zed')).toBe(200)
+    expect(readFileSync(join(ocrDir, 'config.yaml'), 'utf-8')).toMatch(/^\s*ide:\s*zed$/m)
+    expect((await api('GET')).body.ide).toBe('zed')
+  })
+
+  it('still rejects unknown editors', async () => {
+    expect(await patchIde('emacs')).toBe(400)
   })
 })

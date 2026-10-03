@@ -10,8 +10,14 @@ import type {
 export const CLEANUP_MODES: readonly WorktreeCleanup[] = ['keep', 'on-close', 'after-post']
 export const LANGUAGES = ['en', 'es'] as const
 
-export type SettingsForm = { dir: string; cleanup: string; language: string }
-export type SettingsField = 'worktrees.dir' | 'worktrees.cleanup' | 'language'
+export type SettingsForm = {
+  dir: string
+  cleanup: string
+  language: string
+  /** '' = same as the interface language. */
+  postingLanguage: string
+}
+export type SettingsField = 'worktrees.dir' | 'worktrees.cleanup' | 'language' | 'posting.language'
 export type SettingsErrors = Partial<Record<SettingsField, MessageKey>>
 
 /**
@@ -41,6 +47,9 @@ export function buildSettingsPatch(
   const language = form.language.trim()
   if (language === '') errors.language = 'settings.error_language_required'
   else if (language !== current.language) patch.language = language
+
+  const postingLanguage = form.postingLanguage.trim()
+  if (postingLanguage !== (current.posting_language ?? '')) patch.posting = { language: postingLanguage }
 
   if (Object.keys(worktrees).length > 0) patch.worktrees = worktrees
   return { patch, errors }

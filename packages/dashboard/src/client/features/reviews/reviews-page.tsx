@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { PrAuthor } from '../sessions/components/pr-author'
 import { useNavigate } from 'react-router-dom'
 import { Filter, FileText } from 'lucide-react'
 import { cn } from '../../lib/utils'
@@ -202,6 +203,9 @@ export function ReviewsPage() {
                       direction={sortDir}
                       onSort={handleSort}
                     />
+                    <th className="border-b border-zinc-200 px-4 py-2 text-left font-medium text-zinc-900 dark:border-zinc-800 dark:text-zinc-100">
+                      {t('reviews.col_author')}
+                    </th>
                     <SortableHeader
                       label={t('reviews.col_round')}
                       field="round_number"
@@ -253,6 +257,9 @@ export function ReviewsPage() {
                               {branch}
                             </span>
                           </div>
+                        </td>
+                        <td className="border-b border-zinc-200 px-4 py-2 text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
+                          <PrAuthor login={round.pr_author} link={false} />
                         </td>
                         <td className="border-b border-zinc-200 px-4 py-2 text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
                           {t('reviews.round_n', { number: round.round_number })}

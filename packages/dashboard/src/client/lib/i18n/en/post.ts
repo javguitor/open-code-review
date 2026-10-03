@@ -6,6 +6,21 @@ const post = {
   'post.worktree_kept_active': 'Worktree kept: a review of this PR is still open; finish it first.',
   'post.worktree_kept_running': 'Worktree kept: a command for this PR is still running.',
   'post.worktree_none': 'No worktree for this review.',
+  'post.severity_blocking': 'Blocking',
+  'post.severity_should_fix': 'Should fix',
+  'post.severity_optional': 'Optional',
+  'post.severity_nit': 'Nit',
+  'post.recommended': 'Recommended',
+  'post.view_human': 'Preview human review',
+  'post.team_secondary': 'Or post the team version',
+  'post.summary_heading': 'Summary',
+  'post.preview_loading': 'Loading preview…',
+  'post.inline_toggle': 'Inline comments',
+  'post.inline_heading': 'Inline comments ({count})',
+  'post.inline_hint': 'Posted as a single review with one comment on each line.',
+  'post.inline_off_hint': 'Inline comments are off: only the summary is posted.',
+  'post.moved_heading': 'Outside the diff ({count})',
+  'post.moved_hint': 'These lines are not part of the diff, so they go in the summary.',
 }
 
 export { post }

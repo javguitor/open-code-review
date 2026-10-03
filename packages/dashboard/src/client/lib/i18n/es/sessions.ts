@@ -100,6 +100,7 @@ const sessions = {
   'sessions.check_updates_error_generic': 'No se pudo buscar actualizaciones. Inténtalo de nuevo.',
   'sessions.re_review': 'Revisar de nuevo',
   'sessions.pr_title': 'Pull request',
+  'sessions.pr_author': 'Autor',
   'sessions.pr_base': 'Base',
   'sessions.pr_head': 'Head',
   'sessions.pr_reviewed_commit': 'Commit revisado',

@@ -100,6 +100,7 @@ const sessions = {
   'sessions.check_updates_error_generic': 'Could not check for updates. Try again.',
   'sessions.re_review': 'Re-review',
   'sessions.pr_title': 'Pull request',
+  'sessions.pr_author': 'Author',
   'sessions.pr_base': 'Base',
   'sessions.pr_head': 'Head',
   'sessions.pr_reviewed_commit': 'Reviewed commit',

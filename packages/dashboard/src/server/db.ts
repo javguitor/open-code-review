@@ -63,6 +63,7 @@ export type SessionRow = {
   head_sha: string | null
   pr_number: number | null
   pr_url: string | null
+  pr_author: string | null
   // Requirements source recorded by `ocr requirements fetch --session` (null when none)
   requirements_source_url: string | null
   requirements_updated_at: string | null

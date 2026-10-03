@@ -38,6 +38,7 @@ export type InitParams = {
   headSha?: string;
   prNumber?: number;
   prUrl?: string;
+  prAuthor?: string;
   requirementsUrl?: string;
   requirementsUpdatedAt?: string;
 };
@@ -306,6 +307,7 @@ export type ShowResult = {
     head_sha: string | null;
     pr_number: number | null;
     pr_url: string | null;
+    pr_author: string | null;
     requirements_source_url: string | null;
     requirements_updated_at: string | null;
   };

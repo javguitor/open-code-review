@@ -8,7 +8,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Server as SocketIOServer, Socket } from 'socket.io'
 import type { Database } from '@open-code-review/persistence'
@@ -163,8 +163,16 @@ type GhRule = { match: string; stdout?: string; fail?: boolean; error?: string }
 
 function setup(rules: GhRule[], runCli?: RunCli) {
   const ghCalls: string[][] = []
+  /** Parsed JSON of every `--input <file>` (the file is deleted once the call returns). */
+  const inputs: unknown[] = []
+  /** Text of every `--body-file <file>` (`gh pr review` / `gh pr comment`). */
+  const bodies: string[] = []
   const runGh: typeof execBinaryAsync = async (_bin, args) => {
     ghCalls.push(args)
+    const inputIdx = args.indexOf('--input')
+    if (inputIdx !== -1) inputs.push(JSON.parse(readFileSync(args[inputIdx + 1] as string, 'utf-8')))
+    const bodyIdx = args.indexOf('--body-file')
+    if (bodyIdx !== -1) bodies.push(readFileSync(args[bodyIdx + 1] as string, 'utf-8'))
     const joined = args.join(' ')
     const rule = rules.find((r) => joined.startsWith(r.match))
     if (!rule) throw new Error(`unscripted gh call: gh ${joined}`)
@@ -204,7 +212,7 @@ function setup(rules: GhRule[], runCli?: RunCli) {
   function reviewCalls(): string[][] {
     return ghCalls.filter((a) => a[0] === 'pr' && a[1] === 'review')
   }
-  return { fire, last, ghCalls, reviewCalls, ioEvents }
+  return { fire, last, ghCalls, reviewCalls, ioEvents, inputs, bodies }
 }
 
 function prListRule(author: string): GhRule {
@@ -603,5 +611,177 @@ describe('post:submit worktree cleanup (after-post)', () => {
     const h = await postByUrl({ runCli })
     expect(h.last('post:submit-result')).toMatchObject({ success: true, worktree: 'kept_error' })
     expect(exitCodeOfLastExecution()).toBe(0)
+  })
+})
+
+describe('post:preview and inline submit', () => {
+  const ROUND = () => join(ocrDir, 'sessions', 'sess-1', 'rounds', 'round-1')
+  const PATCH = [
+    'diff --git a/src/a.ts b/src/a.ts',
+    '--- a/src/a.ts',
+    '+++ b/src/a.ts',
+    '@@ -10,2 +10,3 @@',
+    ' ctx10',
+    '+add11',
+    ' ctx12',
+    '',
+  ].join('\n')
+  const COMMENTS = {
+    comments: [
+      { path: 'src/a.ts', line: 11, side: 'RIGHT', severity: 'blocking', body: 'Bloqueante: validemos la entrada.' },
+      { path: 'src/a.ts', line: 11, start_line: 10, side: 'RIGHT', severity: 'nit', body: 'Nit: nombre.' },
+      { path: 'src/a.ts', line: 13, start_line: 11, side: 'RIGHT', severity: 'optional', body: 'Opcional: extraer.' },
+      { path: 'src/b.ts', line: 3, side: 'RIGHT', severity: 'should_fix', body: 'Importante: fuera del diff.' },
+    ],
+  }
+  const REVIEW_POST = 'api --method POST repos/x/y/pulls/42/reviews'
+  const CREATED = JSON.stringify({ id: 9, html_url: 'https://github.com/x/y/pull/42#pullrequestreview-9' })
+
+  beforeEach(() => {
+    writeFileSync(join(ocrDir, 'config.yaml'), 'language: es\n')
+  })
+
+  function writeRound(files: Record<string, string>) {
+    mkdirSync(ROUND(), { recursive: true })
+    for (const [name, content] of Object.entries(files)) writeFileSync(join(ROUND(), name), content)
+  }
+  const submit = (h: ReturnType<typeof setup>, extra: Record<string, unknown> = {}) =>
+    h.fire('post:submit', { prNumber: PR_NUMBER, content: 'CLIENT', sessionId: 'sess-1', roundNumber: 1, ...extra })
+
+  it('preview splits inline from moved and appends the moved ones to the body', async () => {
+    writeRound({ 'final-human.md': 'Resumen', 'final.md': 'TEAM', 'diff.patch': PATCH, 'final-human-comments.json': JSON.stringify(COMMENTS) })
+    const h = setup([])
+    await h.fire('post:preview', { sessionId: 'sess-1', roundNumber: 1 })
+    const res = h.last('post:preview-result') as any
+    expect(res.hasHuman).toBe(true)
+    expect(res.inline.map((c: any) => c.line)).toEqual([11, 11])
+    expect(res.moved.map((c: any) => `${c.path}:${c.line}`)).toEqual(['src/a.ts:13', 'src/b.ts:3'])
+    expect(res.body.startsWith('Resumen')).toBe(true)
+    expect(res.body).toContain('`src/b.ts:3` — Importante: fuera del diff.')
+  })
+
+  it('posts the moved heading in posting.language, independent of language', async () => {
+    writeFileSync(join(ocrDir, 'config.yaml'), 'language: es\nposting:\n  language: en\n')
+    writeRound({ 'final-human.md': 'Resumen', 'diff.patch': PATCH, 'final-human-comments.json': JSON.stringify(COMMENTS) })
+    const h = setup([])
+    await h.fire('post:preview', { sessionId: 'sess-1', roundNumber: 1 })
+    const res = h.last('post:preview-result') as any
+    expect(res.body).toContain('## Other comments')
+    expect(res.body).not.toContain('Otros comentarios')
+  })
+
+  it('preview falls back to final.md when there is no human review', async () => {
+    writeRound({ 'final.md': 'TEAM' })
+    const h = setup([])
+    await h.fire('post:preview', { sessionId: 'sess-1', roundNumber: 1 })
+    expect(h.last('post:preview-result')).toEqual({ body: 'TEAM', summary: 'TEAM', inline: [], moved: [], hasHuman: false })
+  })
+
+  it('preview rejects an invalid payload', async () => {
+    const h = setup([])
+    await h.fire('post:preview', { sessionId: 'sess-1', roundNumber: 'x' })
+    expect(h.last('post:error')).toEqual({ error: 'Invalid payload' })
+  })
+
+  it('posts ONE review through the reviews API with the exact JSON', async () => {
+    writeRound({ 'final-human.md': 'Resumen', 'diff.patch': PATCH, 'final-human-comments.json': JSON.stringify(COMMENTS) })
+    db.run("UPDATE sessions SET head_sha = 'deadbeef' WHERE id = 'sess-1'")
+    const h = setup([...checkRules('them'), { match: REVIEW_POST, stdout: CREATED }])
+    await checkGh(h)
+    await submit(h, { state: 'request-changes', content: '' })
+
+    expect(h.reviewCalls()).toHaveLength(0)
+    const call = h.ghCalls.find((a) => a[0] === 'api' && a.includes('--input'))
+    expect(call?.slice(0, 4)).toEqual(['api', '--method', 'POST', 'repos/x/y/pulls/42/reviews'])
+    expect(h.inputs).toHaveLength(1)
+    const sent = h.inputs[0] as any
+    expect(sent).toEqual({
+      commit_id: 'deadbeef',
+      event: 'REQUEST_CHANGES',
+      body: expect.stringContaining('Resumen'),
+      comments: [
+        { path: 'src/a.ts', line: 11, side: 'RIGHT', body: 'Bloqueante: validemos la entrada.' },
+        { path: 'src/a.ts', line: 11, side: 'RIGHT', start_line: 10, start_side: 'RIGHT', body: 'Nit: nombre.' },
+      ],
+    })
+    // Empty `content`: the server composes the body, moved comments included.
+    expect(sent.body).toContain('## Otros comentarios')
+    expect(sent.body).toContain('`src/a.ts:11-13` — Opcional: extraer.')
+    expect(h.last('post:submit-result')).toMatchObject({
+      success: true, state: 'request-changes', downgraded: false,
+      commentUrl: 'https://github.com/x/y/pull/42#pullrequestreview-9', inlineCount: 2,
+    })
+  })
+
+  it('keeps the edited summary and appends the moved comments once', async () => {
+    writeRound({ 'final-human.md': 'Resumen', 'diff.patch': PATCH, 'final-human-comments.json': JSON.stringify(COMMENTS) })
+    const h = setup([...checkRules('them'), { match: REVIEW_POST, stdout: CREATED }])
+    await checkGh(h)
+    await submit(h, { content: 'EDITADO por el usuario' })
+    const sent = h.inputs[0] as any
+    expect(sent.body.startsWith('EDITADO por el usuario')).toBe(true)
+    expect(sent.body).not.toContain('Resumen')
+    expect(sent.body.match(/## Otros comentarios/g)).toHaveLength(1)
+    expect(sent.body).toContain('`src/b.ts:3` — Importante: fuera del diff.')
+    expect(sent.comments).toHaveLength(2)
+  })
+
+  it('still downgrades approve to COMMENT on an own PR', async () => {
+    writeRound({ 'final-human.md': 'Resumen', 'diff.patch': PATCH, 'final-human-comments.json': JSON.stringify(COMMENTS) })
+    const h = setup([...checkRules('me'), { match: REVIEW_POST, stdout: CREATED }])
+    await checkGh(h)
+    await submit(h, { state: 'approve' })
+    expect((h.inputs[0] as any).event).toBe('COMMENT')
+    expect(h.last('post:submit-result')).toMatchObject({ success: true, state: 'comment', downgraded: true })
+  })
+
+  it('looks the PR head up when the session has no head_sha, and omits commit_id if unknown', async () => {
+    writeRound({ 'final-human.md': 'Resumen', 'diff.patch': PATCH, 'final-human-comments.json': JSON.stringify(COMMENTS) })
+    const h = setup([...checkRules('them'), { match: 'pr view', fail: true }, { match: REVIEW_POST, stdout: CREATED }])
+    await checkGh(h)
+    await submit(h)
+    expect(h.inputs[0]).not.toHaveProperty('commit_id')
+  })
+
+  it('inline:false moves every comment into the body and uses gh pr review', async () => {
+    writeRound({ 'final-human.md': 'Resumen', 'diff.patch': PATCH, 'final-human-comments.json': JSON.stringify(COMMENTS) })
+    const h = setup([...checkRules('them'), REVIEW_OK, reviewsRule([])])
+    await checkGh(h)
+    await submit(h, { inline: false, state: 'comment' })
+    expect(h.inputs).toHaveLength(0)
+    expect(h.reviewCalls()).toHaveLength(1)
+    // Comments that would have gone inline are not lost: all four land in the body.
+    expect(h.bodies[0]?.startsWith('CLIENT')).toBe(true)
+    expect(h.bodies[0]).toContain('Bloqueante: validemos la entrada.')
+    expect(h.bodies[0]).toContain('`src/b.ts:3` — Importante: fuera del diff.')
+    expect(h.last('post:submit-result')).toMatchObject({ success: true })
+    expect(h.last('post:submit-result')).not.toHaveProperty('inlineCount')
+  })
+
+  it('falls back to gh pr review with the client content when final-human-comments.json is missing', async () => {
+    writeRound({ 'final-human.md': 'Resumen', 'diff.patch': PATCH })
+    const h = setup([...checkRules('them'), REVIEW_OK, reviewsRule([])])
+    await checkGh(h)
+    await submit(h)
+    expect(h.inputs).toHaveLength(0)
+    expect(h.reviewCalls()).toHaveLength(1)
+  })
+
+  it('useHuman:false posts the client content through gh pr review even with comments on disk', async () => {
+    writeRound({ 'final-human.md': 'Resumen', 'diff.patch': PATCH, 'final-human-comments.json': JSON.stringify(COMMENTS) })
+    const h = setup([...checkRules('them'), REVIEW_OK, reviewsRule([])])
+    await checkGh(h)
+    await submit(h, { useHuman: false })
+    expect(h.inputs).toHaveLength(0)
+    expect(h.reviewCalls()).toHaveLength(1)
+  })
+
+  it('reports a failed reviews API call and records exit code 1', async () => {
+    writeRound({ 'final-human.md': 'Resumen', 'diff.patch': PATCH, 'final-human-comments.json': JSON.stringify(COMMENTS) })
+    const h = setup([...checkRules('them'), { match: REVIEW_POST, fail: true, error: 'HTTP 422' }])
+    await checkGh(h)
+    await submit(h)
+    expect(JSON.stringify(h.last('post:submit-result'))).toContain('HTTP 422')
+    expect(exitCodeOfLastExecution()).toBe(1)
   })
 })

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchApi } from '../../../lib/utils'
+import { fetchApi, type IdeType } from '../../../lib/utils'
 import { authHeaders } from '../../../lib/auth'
 import type { ConfigPatchBody, ConfigSettings } from '../../../lib/api-types'
 
@@ -15,6 +15,26 @@ export function useConfigSettings() {
   return useQuery<ConfigSettings>({
     queryKey: ['config'],
     queryFn: () => fetchApi<ConfigSettings>('/api/config'),
+  })
+}
+
+/** `PATCH /api/config/ide`: saved on change, separate from the form's Save. */
+export function usePatchIde() {
+  const queryClient = useQueryClient()
+  return useMutation<{ ide: IdeType }, Error, IdeType>({
+    mutationFn: async (ide) => {
+      const res = await fetch('/api/config/ide', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ ide }),
+      })
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(err.error ?? `${res.status}: ${res.statusText}`)
+      }
+      return res.json()
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['config'] }),
   })
 }
 
