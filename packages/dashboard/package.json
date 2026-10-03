@@ -11,7 +11,8 @@
     "build:client": "vite build",
     "build:server": "esbuild src/server/index.ts --bundle --platform=node --format=esm --outfile=dist/server.js --conditions=source --external:chokidar --external:socket.io --external:cross-spawn --banner:js=\"import { createRequire as _cjsReq } from 'module'; const require = _cjsReq(import.meta.url);\"",
     "preview": "node dist/server.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "sync:themes": "tsx scripts/sync-omarchy-themes.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5",
@@ -30,6 +31,7 @@
     "react-router-dom": "^7",
     "rehype-highlight": "^7",
     "remark-gfm": "^4",
+    "smol-toml": "^1.9.0",
     "socket.io": "^4.8",
     "socket.io-client": "^4.8",
     "tailwind-merge": "^3.5.0"

@@ -165,6 +165,7 @@ const reviews = {
   'reviews.status_confirmed': 'Confirmado',
   'reviews.verdict_after_decisions': 'Veredicto tras tus decisiones',
   'reviews.synthesis_verdict': 'Veredicto de la síntesis',
+  'reviews.open_counts_synthesized': 'Abiertos: {blockers} bloqueantes, {should_fix} a corregir, {suggestions} sugerencias',
   'reviews.open_counts': 'Abiertos, contados por fila de revisor: {blockers} bloqueantes, {should_fix} a corregir, {suggestions} sugerencias',
   'reviews.counts_per_row': 'Contado por fila de revisor: un problema reportado por varios revisores cuenta una vez por revisor.',
   'reviews.synthesis_counts': 'síntesis: {blockers} bloqueantes, {should_fix} a corregir, {suggestions} sugerencias',

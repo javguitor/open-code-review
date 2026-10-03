@@ -33,6 +33,13 @@ const settings = {
   'settings.error_dir_required': 'The directory cannot be empty.',
   'settings.error_cleanup_invalid': 'Choose one of the cleanup modes.',
   'settings.error_language_required': 'Choose a language.',
+  'settings.theme_title': 'Theme',
+  'settings.theme_hint': 'Saved in this browser and applied immediately. Palettes come from the Omarchy themes; light/dark follows the chosen theme.',
+  'settings.theme_default': 'Default',
+  'settings.theme_omarchy_current': 'Omarchy (current: {name})',
+  'settings.theme_omarchy_unavailable': 'Omarchy (not detected)',
+  'settings.theme_group_dark': 'Dark themes',
+  'settings.theme_group_light': 'Light themes',
 }
 
 export { settings }

@@ -284,7 +284,7 @@ export function RoundPage() {
           </p>
           {round.open_counts && (
             <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">
-              {t('reviews.open_counts', {
+              {t(showCountedPerRow(round) ? 'reviews.open_counts' : 'reviews.open_counts_synthesized', {
                 blockers: round.open_counts.blockers,
                 should_fix: round.open_counts.should_fix,
                 suggestions: round.open_counts.suggestions,

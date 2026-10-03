@@ -48,6 +48,7 @@ const layout = {
   'layout.time_minutes_ago': 'hace {n} min',
   'layout.time_hours_ago': 'hace {n} h',
   'layout.time_days_ago': 'hace {n} d',
+  'layout.theme_locked': 'El modo claro/oscuro lo marca el tema {name} (cámbialo en Ajustes)',
 }
 
 export { layout }

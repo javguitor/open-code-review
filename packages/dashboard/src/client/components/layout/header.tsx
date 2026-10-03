@@ -16,6 +16,8 @@ const SEGMENT_KEYS: Record<string, MessageKey> = {
   reviews: 'nav.reviews',
   commands: 'nav.commands',
   maps: 'layout.crumb_maps',
+  settings: 'nav.settings',
+  workbench: 'workbench.title',
 }
 
 function buildBreadcrumbs(
@@ -42,7 +44,7 @@ function buildBreadcrumbs(
 }
 
 export function Header() {
-  const { mode, cycle } = useTheme()
+  const { mode, cycle, modeLocked, activePalette } = useTheme()
   const { t } = useT()
   const location = useLocation()
   const breadcrumbs = buildBreadcrumbs(location.pathname, t)
@@ -90,9 +92,10 @@ export function Header() {
         </a>
         <button
           onClick={cycle}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          disabled={modeLocked}
+          className="flex h-8 w-8 items-center justify-center rounded-md text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
           aria-label={t('layout.theme_cycle_label', { mode: modeLabel })}
-          title={t('layout.theme_label', { mode: modeLabel })}
+          title={modeLocked ? t('layout.theme_locked', { name: activePalette?.name ?? '' }) : t('layout.theme_label', { mode: modeLabel })}
         >
           <ThemeIcon className="h-4 w-4" />
         </button>

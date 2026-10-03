@@ -163,6 +163,7 @@ const reviews = {
   'reviews.status_confirmed': 'Confirmed',
   'reviews.verdict_after_decisions': 'Verdict after your decisions',
   'reviews.synthesis_verdict': 'Synthesis verdict',
+  'reviews.open_counts_synthesized': 'Open: {blockers} blockers, {should_fix} should fix, {suggestions} suggestions',
   'reviews.open_counts': 'Open, counted per reviewer row: {blockers} blockers, {should_fix} should fix, {suggestions} suggestions',
   'reviews.counts_per_row': 'Counted per reviewer row: a problem reported by several reviewers counts once per reviewer.',
   'reviews.synthesis_counts': 'synthesis: {blockers} blockers, {should_fix} should fix, {suggestions} suggestions',
