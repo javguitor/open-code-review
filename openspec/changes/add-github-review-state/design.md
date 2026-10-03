@@ -16,8 +16,8 @@ of `--approve`, `--request-changes`, `--comment` plus `--body-file` (verified wi
    request`). Only a `comment` review is accepted. *Hypothesis to confirm in task 1.1
    against a real PR before coding the client branch.*
 2. `gh pr review` does not print the review's URL on success the way `gh pr comment`
-   does. *Hypothesis to confirm in task 1.1.* If confirmed, the dialog's "View on
-   GitHub" link falls back to the PR URL already returned by `post:check-gh`.
+   does (confirmed in task 1.1: empty stdout). The review's URL is recoverable with
+   `gh api repos/{owner}/{repo}/pulls/<n>/reviews --jq '.[-1].html_url'`.
 
 Constraints from the repo: shared code goes in `packages/shared/*` once consumed across
 a package boundary; agent assets are edited in `packages/agents/` and synced with
@@ -89,9 +89,13 @@ fake, no internal mocks — see `socket/__tests__/finalizer.test.ts`).
   "Re-check" button. The selector state lives in the `usePostReview` hook
   (`reviewState`, `setReviewState`) and resets with the state machine's `reset()`.
 
-- **Decision: success link.** `post:submit-result` keeps `commentUrl`; the server fills
-  it from `gh pr review` stdout if a URL is present, else `null`, and the dialog links
-  to `prUrl` when `commentUrl` is `null`.
+- **Decision: success link.** `post:submit-result` keeps `commentUrl`. After a
+  successful `gh pr review`, the server makes one best-effort call
+  `gh api repos/{owner}/{repo}/pulls/<n>/reviews --jq '.[-1].html_url'` (owner/repo
+  from `gh repo view --json nameWithOwner`, or the `:owner/:repo` placeholders gh
+  resolves from `cwd`) and returns that URL; on any failure it returns `null` and the
+  dialog links to `prUrl` instead. The post itself is never reported as failed because
+  of the URL lookup.
 
 - **Decision: execution tracking.** The tracked execution keeps the label
   `ocr post-to-github` and its args become `[PR #n, --<state>]` so

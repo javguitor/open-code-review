@@ -1,9 +1,9 @@
 ## 1. Verify the two GitHub hypotheses (before any code)
 
-- [ ] 1.1 On a throwaway PR in the fork, run `gh pr review <n> --approve --body-file x.md`
+- [x] 1.1 On a throwaway PR in the fork, run `gh pr review <n> --approve --body-file x.md`
       as the PR author and record the exact error; then `--comment` and record whether
       stdout contains a URL. Paste both outputs into this file under "Findings".
-- [ ] 1.2 Adjust `design.md` if either hypothesis is wrong (own-PR lock, success link
+- [x] 1.2 Adjust `design.md` if either hypothesis is wrong (own-PR lock, success link
       fallback).
 
 ## 2. Shared mapping (`@open-code-review/platform`)
@@ -24,7 +24,7 @@
       any other value with `Invalid payload`; force `comment` when ownership is
       `own`; reject `approve` / `request-changes` when ownership is `unknown` or was
       never checked for that PR number; run `gh pr review <n> --<state> --body-file
-      <tmp>`; keep `commentUrl` extraction and return `null` when stdout has no URL.
+      <tmp>`; then resolve `commentUrl` best-effort via `gh api repos/{owner}/{repo}/pulls/<n>/reviews --jq .[-1].html_url` (`null` on failure, post still reported as success).
 - [ ] 3.3 Tracked execution args become `[`PR #${n}`, `--${state}`]`.
 - [ ] 3.4 Tests in `packages/dashboard/src/server/socket/__tests__/post-handler.test.ts`
       (classical style, recording `io`/`socket` fakes, real sqlite from
@@ -72,4 +72,15 @@
 
 ## Findings
 
-(filled in by task 1.1)
+Probe PR: https://github.com/javguitor/open-code-review/pull/1 (own PR, gh 2.102.0, 2026-10-03).
+
+- H1 confirmed. `gh pr review 1 --approve --body-file x.md` → exit 1,
+  `failed to create review: GraphQL: Review Can not approve your own pull request (addPullRequestReview)`.
+  `--request-changes` → exit 1,
+  `failed to create review: GraphQL: Review Can not request changes on your own pull request (addPullRequestReview)`.
+- H2 confirmed. `gh pr review 1 --comment --body-file x.md` → exit 0, **empty stdout and stderr**
+  (`gh pr comment` prints `https://github.com/.../pull/1#issuecomment-<id>`).
+- Review URL is recoverable afterwards: `gh api repos/{owner}/{repo}/pulls/1/reviews --jq '.[-1].html_url'`
+  → `https://github.com/javguitor/open-code-review/pull/1#pullrequestreview-5399455801` (state `COMMENTED`).
+- Ownership lookups work as designed: `gh pr list --head <branch> --json number,url,author`
+  returns `author.login`; `gh api user --jq .login` returns the viewer.
