@@ -23,6 +23,8 @@ import chalk from "chalk";
 import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { requireOcrSetup } from "../lib/guards.js";
+import { getWorktreeConfig } from "@open-code-review/config/worktree-config";
+import { removePrWorktree } from "./worktree.js";
 import {
   stateClose,
   stateShow,
@@ -45,6 +47,8 @@ import {
 } from "@open-code-review/config/runtime-config";
 import {
   getDb,
+  getSession,
+  getAllSessions,
   isBusyError,
   linkDashboardInvocationToWorkflow,
 } from "@open-code-review/persistence";
@@ -611,6 +615,31 @@ const completeMapSubcommand = new Command("complete-map")
     },
   );
 
+/**
+ * `worktrees.cleanup: on-close` — drop the PR worktree once its last active
+ * session is closed. Best effort: a dirty/missing worktree or a git failure
+ * prints a notice and never fails the finish (the session is already closed).
+ */
+export async function cleanupPrWorktree(ocrDir: string, sessionId: string): Promise<void> {
+  try {
+    if (getWorktreeConfig(ocrDir).cleanup !== "on-close") return;
+    const db = await getDb(ocrDir);
+    const prNumber = getSession(db, sessionId)?.pr_number;
+    if (prNumber == null) return;
+    if (getAllSessions(db).some((s) => s.status === "active" && s.pr_number === prNumber)) return;
+    const result = removePrWorktree({ ocrDir, prNumber });
+    if (result.status === "removed") {
+      console.log(chalk.dim(`Removed worktree ${result.path}`));
+    } else if (result.status === "dirty") {
+      console.log(chalk.dim(`Worktree ${result.path} has uncommitted changes; kept (ocr worktree remove ${prNumber} --force)`));
+    } else {
+      console.log(chalk.dim(`No worktree for PR #${prNumber}; nothing to clean up`));
+    }
+  } catch (error) {
+    console.log(chalk.dim(`Worktree cleanup skipped: ${error instanceof Error ? error.message : String(error)}`));
+  }
+}
+
 const finishSubcommand = new Command("finish")
   .description("Close a workflow (refuses unless the current round/run is complete)")
   .option("--session-id <id>", "Session ID (auto-detects active if omitted)")
@@ -623,6 +652,7 @@ const finishSubcommand = new Command("finish")
       const { id: sessionId } = await resolveActiveSession(ocrDir, options.sessionId);
       await stateClose({ sessionId, ocrDir, abort: options.abort });
       console.log(`${sessionId}: ${options.abort ? "aborted" : "finished"}`);
+      await cleanupPrWorktree(ocrDir, sessionId);
     } catch (error) {
       exitFromStateError(error, "Failed to finish");
     }

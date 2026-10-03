@@ -15,6 +15,7 @@ import { doctorCommand } from "./commands/doctor";
 import { dbCommand } from "./commands/db";
 import { reviewersCommand } from "./commands/reviewers";
 import { hostCommand } from "./commands/host";
+import { worktreeCommand } from "./commands/worktree";
 import { checkForUpdate, printUpdateNotification } from "./lib/update-check.js";
 import { checkLocalArtifactVersion, printLocalVersionHint } from "./lib/cli-config.js";
 import { CLI_VERSION } from "./lib/version.js";
@@ -46,6 +47,7 @@ program.addCommand(doctorCommand);
 program.addCommand(dbCommand);
 program.addCommand(reviewersCommand);
 program.addCommand(hostCommand);
+program.addCommand(worktreeCommand);
 
 await program.parseAsync();
 
