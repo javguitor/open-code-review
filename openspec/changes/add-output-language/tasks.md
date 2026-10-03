@@ -48,3 +48,14 @@ Acceptance 4.1 (2026-10-03): session `2026-10-03-feat-output-language`, `languag
 
 2b browser check (2026-10-03, `language: es`, Vite dev): sidebar, round page, findings table and post dialog render in Spanish; `en` fallback checked by switching the config. Follow-ups (not blocking): "Round N" heading in round-page.tsx still English; server-emitted error strings (e.g. "No open PR found…") are data and stay English; duplicate generic keys to merge later (`reviews.state_*`/`verdict_*`, `commands.status_*`/`status.*`, `map.ask_the_team`/`chat.title`, `notes.cancel|save`/`common.*`, `commands.tier_*`/`reviewers.tier_*`); `REVIEW_STATE_LABELS` in lib/review-state.ts has no consumer; `formatDate*` follow the browser locale, not `language`.
 
+## 7. Fixes from the round-2 (interface) review — done
+
+- [x] 7.1 `timeAgo` requires `t`; home relative times localized.
+- [x] 7.2 `translate` falls back to the key; tests for unknown keys with/without vars.
+- [x] 7.3 vitest `include: src/**/*.test.ts` (4 files were skipped; all pass — 503 tests).
+- [x] 7.4 `lockReasonKey`; `REVIEW_STATE_LABELS` deleted.
+- [x] 7.5 Diverging duplicate keys merged (`commands.*_count`, `common.close_dialog`, `sessions.resume_in_terminal`, `phase_reviews`); divergence + placeholder-parity tests with a 6-key exemption list.
+- [x] 7.6 `RichText` → `components/ui`; `isResolvedStatus` type guard.
+
+Round 2 review (2026-10-03): APPROVE, 0 / 5 / 7; posted on PR #4. Remaining suggestions (core.ts split, glossary header, ~35 same-Spanish duplicates, fragment sentences, `common.save`) deferred.
+
