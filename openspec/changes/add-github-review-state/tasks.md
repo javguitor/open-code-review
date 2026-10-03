@@ -66,7 +66,8 @@
 
 - [x] 6.1 `pnpm nx run-many -t lint test` green.
 - [ ] 6.2 Manual check, two PRs (first run `gh repo set-default javguitor/open-code-review`
-      in the checkout — see design.md Risks): on a PR opened by **another account** (a colleague's,
+      in the checkout — see design.md Risks). *Own-PR half done 2026-10-03 (see
+      Findings); the other-account half is pending.* on a PR opened by **another account** (a colleague's,
       or a second GitHub account on a test repo) post each of the three states from
       the dashboard and confirm the PR shows a review, not a comment; on the own
       throwaway PR from 1.1 confirm the dialog locks to Comment and that Comment
@@ -88,3 +89,19 @@ Probe PR: https://github.com/javguitor/open-code-review/pull/1 (own PR, gh 2.102
   → `https://github.com/javguitor/open-code-review/pull/1#pullrequestreview-5399455801` (state `COMMENTED`).
 - Ownership lookups work as designed: `gh pr list --head <branch> --json number,url,author`
   returns `author.login`; `gh api user --jq .login` returns the viewer.
+
+Own-PR dashboard check (2026-10-03, dev server + headless Chromium via Playwright,
+session `2026-10-03-test-review-state-probe` built with `ocr state`, verdict REQUEST CHANGES):
+
+- Dialog `ready` step on PR #1 (own): Approve and Request changes `disabled`, Comment
+  `aria-pressed=true`, caption "GitHub does not allow approving or requesting changes on
+  your own pull request." — the verdict-derived `request-changes` was correctly NOT
+  pre-selected because ownership is `own`.
+- "Post Team Review" → `post:submit-result.success: true`, link "View review" →
+  `https://github.com/javguitor/open-code-review/pull/1#pullrequestreview-5399496112`;
+  GitHub Reviews API shows that review with `state: COMMENTED` and `final.md` as body.
+- `command_executions`: `ocr post-to-github` args `["PR #1","--comment"]`, exit 0.
+- Console: two `404` resource errors on the round page, present before opening the
+  dialog. Hypothesis, unverified: the `final-human` artifact lookup
+  (`round-page.tsx:41`) when no human draft exists — pre-existing, unrelated.
+
