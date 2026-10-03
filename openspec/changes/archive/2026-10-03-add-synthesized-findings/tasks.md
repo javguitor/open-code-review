@@ -36,6 +36,6 @@
 - [x] 6.2 Run `nx run cli:update`; never hand-edit `.ocr/`
 
 ## 7. Gate
-- [ ] 7.1 `nx run-many -t lint test build --skip-nx-cache`
-- [ ] 7.2 Run a real review end to end; confirm one decision on a synthesized finding moves the verdict after decisions
-- [ ] 7.3 Open a legacy session (no `synthesis_findings`) and confirm unchanged behaviour
+- [x] 7.1 `nx run-many -t lint test build --skip-nx-cache`
+- [x] 7.2 Run a real review end to end; confirm one decision on a synthesized finding moves the verdict after decisions
+- [x] 7.3 Open a legacy session (no `synthesis_findings`) and confirm unchanged behaviour
