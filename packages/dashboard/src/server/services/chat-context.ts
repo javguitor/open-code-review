@@ -7,6 +7,7 @@
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { getOutputLanguage, languagePolicy } from '@open-code-review/config/language-config'
 
 export type ChatTarget =
   | { type: 'map_run'; sessionId: string; runNumber: number }
@@ -21,11 +22,13 @@ export type ChatTarget =
 export function buildChatContext(ocrDir: string, target: ChatTarget): string {
   const sessionsDir = join(ocrDir, 'sessions')
 
-  if (target.type === 'map_run') {
-    return buildMapRunContext(sessionsDir, target.sessionId, target.runNumber)
-  }
+  const context =
+    target.type === 'map_run'
+      ? buildMapRunContext(sessionsDir, target.sessionId, target.runNumber)
+      : buildReviewRoundContext(sessionsDir, target.sessionId, target.roundNumber)
 
-  return buildReviewRoundContext(sessionsDir, target.sessionId, target.roundNumber)
+  const policy = languagePolicy(getOutputLanguage(ocrDir))
+  return policy ? `${context}\n\n${policy}` : context
 }
 
 function buildMapRunContext(

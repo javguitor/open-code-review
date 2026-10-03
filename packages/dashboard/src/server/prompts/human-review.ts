@@ -1,3 +1,5 @@
+import { languagePolicy } from '@open-code-review/config/language-config'
+
 /**
  * Prompt generator for rewriting a multi-reviewer code review
  * into a single human-voice GitHub PR comment.
@@ -9,6 +11,7 @@
 export function buildHumanReviewPrompt(
   finalContent: string,
   reviewerContents: { name: string; content: string }[],
+  language: string,
 ): string {
   let prompt = `You are rewriting a multi-reviewer code review into a single PR comment that reads like one real person wrote it after carefully reading through the code. Not an AI. Not a committee. Just a developer who spent time on this and has opinions.
 
@@ -66,7 +69,20 @@ Your writing must be indistinguishable from a real person's PR review. Follow th
 - Never use "the team", "our analysis", "upon review", "it was noted that".
 - Never write a formulaic sign-off or summary conclusion paragraph.
 - Never start with "Overall, this is a..." — that's the #1 AI tell.
+`
 
+  const policy = languagePolicy(language)
+  if (policy) {
+    prompt += `
+## Language
+
+${policy}
+
+The "Voice & Tone" and "Writing Style" rules above describe a register, not English phrases: apply the equivalent natural register of ${language} (contractions, asides, casual markers that a native senior engineer would actually write). Do not transliterate English fillers.
+`
+  }
+
+  prompt += `
 Output ONLY the review comment in markdown. Jump straight into the review — no meta-preamble.`
 
   return prompt

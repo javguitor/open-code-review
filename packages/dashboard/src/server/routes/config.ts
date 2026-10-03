@@ -5,6 +5,7 @@
 import { Router } from 'express'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { execBinary } from '@open-code-review/platform'
+import { getOutputLanguage } from '@open-code-review/config/language-config'
 import { childEnv } from '../child-env.js'
 import { join, dirname, basename } from 'node:path'
 import type { AiCliService } from '../services/ai-cli/index.js'
@@ -87,6 +88,7 @@ export function createConfigRouter(ocrDir: string, aiCliService: AiCliService): 
       workspaceName,
       gitBranch,
       aiCli: aiCliService.getStatus(),
+      language: getOutputLanguage(ocrDir),
     })
   })
 
