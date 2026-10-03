@@ -147,28 +147,33 @@ type WorktreeOutcome =
 
 /**
  * `after-post` cleanup. Never throws and never affects the post's own result:
- * every failure maps to a `kept_*` outcome.
+ * every failure maps to a `kept_*` outcome (with its cause, when known).
+ * `cleanup` is read first: a user who never asked for removal must not see
+ * "could not be removed" just because the CLI is broken.
  */
 async function cleanupWorktreeAfterPost(
   ocrDir: string,
   db: Database,
   prNumber: number,
   run: RunCli | undefined,
-): Promise<WorktreeOutcome> {
+): Promise<{ outcome: WorktreeOutcome; error?: string }> {
   try {
+    const cleanup = getWorktreeConfig(ocrDir).cleanup
     const list = await listWorktrees(ocrDir, { run })
     // Unknown is not "none": leaving the worktree on disk unreported is the worse failure.
-    if (!list.ok) return 'kept_error'
-    if (presentWorktree(list.rows, prNumber) === undefined) return 'none'
-    if (getWorktreeConfig(ocrDir).cleanup !== 'after-post') return 'kept_config'
-    if (runningExecutionForPr(db, prNumber) !== null) return 'kept_running'
-    const { status } = await removeWorktree(ocrDir, prNumber, { run })
-    if (status === 'removed') return 'removed'
-    if (status === 'dirty') return 'kept_dirty'
-    if (status === 'active-session') return 'kept_active'
-    return status === 'not-found' ? 'none' : 'kept_error'
-  } catch {
-    return 'kept_error'
+    if (!list.ok) return cleanup === 'after-post' ? { outcome: 'kept_error', error: list.error } : { outcome: 'none' }
+    if (presentWorktree(list.rows, prNumber) === undefined) return { outcome: 'none' }
+    if (cleanup !== 'after-post') return { outcome: 'kept_config' }
+    if (runningExecutionForPr(db, prNumber) !== null) return { outcome: 'kept_running' }
+    const { status, error } = await removeWorktree(ocrDir, prNumber, { run })
+    if (status === 'removed') return { outcome: 'removed' }
+    if (status === 'dirty') return { outcome: 'kept_dirty' }
+    if (status === 'active-session') return { outcome: 'kept_active' }
+    return status === 'not-found' ? { outcome: 'none' } : { outcome: 'kept_error', error }
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err)
+    console.warn(`[post] worktree cleanup for PR #${prNumber} failed: ${error}`)
+    return { outcome: 'kept_error', error }
   }
 }
 
@@ -686,11 +691,13 @@ export function registerPostHandlers(
 
           tracker.appendOutput(`✓ Posted to PR #${prNumber}${urlMatch ? ` — ${urlMatch}` : ''}\n`)
           // Only the PR session's own worktree is ever touched (`sessionPr`).
-          const worktree =
+          const { outcome: worktree, error: worktreeError } =
             checked.sessionPr === prNumber
               ? await cleanupWorktreeAfterPost(ocrDir, db, prNumber, deps.runCli)
-              : 'none'
-          if (worktree !== 'none') tracker.appendOutput(`▸ Worktree: ${worktree}\n`)
+              : { outcome: 'none' as const, error: undefined }
+          if (worktree !== 'none') {
+            tracker.appendOutput(`▸ Worktree: ${worktree}${worktreeError ? ` (${worktreeError})` : ''}\n`)
+          }
           tracker.finish(0)
           socket.emit('post:submit-result', {
             success: true, commentUrl: urlMatch, state, downgraded, worktree,

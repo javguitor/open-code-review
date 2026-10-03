@@ -21,7 +21,7 @@ import {
   type ChatConversationRow,
 } from '../db.js'
 import { buildChatContext, type ChatTarget } from '../services/chat-context.js'
-import { codeRootForSession, worktreeRootFromContext, type RunCli } from '../services/worktrees.js'
+import { codeRootForSession, contextRecordedWorktree, type RunCli } from '../services/worktrees.js'
 import { AiCliService, formatToolDetail } from '../services/ai-cli/index.js'
 import { startTrackedExecution, type TrackedExecution } from './execution-tracker.js'
 
@@ -139,12 +139,11 @@ export function registerChatHandlers(
         : { path: dirname(ocrDir), isWorktree: false }
       // Only a session that once had a worktree (its context.md says so) can "lose" it;
       // an in-place PR review never had one.
-      const lostWorktreeRoot = session?.pr_number != null && !codeRoot.isWorktree
-        ? worktreeRootFromContext(ocrDir, sessionId)
-        : null
+      const lostWorktree = session?.pr_number != null && !codeRoot.isWorktree
+        && contextRecordedWorktree(ocrDir, sessionId, session.pr_number)
       if (codeRoot.listError !== undefined) {
         socket.emit('chat:notice', { conversationId, sessionId, code: 'worktree-unknown' })
-      } else if (lostWorktreeRoot !== null) {
+      } else if (lostWorktree) {
         socket.emit('chat:notice', { conversationId, sessionId, code: 'worktree-missing' })
       }
 
@@ -152,7 +151,7 @@ export function registerChatHandlers(
       let prompt: string
       if (claudeSessionId) {
         // The model was told the old code root in the first message; say so when it moved.
-        prompt = lostWorktreeRoot !== null
+        prompt = lostWorktree
           ? `Note: the code root is now ${codeRoot.path}.\n\n${message}`
           : message
       } else {

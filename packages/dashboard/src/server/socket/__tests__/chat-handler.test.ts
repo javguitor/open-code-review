@@ -94,7 +94,7 @@ afterEach(() => {
 
 describe('chat:send code root', () => {
   it('PR with a worktree: spawns in the worktree, no notice, and the context names it', async () => {
-    const wt = join(workspace, 'wt', 'pr-7')
+    const wt = join(workspace, '.ocr', 'worktrees', 'pr-7')
     mkdirSync(wt, { recursive: true })
     insertSession('s-pr', 7)
     writeContext('s-pr', wt)
@@ -107,7 +107,7 @@ describe('chat:send code root', () => {
   })
 
   it('PR whose worktree is gone: spawns in the checkout and emits worktree-missing', async () => {
-    const wt = join(workspace, 'wt', 'pr-7')
+    const wt = join(workspace, '.ocr', 'worktrees', 'pr-7')
     insertSession('s-pr', 7)
     writeContext('s-pr', wt)
     setup(listCli([{ pr_number: 7, path: wt, head_sha: 'a', session_id: 's-pr', session_status: 'closed', dirty: false }]).runCli)
@@ -138,7 +138,7 @@ describe('chat:send code root', () => {
   it('unreadable worktree list: spawns in the checkout and emits worktree-unknown (not worktree-missing)', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     insertSession('s-pr', 7)
-    writeContext('s-pr', join(workspace, 'wt', 'pr-7'))
+    writeContext('s-pr', join(workspace, '.ocr', 'worktrees', 'pr-7'))
     setup(listCli(null).runCli)
     await sendChat(msg('s-pr'))
     expect(spawns[0]!.cwd).toBe(workspace)
@@ -147,7 +147,7 @@ describe('chat:send code root', () => {
   })
 
   it('resumed conversation whose worktree vanished: the prompt is prefixed with the new code root', async () => {
-    const wt = join(workspace, 'wt', 'pr-7')
+    const wt = join(workspace, '.ocr', 'worktrees', 'pr-7')
     insertSession('s-pr', 7)
     writeContext('s-pr', wt)
     setup(listCli([]).runCli)

@@ -571,6 +571,17 @@ describe('post:submit worktree cleanup (after-post)', () => {
     expect(cli.calls.some((c) => c[0] === 'remove')).toBe(false)
   })
 
+  it('keep + failing CLI: nothing was asked to be removed, so the outcome is none (never kept_error)', async () => {
+    setCleanup('keep')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const runCli: RunCli = async () => {
+      throw new Error('ocr not found')
+    }
+    const h = await postByUrl({ runCli })
+    expect(h.last('post:submit-result')).toMatchObject({ success: true, worktree: 'none' })
+    warn.mockRestore()
+  })
+
   it('kept_error: an unreadable worktree list is not "none" (and never fails the post)', async () => {
     setCleanup('after-post')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})

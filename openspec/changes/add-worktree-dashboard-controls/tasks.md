@@ -9,7 +9,7 @@
 - [x] 2.1 `routes/config.ts`: `PATCH /api/config` (allow-list, validation, resolved response incl. `worktrees.dir` absolute + `exists`); `GET` returns the same resolved view.
 - [x] 2.2 `services/worktrees.ts`: `listWorktrees`/`removeWorktree`/`codeRootForSession` via `ocr worktree … --json` (no `packages/cli` import); tests with a fake runner.
 - [x] 2.3 `chat-handler.ts`: `cwd` from `codeRootForSession`; first-message context states the code root; fallback note emitted as a `chat:notice`.
-- [x] 2.4 `routes/worktrees.ts`: `POST /api/sessions/:id/worktree/remove { force }` → tracked `ocr worktree remove <n> [--force]`; refuses while an execution for the session is running; `GET /api/sessions/:id/worktree` → `{ path, exists, dirty }`.
+- [x] 2.4 `routes/worktrees.ts`: `POST /api/sessions/:id/worktree/remove { force }` → tracked `ocr worktree remove <n> [--force]`; refuses while an execution for any session of the PR is running (pid-less rows only within the last 2 h); `GET /api/sessions/:id/worktree` → `{ path, exists, dirty }`.
 - [x] 2.5 `post-handler.ts`: on successful submit and `cleanup: after-post`, remove the session's worktree (non-force); include `worktree: removed | kept_dirty | kept_active | kept_running | kept_config | kept_error | none` in `post:submit-result`.
 - [x] 2.6 Tests for 2.1, 2.4, 2.5 (classical; `gh`/`git`/`ocr` runners injectable).
 
@@ -26,4 +26,4 @@
 - [x] 4.1 Settings: change the worktree directory to an absolute path and `cleanup` to `after-post`; verify `.ocr/config.yaml` keeps its comments and other keys; the screen shows the resolved path.
 - [x] 4.2 Review the throwaway PR #1 via URL from the palette; worktree created under the new directory; Ask the Team answers from the worktree (ask for a file that only exists on that branch).
 - [x] 4.3 Post the review (comment, own PR) → worktree removed automatically; with `keep`, the session page's "Remove worktree" removes it; a dirty worktree is kept and Force removes it.
-- [ ] 4.4 `nx run-many -t lint test typecheck` green; `openspec validate add-worktree-dashboard-controls --strict`; OCR review of the branch before merge.
+- [x] 4.4 `nx run-many -t lint test typecheck` green; `openspec validate add-worktree-dashboard-controls --strict`; OCR review of the branch before merge.

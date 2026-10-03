@@ -11,10 +11,10 @@ import {
 } from '../../child-env.js'
 import {
   codeRootForSession,
+  contextRecordedWorktree,
   listWorktrees,
   removeWorktree,
   runningExecutionForPr,
-  worktreeRootFromContext,
   type RunCli,
 } from '../worktrees.js'
 
@@ -146,21 +146,31 @@ describe('codeRootForSession', () => {
   })
 })
 
-describe('worktreeRootFromContext', () => {
+describe('contextRecordedWorktree', () => {
   function writeContext(body: string) {
     mkdirSync(join(ocrDir, 'sessions', 's1'), { recursive: true })
     writeFileSync(join(ocrDir, 'sessions', 's1', 'context.md'), body)
   }
-  it('returns the recorded worktree path (relative paths resolve against the repo root)', () => {
-    writeContext('# Review Context\n\n**Code root**: .ocr/worktrees/pr-7\n')
-    expect(worktreeRootFromContext(ocrDir, 's1')).toBe(join(workspace, '.ocr/worktrees/pr-7'))
+  const wt = () => join(workspace, '.ocr', 'worktrees', 'pr-8')
+
+  it('is false for the literal in-place line of an annotated Code root', () => {
+    writeContext(`**Code root** (PR targets only): ${workspace} (in place: HEAD is already the PR head, c019b8b)\n`)
+    expect(contextRecordedWorktree(ocrDir, 's1', 8)).toBe(false)
   })
-  it('is null for an in-place review (code root = checkout), a missing line or a missing file', () => {
-    writeContext(`**Code root**: ${workspace}\n`)
-    expect(worktreeRootFromContext(ocrDir, 's1')).toBeNull()
+  it('is true for a list-item Code root naming the worktree', () => {
+    writeContext(`# Review Context\n\n- **Code root**: ${wt()}\n`)
+    expect(contextRecordedWorktree(ocrDir, 's1', 8)).toBe(true)
+  })
+  it('is true when the worktree path is followed by an annotation, or appears in a later round', () => {
+    writeContext(`**Code root**: ${workspace}\n\n## Round 2\n**Code root**: ${wt()} (worktree, detached)\n`)
+    expect(contextRecordedWorktree(ocrDir, 's1', 8)).toBe(true)
+  })
+  it('is false for another PR, a missing line or a missing file', () => {
+    writeContext(`**Code root**: ${wt()}\n`)
+    expect(contextRecordedWorktree(ocrDir, 's1', 9)).toBe(false)
     writeContext('**Target**: staged changes\n')
-    expect(worktreeRootFromContext(ocrDir, 's1')).toBeNull()
-    expect(worktreeRootFromContext(ocrDir, 'nope')).toBeNull()
+    expect(contextRecordedWorktree(ocrDir, 's1', 8)).toBe(false)
+    expect(contextRecordedWorktree(ocrDir, 'nope', 8)).toBe(false)
   })
 })
 
@@ -196,5 +206,23 @@ describe('runningExecutionForPr', () => {
     insert('e', '["d1-pr-7"]', new Date(Date.now() - 3 * 3600_000).toISOString())
     expect(runningExecutionForPr(db, 7)).toBeNull()
     expect(runningExecutionForPr(db, 70)).not.toBeNull()
+  })
+
+  describe('2-hour bound (fixed now)', () => {
+    const NOW = Date.parse('2026-10-03T12:00:00.000Z')
+    const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
+    const withPid = (uid: string, startedAt: string, pid: number | null) => {
+      insert(uid, '["d1-pr-7"]', startedAt)
+      db.run('UPDATE command_executions SET pid = ? WHERE uid = ?', [pid, uid])
+    }
+    it.each([
+      ['pid-less row at -1h59m', 119, null, true],
+      ['pid-less row at -2h01m', 121, null, false],
+      ['pid row at -1h59m', 119, 123, true],
+      ['pid row at -2h01m (still blocks)', 121, 123, true],
+    ])('%s', (_name, minutesAgo, pid, blocks) => {
+      withPid('x', ago(minutesAgo), pid)
+      expect(runningExecutionForPr(db, 7, NOW) !== null).toBe(blocks)
+    })
   })
 })

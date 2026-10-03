@@ -37,6 +37,18 @@ The `worktrees.cleanup` setting SHALL accept `after-post` in addition to `keep` 
 - **WHEN** a review for that session is posted to GitHub successfully (any state)
 - **THEN** the worktree is removed unless it has uncommitted changes, in which case it is kept and reported
 
+#### Scenario: Kept while a review is open
+
+- **GIVEN** `worktrees.cleanup: after-post` and a PR worktree that an open (active) review session still uses
+- **WHEN** a review is posted successfully
+- **THEN** the worktree is kept and reported as `kept_active`; removal is never forced
+
+#### Scenario: Kept while a command runs
+
+- **GIVEN** `worktrees.cleanup: after-post` and a running execution of any session of the same PR
+- **WHEN** a review is posted successfully
+- **THEN** the worktree is kept and reported as `kept_running`
+
 #### Scenario: Other modes unchanged
 
 - **GIVEN** `keep` or `on-close`

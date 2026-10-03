@@ -147,6 +147,7 @@ export function useChat(
       setMessages((prev) => [...prev, userMsg])
       setIsStreaming(true)
       setError(null)
+      setWorktreeNotice(null) // the server re-emits it if it still applies
       setToolStatus(null)
       setToolHistory([])
       streamingRef.current = ''

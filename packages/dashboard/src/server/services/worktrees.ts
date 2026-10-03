@@ -9,9 +9,10 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join } from 'node:path'
 import { execBinaryAsync, type ExecError } from '@open-code-review/platform'
 import type { Database } from '@open-code-review/persistence'
+import { getWorktreeConfig } from '@open-code-review/config/worktree-config'
 import { childEnv } from '../child-env.js'
 import { resolveLocalCli } from '../socket/cli-resolver.js'
 
@@ -134,36 +135,35 @@ export async function codeRootForSession(
 }
 
 /**
- * The worktree path the session's `context.md` recorded as **Code root**, or
- * null when it has none or it is the checkout itself (an in-place review never
- * had a worktree). Relative paths resolve against the repository root.
+ * True iff the session's `context.md` mentions the PR worktree path
+ * (`<worktrees.dir>/pr-<n>`) anywhere, in any round. A plain substring check:
+ * the file is prose written by an LLM, so extracting a path from it is
+ * brittle, while "does it name the worktree we would have created" is not.
+ * An in-place review (code root = checkout) never names it.
  */
-export function worktreeRootFromContext(ocrDir: string, sessionId: string): string | null {
-  const repoRoot = dirname(ocrDir)
+export function contextRecordedWorktree(ocrDir: string, sessionId: string, prNumber: number): boolean {
   let text: string
   try {
     text = readFileSync(join(ocrDir, 'sessions', sessionId, 'context.md'), 'utf-8')
   } catch {
-    return null
+    return false
   }
-  const raw = /^\*\*Code root\*\*(?:\s*\([^)]*\))?:\s*`?([^`\r\n]+?)`?\s*$/m.exec(text)?.[1]
-  if (!raw) return null
-  const root = resolve(repoRoot, raw)
-  return root === resolve(repoRoot) ? null : root
+  return text.includes(join(getWorktreeConfig(ocrDir).dir, `pr-${prNumber}`))
 }
 
 /**
  * Id of a still-running execution linked to ANY session of the PR: bound via
  * `workflow_id` (command runner) or carrying the session id as an arg (chat,
  * post generation). The worktree is per PR but sessions are per day/re-review,
- * so the guard is keyed by PR. Rows older than 2 hours are ignored so a crashed
- * server cannot block removal forever. Null when none.
+ * so the guard is keyed by PR. Rows without a recorded pid and older than 2 hours
+ * are ignored so a crashed server cannot block removal forever; rows with a pid
+ * are closed by the orphan sweeps when their process dies, so they always count. Null when none.
  */
 export function runningExecutionForPr(db: Database, prNumber: number, now: number = Date.now()): number | null {
   const res = db.exec(
     `SELECT ce.id FROM command_executions ce
       WHERE ce.finished_at IS NULL
-        AND julianday(ce.started_at) >= julianday(?)
+        AND (ce.pid IS NOT NULL OR julianday(ce.started_at) >= julianday(?))
         AND EXISTS (
           SELECT 1 FROM sessions s
            WHERE s.pr_number = ?
