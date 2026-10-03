@@ -98,6 +98,24 @@ export function escapeUserHeaders(value: string): string {
   )
 }
 
+/** Accepted PR target forms: `pr:<n>` or `https://github.com/<owner>/<repo>/pull/<n>`. */
+const PR_TARGET_SHAPE = /^(?:pr:[1-9]\d*|https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/[1-9]\d*\/?)$/
+/** A target that is *trying* to be a PR target (so a malformed one is an error, not free text). */
+const PR_TARGET_INTENT = /^(?:pr:|https?:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/)/i
+
+export const PR_TARGET_ERROR =
+  'Invalid PR target. Use pr:<number> (e.g. pr:123) or https://github.com/<owner>/<repo>/pull/<number>.'
+
+/**
+ * Shape-only check of a review/map target: returns an error message when it
+ * looks like a PR target but is malformed, else null. Anything else (branch,
+ * commit range, path, free text) is not this function's business. Never
+ * contacts GitHub; the skill resolves the PR.
+ */
+export function validatePrTarget(target: string): string | null {
+  return PR_TARGET_INTENT.test(target) && !PR_TARGET_SHAPE.test(target) ? PR_TARGET_ERROR : null
+}
+
 /**
  * Pure prompt builder.
  *
@@ -140,12 +158,15 @@ export type BuildPromptOptions = {
 export function buildPrompt(opts: BuildPromptOptions): {
   prompt: string
   resumeWorkflowId: string
+  /** Set when the target is a malformed PR target; the caller must not spawn. */
+  targetError: string | null
 } {
   const { baseCommand, subArgs, commandContent, executionUid, localCli } = opts
 
   // Hoisted to function scope: every command path needs to honor
   // `--resume`, and the result is read after the if/else.
   let resumeWorkflowId = ''
+  let targetError: string | null = null
 
   // Final prompt buffer.
   const promptLines: string[] = []
@@ -201,6 +222,8 @@ export function buildPrompt(opts: BuildPromptOptions): {
         i++
       }
     }
+
+    targetError = validatePrTarget(target)
 
     const optionsStr = options.length > 0 ? options.join(' ') : 'none'
     userContentLines.push(
@@ -291,7 +314,7 @@ export function buildPrompt(opts: BuildPromptOptions): {
   }
 
   promptLines.push('', '---', '', commandContent)
-  return { prompt: promptLines.join('\n'), resumeWorkflowId }
+  return { prompt: promptLines.join('\n'), resumeWorkflowId, targetError }
 }
 
 /**

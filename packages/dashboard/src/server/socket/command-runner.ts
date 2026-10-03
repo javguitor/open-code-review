@@ -421,6 +421,12 @@ function spawnAiCommand(
     executionUid: entry.uid,
     localCli,
   })
+  if (built.targetError) {
+    const content = `Error: ${built.targetError}\n`
+    io.emit('command:output', { execution_id: executionId, content })
+    finishExecution(io, db, ocrDir, executionId, 1, content)
+    return
+  }
   const prompt = built.prompt
   const resumeWorkflowId = built.resumeWorkflowId
 

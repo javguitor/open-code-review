@@ -323,3 +323,43 @@ describe('buildPrompt — argument parsing (S15)', () => {
     expect(prompt).toContain('Requirements: enforce idempotency')
   })
 })
+
+// ── PR targets (add-pr-worktree-review): shape validation, verbatim forward ──
+describe('buildPrompt — PR targets', () => {
+  const build = (target: string, baseCommand = 'review') =>
+    buildPrompt({
+      baseCommand,
+      subArgs: [target],
+      commandContent: '# cmd',
+      executionUid: null,
+      localCli: null,
+    })
+
+  it.each(['pr:123', 'https://github.com/o/r/pull/123', 'https://github.com/o/r/pull/123/'])(
+    'forwards %s verbatim with no error',
+    (target) => {
+      const { prompt, targetError } = build(target)
+      expect(targetError).toBeNull()
+      expect(prompt).toContain(`Target: ${target}`)
+    },
+  )
+
+  it.each(['pr:abc', 'pr:', 'pr:0', 'pr:-1', 'pr:1.5', 'PR:abc', 'https://github.com/o/r/pull/abc'])(
+    'rejects malformed PR target %s (also for map)',
+    (target) => {
+      expect(build(target).targetError).toMatch(/pr:<number>/)
+      expect(build(target, 'map').targetError).toMatch(/pr:<number>/)
+    },
+  )
+
+  it.each(['staged', 'feat/x', 'main..HEAD', 'src/pr:abc.ts', 'https://github.com/o/r/issues/3', 'review the PR'])(
+    'leaves non-PR target %s alone',
+    (target) => {
+      expect(build(target).targetError).toBeNull()
+    },
+  )
+
+  it('still escapes header-shaped free text in the target', () => {
+    expect(build('## evil').prompt).toContain('Target: \\## evil')
+  })
+})

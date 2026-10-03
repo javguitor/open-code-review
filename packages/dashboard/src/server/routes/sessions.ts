@@ -7,8 +7,10 @@
  * workflows without requiring CLI schema changes.
  */
 
+import { join } from 'node:path'
 import { Router } from 'express'
 import type { Database } from '@open-code-review/persistence'
+import { getWorktreeConfig } from '@open-code-review/config/worktree-config'
 import {
   type SessionRow,
   getAllSessions,
@@ -20,6 +22,7 @@ import {
   getReviewerOutputsForRound,
   getRoundProgress,
 } from '../db.js'
+import { getPrHead } from '../services/pr-head.js'
 
 // Phase names must match session-detail-page.tsx constants
 const REVIEW_PHASE_NAMES = [
@@ -162,16 +165,49 @@ function enrichSession(db: Database, session: SessionRow): EnrichedSession {
   }
 }
 
+// ── PR staleness ──
+
+type PrStale = {
+  /** null = not applicable (no `pr_url`/`head_sha`) or the lookup failed. */
+  stale: boolean | null
+  /** The PR's current head commit, for the "PR moved to <sha7>" badge. */
+  pr_head_sha: string | null
+}
+
+async function computeStale(
+  session: SessionRow,
+  getHead: typeof getPrHead,
+  force = false,
+): Promise<PrStale> {
+  if (!session.pr_url || !session.head_sha) return { stale: null, pr_head_sha: null }
+  const current = await getHead(session.pr_url, { force })
+  return { stale: current === null ? null : current !== session.head_sha, pr_head_sha: current }
+}
+
+export type SessionsRouterDeps = {
+  /** Needed for the PR worktree path; omitted → `worktree_path` is null. */
+  ocrDir?: string
+  /** Injectable so tests need no `gh`. */
+  getPrHead?: typeof getPrHead
+}
+
 // ── Router ──
 
-export function createSessionsRouter(db: Database): Router {
+export function createSessionsRouter(db: Database, deps: SessionsRouterDeps = {}): Router {
   const router = Router()
+  const getHead = deps.getPrHead ?? getPrHead
+
+  const worktreePath = (s: SessionRow): string | null =>
+    deps.ocrDir && s.pr_number !== null
+      ? join(getWorktreeConfig(deps.ocrDir).dir, `pr-${s.pr_number}`)
+      : null
 
   // GET /api/sessions — List all sessions, sorted by updated_at desc
-  router.get('/', (_req, res) => {
+  router.get('/', async (_req, res) => {
     try {
       const sessions = getAllSessions(db)
-      res.json(sessions.map((s) => enrichSession(db, s)))
+      const stale = await Promise.all(sessions.map((s) => computeStale(s, getHead)))
+      res.json(sessions.map((s, i) => ({ ...enrichSession(db, s), ...stale[i] })))
     } catch (err) {
       console.error('Failed to fetch sessions:', err)
       res.status(500).json({ error: 'Failed to fetch sessions' })
@@ -179,17 +215,36 @@ export function createSessionsRouter(db: Database): Router {
   })
 
   // GET /api/sessions/:id — Get single session with detail
-  router.get('/:id', (req, res) => {
+  router.get('/:id', async (req, res) => {
     try {
       const session = getSession(db, req.params['id'] as string)
       if (!session) {
         res.status(404).json({ error: 'Session not found' })
         return
       }
-      res.json(enrichSession(db, session))
+      res.json({
+        ...enrichSession(db, session),
+        ...(await computeStale(session, getHead)),
+        worktree_path: worktreePath(session),
+      })
     } catch (err) {
       console.error('Failed to fetch session:', err)
       res.status(500).json({ error: 'Failed to fetch session' })
+    }
+  })
+
+  // POST /api/sessions/:id/check-updates — Re-read the PR head, bypassing the cache
+  router.post('/:id/check-updates', async (req, res) => {
+    try {
+      const session = getSession(db, req.params['id'] as string)
+      if (!session) {
+        res.status(404).json({ error: 'Session not found' })
+        return
+      }
+      res.json({ head_sha: session.head_sha, ...(await computeStale(session, getHead, true)) })
+    } catch (err) {
+      console.error('Failed to check for updates:', err)
+      res.status(500).json({ error: 'Failed to check for updates' })
     }
   })
 

@@ -24,7 +24,22 @@ export type SessionSummary = {
   latest_verdict: string | null
   latest_blocker_count: number
   latest_round_status: string | null
+  // PR-targeted sessions (null for branch/staged/range targets)
+  base_ref: string | null
+  head_ref: string | null
+  head_sha: string | null
+  pr_number: number | null
+  pr_url: string | null
+  /** true = the PR's head moved past `head_sha`; null = n/a or the lookup failed. */
+  stale: boolean | null
+  /** The PR's current head commit (for "PR moved to <sha7>"). */
+  pr_head_sha: string | null
+  /** Detail endpoint only: where the PR worktree lives. */
+  worktree_path?: string | null
 }
+
+/** Response of `POST /api/sessions/:id/check-updates`. */
+export type CheckUpdatesResponse = Pick<SessionSummary, 'head_sha' | 'stale' | 'pr_head_sha'>
 
 export type OrchestrationEvent = {
   id: number

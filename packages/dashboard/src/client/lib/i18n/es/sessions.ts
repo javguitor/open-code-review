@@ -93,6 +93,16 @@ const sessions = {
   'sessions.handoff_copy': 'Copiar',
   'sessions.handoff_copied_both': 'Copiados ambos',
   'sessions.handoff_copy_both': 'Copiar ambos',
+  'sessions.stale_badge': 'Desactualizada — la PR avanzó a {sha}',
+  'sessions.check_updates': 'Buscar actualizaciones',
+  'sessions.checking_updates': 'Comprobando…',
+  'sessions.check_updates_failed': 'No se pudo consultar GitHub para comprobar la PR.',
+  'sessions.re_review': 'Revisar de nuevo',
+  'sessions.pr_title': 'Pull request',
+  'sessions.pr_base': 'Base',
+  'sessions.pr_head': 'Head',
+  'sessions.pr_reviewed_commit': 'Commit revisado',
+  'sessions.pr_worktree': 'Worktree',
 }
 
 export { sessions }

@@ -9,6 +9,7 @@ import { PhaseTimeline, type Phase } from '../../components/ui/phase-timeline'
 import { SessionTabs } from './components/session-tabs'
 import { LivenessHeader } from './components/liveness-header'
 import { ResumeCard } from './components/resume-card'
+import { StaleBadge } from './components/stale-badge'
 import { fetchApi, parseUtcDate } from '../../lib/utils'
 import { formatDate } from '../../lib/date-utils'
 import { useT } from '../../lib/i18n'
@@ -178,6 +179,20 @@ export function SessionDetailPage() {
           </div>
           <StatusBadge variant={session.status} />
         </div>
+
+        {session.pr_url && (
+          <div className="mt-4 space-y-2 text-sm text-zinc-600 dark:text-zinc-300">
+            <StaleBadge session={session} alwaysShowCheck />
+            <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1">
+              <dt className="text-zinc-500 dark:text-zinc-400">{t('sessions.pr_title')}</dt>
+              <dd><a href={session.pr_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline dark:text-blue-400">#{session.pr_number}</a></dd>
+              {session.base_ref && (<><dt className="text-zinc-500 dark:text-zinc-400">{t('sessions.pr_base')}</dt><dd>{session.base_ref}</dd></>)}
+              {session.head_ref && (<><dt className="text-zinc-500 dark:text-zinc-400">{t('sessions.pr_head')}</dt><dd>{session.head_ref}</dd></>)}
+              {session.head_sha && (<><dt className="text-zinc-500 dark:text-zinc-400">{t('sessions.pr_reviewed_commit')}</dt><dd className="font-mono">{session.head_sha.slice(0, 7)}</dd></>)}
+              {session.worktree_path && (<><dt className="text-zinc-500 dark:text-zinc-400">{t('sessions.pr_worktree')}</dt><dd className="break-all font-mono">{session.worktree_path}</dd></>)}
+            </dl>
+          </div>
+        )}
 
         <div className="mt-6">
           <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">

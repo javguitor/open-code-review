@@ -93,6 +93,16 @@ const sessions = {
   'sessions.handoff_copy': 'Copy',
   'sessions.handoff_copied_both': 'Copied both',
   'sessions.handoff_copy_both': 'Copy both',
+  'sessions.stale_badge': 'Stale — PR moved to {sha}',
+  'sessions.check_updates': 'Check for updates',
+  'sessions.checking_updates': 'Checking…',
+  'sessions.check_updates_failed': 'Could not reach GitHub to check the PR.',
+  'sessions.re_review': 'Re-review',
+  'sessions.pr_title': 'Pull request',
+  'sessions.pr_base': 'Base',
+  'sessions.pr_head': 'Head',
+  'sessions.pr_reviewed_commit': 'Reviewed commit',
+  'sessions.pr_worktree': 'Worktree',
 }
 
 export { sessions }

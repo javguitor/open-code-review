@@ -28,7 +28,7 @@ const commands = {
   'commands.param_target': 'Target',
   'commands.param_requirements': 'Requirements',
   'commands.param_fresh': 'Fresh start',
-  'commands.param_target_placeholder': 'staged (default)',
+  'commands.param_target_placeholder': 'pr:123 · branch · commit range · path (default: staged)',
   'commands.param_requirements_placeholder': 'spec.md or describe what to focus on...',
   'commands.default_model_label': '(default model)',
   'commands.default_model_detail': "Use the host CLI's default",

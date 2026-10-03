@@ -92,6 +92,41 @@ async function findPrForBranch(
   return null
 }
 
+/**
+ * Resolve a PR-targeted session's PR by its stored URL. Same result shape as
+ * `findPrForBranch`, but the session's own `pr_url` is authoritative: a branch
+ * lookup would miss PRs from forks and can match a different PR on the branch.
+ */
+async function findPrByUrl(
+  prUrl: string,
+  fallbackBranch: string,
+  env: NodeJS.ProcessEnv,
+  cwd: string,
+  runGh: RunGh,
+): Promise<{ prNumber: number; prUrl: string; resolvedBranch: string; authorLogin: string | null } | null> {
+  try {
+    const { stdout } = await runGh(
+      'gh',
+      ['pr', 'view', prUrl, '--json', 'number,url,author,headRefName'],
+      { env, cwd, encoding: 'utf-8' },
+    )
+    const pr = JSON.parse(stdout) as {
+      number: number
+      url: string
+      author?: { login?: string } | null
+      headRefName?: string
+    }
+    return {
+      prNumber: pr.number,
+      prUrl: pr.url,
+      resolvedBranch: pr.headRefName ?? fallbackBranch,
+      authorLogin: pr.author?.login ?? null,
+    }
+  } catch {
+    return null
+  }
+}
+
 const INVALID_SUBMIT_PAYLOAD = { success: false, code: 'invalid-payload', error: 'Invalid payload' } as const
 
 // ── Active generation processes ──
@@ -168,8 +203,11 @@ export function registerPostHandlers(
         return
       }
 
-      // Find PR for branch (tries slash-restored variants if needed)
-      const pr = await findPrForBranch(branch, childEnv().env, repoRoot, runGh)
+      // PR sessions resolve by their stored URL; others by branch (tries
+      // slash-restored variants if needed)
+      const pr = session.pr_url
+        ? await findPrByUrl(session.pr_url, branch, childEnv().env, repoRoot, runGh)
+        : await findPrForBranch(branch, childEnv().env, repoRoot, runGh)
       if (pr) {
         // Viewer lookup failure leaves ownership `unknown` — never `other`.
         let viewerLogin: string | null = null
@@ -199,7 +237,9 @@ export function registerPostHandlers(
           prUrl: null,
           branch,
           ownership: 'unknown',
-          error: `No open PR found for branch "${branch}".`,
+          error: session.pr_url
+            ? `Could not resolve PR ${session.pr_url}.`
+            : `No open PR found for branch "${branch}".`,
         })
       }
     } catch (err) {
