@@ -25,11 +25,11 @@
 
 ## 5. Interface localization (2b)
 
-- [ ] 5.1 `client/lib/i18n/{index.ts,en.ts,es.ts}`: `MessageKey` union derived from `en`, `t()`, `useT()` reading `language` from the config query, `{var}` interpolation, English fallback while loading.
-- [ ] 5.2 Extract strings by feature directory (one agent per group): `sessions`, `reviews` (incl. post dialog), `commands` + `map`, `chat` + `reviewers` + `team` + shell/nav (`components/ui`, `status-badge`, layout).
-- [ ] 5.3 Enum display labels (`status.*`, `verdict.*`, `severity.*`, `phase.*`) through keys; values untouched.
-- [ ] 5.4 Unit tests: `t()` interpolation, fallback, every `en` key present in `es` (type-level + runtime assertion).
-- [ ] 5.5 Browser check in `es` and `en` on the round page and post dialog.
+- [x] 5.1 `client/lib/i18n/{index.ts,en.ts,es.ts}`: `MessageKey` union derived from `en`, `t()`, `useT()` reading `language` from the config query, `{var}` interpolation, English fallback while loading.
+- [x] 5.2 Extract strings by feature directory (one agent per group): `sessions`, `reviews` (incl. post dialog), `commands` + `map`, `chat` + `reviewers` + `team` + shell/nav (`components/ui`, `status-badge`, layout).
+- [x] 5.3 Enum display labels (`status.*`, `verdict.*`, `severity.*`, `phase.*`) through keys; values untouched.
+- [x] 5.4 Unit tests: `t()` interpolation, fallback, every `en` key present in `es` (type-level + runtime assertion).
+- [x] 5.5 Browser check in `es` and `en` on the round page and post dialog.
 
 ## 6. Fixes from the Spanish acceptance review (should-fix 1–3, suggestions 1–2)
 
@@ -45,4 +45,6 @@ Acceptance 4.1 (2026-10-03): session `2026-10-03-feat-output-language`, `languag
 - Reviewer files in Spanish with English structure: `parseReviewerOutput` extracted 6/6 and 7/7 findings (+1 spurious `title='s'` from `## Findings` — pre-existing `FINDING_HEADING_RE` bug, identical on the English baseline session).
 - `final.md` in Spanish: `parseFinalMd` → `APPROVE / 0 / 4 / 5` == `round-meta.synthesis_counts`; `complete-round` accepted.
 - Verdict APPROVE; 4 should-fix → block 6.
+
+2b browser check (2026-10-03, `language: es`, Vite dev): sidebar, round page, findings table and post dialog render in Spanish; `en` fallback checked by switching the config. Follow-ups (not blocking): "Round N" heading in round-page.tsx still English; server-emitted error strings (e.g. "No open PR found…") are data and stay English; duplicate generic keys to merge later (`reviews.state_*`/`verdict_*`, `commands.status_*`/`status.*`, `map.ask_the_team`/`chat.title`, `notes.cancel|save`/`common.*`, `commands.tier_*`/`reviewers.tier_*`); `REVIEW_STATE_LABELS` in lib/review-state.ts has no consumer; `formatDate*` follow the browser locale, not `language`.
 
