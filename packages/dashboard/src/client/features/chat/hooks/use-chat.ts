@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSocket, useSocketEvent } from '../../../providers/socket-provider'
-import type { ChatMessage, ChatTargetType, ChatToolStatus } from '../../../lib/api-types'
+import type { ChatMessage, ChatNotice, ChatTargetType, ChatToolStatus } from '../../../lib/api-types'
 
 type UseChatReturn = {
   messages: ChatMessage[]
@@ -10,6 +10,8 @@ type UseChatReturn = {
   toolStatus: ChatToolStatus | null
   toolHistory: ChatToolStatus[]
   error: string | null
+  /** The session's worktree is gone and chat answers from the checkout. */
+  worktreeNotice: ChatNotice['code'] | null
 }
 
 export function useChat(
@@ -26,6 +28,7 @@ export function useChat(
   const [toolStatus, setToolStatus] = useState<ChatToolStatus | null>(null)
   const [toolHistory, setToolHistory] = useState<ChatToolStatus[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [worktreeNotice, setWorktreeNotice] = useState<ChatNotice['code'] | null>(null)
 
   const streamingRef = useRef('')
 
@@ -102,6 +105,17 @@ export function useChat(
     ),
   )
 
+  // Notice — emitted on every message while the worktree is missing/unknown; keeping only the latest code dedupes it
+  useSocketEvent<ChatNotice>(
+    'chat:notice',
+    useCallback(
+      (data) => {
+        if (data.sessionId === sessionId) setWorktreeNotice(data.code)
+      },
+      [sessionId],
+    ),
+  )
+
   // Error
   useSocketEvent<{ conversationId: string; error: string }>(
     'chat:error',
@@ -133,6 +147,7 @@ export function useChat(
       setMessages((prev) => [...prev, userMsg])
       setIsStreaming(true)
       setError(null)
+      setWorktreeNotice(null) // the server re-emits it if it still applies
       setToolStatus(null)
       setToolHistory([])
       streamingRef.current = ''
@@ -148,5 +163,5 @@ export function useChat(
     [socket, conversationId, sessionId, targetType, targetId, isStreaming],
   )
 
-  return { messages, sendMessage, isStreaming, streamingContent, toolStatus, toolHistory, error }
+  return { messages, sendMessage, isStreaming, streamingContent, toolStatus, toolHistory, error, worktreeNotice }
 }

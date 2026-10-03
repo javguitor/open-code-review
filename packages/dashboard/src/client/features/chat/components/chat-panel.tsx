@@ -27,6 +27,7 @@ export function ChatPanel({ sessionId, targetType, targetId, onClose }: ChatPane
     toolStatus,
     toolHistory,
     error,
+    worktreeNotice,
   } = useChat(sessionId, targetType, targetId)
 
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -100,6 +101,12 @@ export function ChatPanel({ sessionId, targetType, targetId, onClose }: ChatPane
             toolStatus={toolStatus}
             toolHistory={toolHistory}
           />
+        )}
+
+        {worktreeNotice && (
+          <p className="text-center text-xs text-zinc-500 dark:text-zinc-400">
+            {t(worktreeNotice === 'worktree-unknown' ? 'chat.worktree_unknown' : 'chat.worktree_missing')}
+          </p>
         )}
 
         {error && (

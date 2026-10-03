@@ -103,6 +103,20 @@ const sessions = {
   'sessions.pr_head': 'Head',
   'sessions.pr_reviewed_commit': 'Reviewed commit',
   'sessions.pr_worktree': 'Worktree',
+  'sessions.worktree_path': 'Path',
+  'sessions.worktree_state': 'State',
+  'sessions.worktree_cleanup': 'Cleanup',
+  'sessions.worktree_clean': 'Present, no uncommitted changes',
+  'sessions.worktree_dirty': 'Present, has uncommitted changes',
+  'sessions.worktree_absent': 'Does not exist',
+  'sessions.worktree_unknown': 'Unknown: the worktree list could not be read',
+  'sessions.worktree_remove': 'Remove worktree',
+  'sessions.worktree_force': 'Force remove',
+  'sessions.worktree_removed': 'Worktree removed.',
+  'sessions.worktree_dirty_blocked': 'The worktree has uncommitted changes and was kept. Force removal discards them.',
+  'sessions.worktree_not_found': 'No worktree found for this pull request.',
+  'sessions.worktree_active_session': 'A review of this PR is still open; finish it first.',
+  'sessions.worktree_remove_error': 'The worktree could not be removed.',
 }
 
 export { sessions }

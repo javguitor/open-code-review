@@ -8,6 +8,9 @@
  *   list              — Worktrees under the configured dir, joined with sessions
  *   remove <n>        — Remove one worktree plus its `refs/ocr/pr/<n>` ref
  *   remove --all-stale — Remove every worktree whose PR has no active session
+ *
+ * `remove --json` prints one result object (an array with `--all-stale`):
+ * `{ pr_number, status: removed|dirty|not-found|active-session|error, path?, error? }`.
  */
 
 import { Command } from "commander";
@@ -186,6 +189,13 @@ function parsePrNumber(value: string): number {
   return Number(value);
 }
 
+type WorktreeRemoveJson = {
+  pr_number: number;
+  status: RemoveWorktreeResult["status"] | "active-session" | "error";
+  path?: string;
+  error?: string;
+};
+
 const removeSubcommand = new Command("remove")
   .description("Remove a PR worktree and its refs/ocr/pr/<n> ref (refuses dirty without --force)")
   .argument("[pr-number]", "PR number whose worktree to remove")
@@ -194,8 +204,12 @@ const removeSubcommand = new Command("remove")
     "Remove every worktree whose PR has no active session (unrelated to the dashboard's Stale badge)",
   )
   .option("--force", "Remove even if the worktree is dirty or its PR has an active session")
+  .option("--json", "Output the result(s) as JSON")
   .action(
-    async (prArg: string | undefined, options: { allStale?: boolean; force?: boolean }) => {
+    async (
+      prArg: string | undefined,
+      options: { allStale?: boolean; force?: boolean; json?: boolean },
+    ) => {
       if (Boolean(prArg) === Boolean(options.allStale)) {
         fail("Pass either <pr-number> or --all-stale");
       }
@@ -208,22 +222,29 @@ const removeSubcommand = new Command("remove")
             ).map((w) => w.prNumber)
           : [parsePrNumber(prArg!)];
         if (options.allStale && targets.length === 0) {
-          console.log(chalk.dim("No stale worktrees."));
+          console.log(options.json ? "[]" : chalk.dim("No stale worktrees."));
           return;
         }
         const active = openPrNumbers(getAllSessions(await getDb(ocrDir)));
         let failed = false;
+        const results: WorktreeRemoveJson[] = [];
         for (const prNumber of targets) {
           try {
             if (!options.force && active.has(prNumber)) {
-              console.error(
-                chalk.red(`PR #${prNumber}: has an active session — refusing to remove (use --force)`),
-              );
+              results.push({ pr_number: prNumber, status: "active-session" });
+              if (!options.json) {
+                console.error(
+                  chalk.red(`PR #${prNumber}: has an active session — refusing to remove (use --force)`),
+                );
+              }
               failed = true;
               continue;
             }
             const result = removePrWorktree({ ocrDir, prNumber, force: options.force });
-            if (result.status === "removed") {
+            results.push({ pr_number: prNumber, ...result });
+            if (options.json) {
+              failed ||= result.status !== "removed";
+            } else if (result.status === "removed") {
               console.log(`PR #${prNumber}: removed ${result.path}`);
             } else if (result.status === "dirty") {
               console.error(
@@ -237,11 +258,14 @@ const removeSubcommand = new Command("remove")
               failed = true;
             }
           } catch (error) {
-            console.error(
-              chalk.red(`PR #${prNumber}: ${error instanceof Error ? error.message : String(error)}`),
-            );
+            const message = error instanceof Error ? error.message : String(error);
+            results.push({ pr_number: prNumber, status: "error", error: message });
+            if (!options.json) console.error(chalk.red(`PR #${prNumber}: ${message}`));
             failed = true;
           }
+        }
+        if (options.json) {
+          console.log(JSON.stringify(options.allStale ? results : results[0], null, 2));
         }
         if (failed) process.exit(1);
       } catch (error) {

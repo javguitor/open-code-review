@@ -1,0 +1,27 @@
+const settings = {
+  'settings.title': 'Ajustes',
+  'settings.subtitle': 'Opciones del proyecto guardadas en `.ocr/config.yaml`. Los comentarios y el resto de claves del fichero se conservan.',
+  'settings.loading': 'Cargando ajustes...',
+  'settings.worktrees_title': 'Worktrees de PR',
+  'settings.worktree_dir': 'Directorio de worktrees',
+  'settings.resolved_path': 'Se resuelve a',
+  'settings.dir_exists': 'existe',
+  'settings.dir_missing': 'todavía no existe',
+  'settings.cleanup': 'Limpieza',
+  'settings.cleanup_keep': 'Conservar',
+  'settings.cleanup_keep_desc': 'No eliminar nunca los worktrees automáticamente; se eliminan a mano.',
+  'settings.cleanup_on-close': 'Al cerrar',
+  'settings.cleanup_on-close_desc': 'Eliminar el worktree al cerrar la sesión.',
+  'settings.cleanup_after-post': 'Tras publicar',
+  'settings.cleanup_after-post_desc': 'Eliminar el worktree cuando la revisión se publica en GitHub (se conserva si tiene cambios sin confirmar).',
+  'settings.language': 'Idioma',
+  'settings.language_en': 'Inglés',
+  'settings.language_es': 'Español',
+  'settings.save': 'Guardar',
+  'settings.saved': 'Guardado. Las páginas abiertas toman el idioma al recargar.',
+  'settings.error_dir_required': 'El directorio no puede estar vacío.',
+  'settings.error_cleanup_invalid': 'Elige uno de los modos de limpieza.',
+  'settings.error_language_required': 'Elige un idioma.',
+}
+
+export { settings }

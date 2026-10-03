@@ -15,6 +15,8 @@ const chat = {
   'chat.install_cli': 'Instala Claude Code u OpenCode para usar «Preguntar al equipo».',
   'chat.empty_map': 'Haz una pregunta sobre este map para empezar.',
   'chat.empty_review': 'Haz una pregunta sobre esta revisión para empezar.',
+  'chat.worktree_missing': 'Worktree eliminado: se responde desde el checkout',
+  'chat.worktree_unknown': 'No se ha podido comprobar el worktree: se responde desde el checkout',
 }
 
 export { chat }

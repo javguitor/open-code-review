@@ -5,8 +5,10 @@
  * - `dir`: where PR worktrees (`<dir>/pr-<n>`) are created. Relative paths
  *   resolve against the repository root (the parent of `.ocr/`); `~` expands
  *   to the home directory. Default `.ocr/worktrees`.
- * - `cleanup`: `keep` (default) or `on-close` (remove the worktree when the
- *   last session using it is closed).
+ * - `cleanup`: `keep` (default), `on-close` (remove the worktree when the
+ *   last session using it is closed), or `after-post` (remove it once a review
+ *   for the session is posted to GitHub; handled by the dashboard, not by
+ *   `ocr state finish`).
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -16,11 +18,15 @@ import { parse as parseYaml } from "yaml";
 
 export const DEFAULT_WORKTREE_DIR = ".ocr/worktrees";
 
-export type WorktreeCleanup = "keep" | "on-close";
+export const WORKTREE_CLEANUP_MODES = ["keep", "on-close", "after-post"] as const;
+
+export type WorktreeCleanup = (typeof WORKTREE_CLEANUP_MODES)[number];
 
 export type WorktreeConfig = {
   /** Absolute directory that holds the PR worktrees. */
   dir: string;
+  /** `worktrees.dir` as written in the file; null when absent (default in effect). */
+  dirRaw: string | null;
   cleanup: WorktreeCleanup;
 };
 
@@ -42,6 +48,7 @@ export function getWorktreeConfig(ocrDir: string): WorktreeConfig {
   const repoRoot = dirname(ocrDir);
   const defaults: WorktreeConfig = {
     dir: resolveDir(DEFAULT_WORKTREE_DIR, repoRoot),
+    dirRaw: null,
     cleanup: "keep",
   };
 
@@ -53,12 +60,11 @@ export function getWorktreeConfig(ocrDir: string): WorktreeConfig {
     if (!isRecord(parsed) || !isRecord(parsed.worktrees)) return defaults;
 
     const { dir, cleanup } = parsed.worktrees;
+    const dirRaw = typeof dir === "string" && dir.trim() ? dir.trim() : null;
     return {
-      dir:
-        typeof dir === "string" && dir.trim()
-          ? resolveDir(dir.trim(), repoRoot)
-          : defaults.dir,
-      cleanup: cleanup === "on-close" ? "on-close" : "keep",
+      dir: dirRaw ? resolveDir(dirRaw, repoRoot) : defaults.dir,
+      dirRaw,
+      cleanup: WORKTREE_CLEANUP_MODES.find((m) => m === cleanup) ?? "keep",
     };
   } catch {
     return defaults;

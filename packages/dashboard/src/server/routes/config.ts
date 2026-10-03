@@ -3,12 +3,15 @@
  */
 
 import { Router } from 'express'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { execBinary } from '@open-code-review/platform'
 import { getOutputLanguage } from '@open-code-review/config/language-config'
+import { getWorktreeConfig } from '@open-code-review/config/worktree-config'
+import { ConfigWriteError, setConfigValues, type ConfigPatch } from '@open-code-review/config/config-writer'
 import { childEnv } from '../child-env.js'
 import { join, dirname, basename } from 'node:path'
 import type { AiCliService } from '../services/ai-cli/index.js'
+import type { WorktreeCleanup } from '@open-code-review/config/worktree-config'
 
 const VALID_IDES = ['vscode', 'cursor', 'windsurf', 'jetbrains', 'sublime'] as const
 type IdeType = (typeof VALID_IDES)[number]
@@ -75,6 +78,36 @@ function detectGitBranch(cwd: string): string | null {
   }
 }
 
+/** Mirrors `ConfigSettings` in client/lib/api-types.ts. */
+type ConfigSettings = {
+  worktrees: { dir: string; dir_raw: string | null; exists: boolean; cleanup: WorktreeCleanup }
+  language: string
+}
+
+/** The allow-listed settings, resolved (absolute dir, existence, effective cleanup). */
+function resolvedSettings(ocrDir: string): ConfigSettings {
+  const { dir, dirRaw, cleanup } = getWorktreeConfig(ocrDir)
+  return {
+    worktrees: { dir, dir_raw: dirRaw, exists: existsSync(dir), cleanup },
+    language: getOutputLanguage(ocrDir),
+  }
+}
+
+/** Translate the nested PATCH body into the writer's flat allow-list; unknown keys throw. */
+function toConfigPatch(body: unknown): ConfigPatch {
+  const isObject = (v: unknown): v is Record<string, unknown> =>
+    typeof v === 'object' && v !== null && !Array.isArray(v)
+  if (!isObject(body)) throw new ConfigWriteError('body', 'must be a JSON object')
+  const patch: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(body)) {
+    if (key === 'language') patch.language = value
+    else if (key === 'worktrees' && isObject(value)) {
+      for (const [sub, v] of Object.entries(value)) patch[`worktrees.${sub}`] = v
+    } else throw new ConfigWriteError(key, 'unknown or invalid config key')
+  }
+  return patch as ConfigPatch
+}
+
 export function createConfigRouter(ocrDir: string, aiCliService: AiCliService): Router {
   const router = Router()
   const projectRoot = dirname(ocrDir)
@@ -88,8 +121,24 @@ export function createConfigRouter(ocrDir: string, aiCliService: AiCliService): 
       workspaceName,
       gitBranch,
       aiCli: aiCliService.getStatus(),
-      language: getOutputLanguage(ocrDir),
+      ...resolvedSettings(ocrDir),
     })
+  })
+
+  // PATCH /api/config — allow-listed, comment-preserving write; responds with the resolved view
+  router.patch('/', (req, res) => {
+    try {
+      const patch = toConfigPatch(req.body)
+      if (Object.keys(patch).length > 0) setConfigValues(ocrDir, patch)
+      res.json(resolvedSettings(ocrDir))
+    } catch (err) {
+      if (err instanceof ConfigWriteError) {
+        res.status(400).json({ error: err.message, key: err.key })
+        return
+      }
+      console.error('Failed to update config:', err)
+      res.status(500).json({ error: 'Failed to update config' })
+    }
   })
 
   router.patch('/ide', (req, res) => {

@@ -15,6 +15,8 @@ const chat = {
   'chat.install_cli': 'Install Claude Code or OpenCode to use Ask the Team.',
   'chat.empty_map': 'Ask a question about this map to get started.',
   'chat.empty_review': 'Ask a question about this review to get started.',
+  'chat.worktree_missing': 'Worktree removed — answering from the checkout',
+  'chat.worktree_unknown': 'Could not check the worktree — answering from the checkout',
 }
 
 export { chat }

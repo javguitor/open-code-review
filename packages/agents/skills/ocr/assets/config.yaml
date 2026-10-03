@@ -33,12 +33,16 @@
 # directory is gitignored by `ocr init` / `ocr update`.
 #   dir:     where worktrees are created. Relative paths resolve against the
 #            repository root; absolute paths and a leading ~ also work.
-#   cleanup: keep (default) leaves worktrees until `ocr worktree remove`;
-#            on-close removes a worktree when its last open session is closed.
+#   cleanup: keep       (default) leaves worktrees until `ocr worktree remove`.
+#            on-close   removes a worktree when its last open session is closed
+#                       (at `ocr state finish`, before you may have posted).
+#            after-post removes it once the review is posted to the PR from the
+#                       dashboard (recommended). A worktree with uncommitted
+#                       changes is kept and reported.
 
 # worktrees:
 #   dir: .ocr/worktrees
-#   cleanup: keep
+#   cleanup: after-post
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CONTEXT DISCOVERY

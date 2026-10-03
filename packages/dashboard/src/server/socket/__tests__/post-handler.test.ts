@@ -7,8 +7,8 @@
  * scripted recorder. No internal mocks.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdirSync } from 'node:fs'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Server as SocketIOServer, Socket } from 'socket.io'
 import type { Database } from '@open-code-review/persistence'
@@ -22,6 +22,7 @@ import {
 } from '../../child-env.js'
 import type { AiCliService } from '../../services/ai-cli/index.js'
 import { registerPostHandlers } from '../post-handler.js'
+import type { RunCli } from '../../services/worktrees.js'
 import {
   decideSubmitState,
   ghReviewArgs,
@@ -160,7 +161,7 @@ let db: Database
 /** Scripted gh: first rule whose `match` is a prefix of the joined args wins. */
 type GhRule = { match: string; stdout?: string; fail?: boolean; error?: string }
 
-function setup(rules: GhRule[]) {
+function setup(rules: GhRule[], runCli?: RunCli) {
   const ghCalls: string[][] = []
   const runGh: typeof execBinaryAsync = async (_bin, args) => {
     ghCalls.push(args)
@@ -190,7 +191,7 @@ function setup(rules: GhRule[]) {
     },
   } as unknown as SocketIOServer
 
-  registerPostHandlers(io, socket, db, ocrDir, {} as AiCliService, { runGh })
+  registerPostHandlers(io, socket, db, ocrDir, {} as AiCliService, { runGh, runCli })
 
   async function fire(event: string, payload: unknown): Promise<void> {
     const handler = handlers.get(event)
@@ -431,6 +432,7 @@ describe('post:submit', () => {
       commentUrl: mine(2).html_url,
       state: 'comment',
       downgraded: false,
+      worktree: 'none',
     })
   })
 
@@ -447,5 +449,159 @@ describe('post:submit', () => {
     await checkGh(h)
     await submit(h)
     expect(h.last('post:submit-result')).toMatchObject({ success: true, commentUrl: null })
+  })
+})
+
+describe('post:submit worktree cleanup (after-post)', () => {
+  let WT_PATH: string
+  let ROW: Record<string, unknown>
+
+  /**
+   * Fake `ocr worktree` that follows the real CLI contract: `list` returns `rows`;
+   * `remove` without --force answers `active-session` while the PR has an active
+   * session; otherwise it replies `removal` (JSON printed even on a non-zero exit).
+   */
+  function fakeCli(rows: unknown[], removal: { status: string } = { status: 'removed' }) {
+    const calls: string[][] = []
+    const runCli: RunCli = async (_bin, args) => {
+      const sub = args.slice(args.indexOf('worktree') + 1)
+      calls.push(sub)
+      if (sub[0] === 'list') return { stdout: JSON.stringify(rows), stderr: '' }
+      const active = (db.exec(`SELECT 1 FROM sessions WHERE pr_number = ? AND status = 'active' LIMIT 1`, [PR_NUMBER])[0]?.values.length ?? 0) > 0
+      const result = !sub.includes('--force') && active ? { status: 'active-session' } : removal
+      const stdout = JSON.stringify({ pr_number: PR_NUMBER, ...result })
+      if (result.status === 'removed') return { stdout, stderr: '' }
+      throw Object.assign(new Error('exit 1'), { code: 1, stdout })
+    }
+    return { runCli, calls }
+  }
+
+  function setCleanup(mode: string) {
+    writeFileSync(join(ocrDir, 'config.yaml'), `worktrees:\n  cleanup: ${mode}\n`)
+  }
+
+  async function post(cli: { runCli: RunCli }) {
+    const h = setup([...checkRules('them'), REVIEW_OK, reviewsRule([])], cli.runCli)
+    await checkGh(h)
+    await h.fire('post:submit', { prNumber: PR_NUMBER, content: 'hi', state: 'comment' })
+    return h
+  }
+
+  beforeEach(() => {
+    // The PR's review is finished (`ocr state finish`): the CLI only removes worktrees of closed sessions.
+    db.run('DELETE FROM sessions WHERE id = ?', ['sess-1'])
+    db.run(
+      `INSERT INTO sessions (id, branch, workflow_type, status, current_phase, phase_number, current_round, current_map_run, session_dir, pr_url, pr_number)
+       VALUES ('sess-1', 'feat-x', 'review', 'closed', 'synthesis', 7, 1, 1, ?, ?, ?)`,
+      [join(ocrDir, 'sessions', 'sess-1'), PR_URL_42, PR_NUMBER],
+    )
+    WT_PATH = join(workspace, 'wt', 'pr-42')
+    mkdirSync(WT_PATH, { recursive: true })
+    ROW = { pr_number: PR_NUMBER, path: WT_PATH, head_sha: 'abc', session_id: 'sess-1', session_status: 'closed', dirty: false }
+  })
+
+  // A PR session resolves by `pr view`, so script that instead of `pr list`.
+  function checkRulesByUrl(): GhRule[] {
+    return [AUTH_OK, {
+      match: `pr view ${PR_URL_42}`,
+      stdout: JSON.stringify({ number: PR_NUMBER, url: PR_URL_42, author: { login: 'them' }, headRefName: 'feat/x' }),
+    }, { match: 'api user', stdout: 'me\n' }]
+  }
+  async function postByUrl(cli: { runCli: RunCli }) {
+    const h = setup([...checkRulesByUrl(), REVIEW_OK, reviewsRule([])], cli.runCli)
+    await checkGh(h)
+    await h.fire('post:submit', { prNumber: PR_NUMBER, content: 'hi', state: 'comment' })
+    return h
+  }
+
+  it('removed: after-post and a clean worktree', async () => {
+    setCleanup('after-post')
+    const cli = fakeCli([ROW])
+    const h = await postByUrl(cli)
+    expect(h.last('post:submit-result')).toMatchObject({ success: true, worktree: 'removed' })
+    expect(cli.calls).toEqual([['list', '--json'], ['remove', '42', '--json']])
+  })
+
+  it('kept_dirty: after-post but the worktree has uncommitted changes (never forced)', async () => {
+    setCleanup('after-post')
+    const cli = fakeCli([{ ...ROW, dirty: true }], { status: 'dirty' })
+    const h = await postByUrl(cli)
+    expect(h.last('post:submit-result')).toMatchObject({ success: true, worktree: 'kept_dirty' })
+    expect(cli.calls.at(-1)).not.toContain('--force')
+  })
+
+  it.each(['keep', 'on-close'])('kept_config: %s with an existing worktree is left alone', async (mode) => {
+    setCleanup(mode)
+    const cli = fakeCli([ROW])
+    const h = await postByUrl(cli)
+    expect(h.last('post:submit-result')).toMatchObject({ success: true, worktree: 'kept_config' })
+    expect(cli.calls.some((c) => c[0] === 'remove')).toBe(false)
+  })
+
+  it('none: after-post but no worktree exists', async () => {
+    setCleanup('after-post')
+    const h = await postByUrl(fakeCli([]))
+    expect(h.last('post:submit-result')).toMatchObject({ success: true, worktree: 'none' })
+  })
+
+  it('none: a session without pr_number never touches the CLI', async () => {
+    db.run('UPDATE sessions SET pr_url = NULL, pr_number = NULL WHERE id = ?', ['sess-1'])
+    setCleanup('after-post')
+    const cli = fakeCli([ROW])
+    const h = await post(cli)
+    expect(h.last('post:submit-result')).toMatchObject({ success: true, worktree: 'none' })
+    expect(cli.calls).toEqual([])
+  })
+
+  it('kept_active: the PR still has an active session (the CLI refuses; never forced)', async () => {
+    setCleanup('after-post')
+    db.run(`UPDATE sessions SET status = 'active' WHERE id = 'sess-1'`)
+    const cli = fakeCli([ROW])
+    const h = await postByUrl(cli)
+    expect(h.last('post:submit-result')).toMatchObject({ success: true, worktree: 'kept_active' })
+    expect(cli.calls.at(-1)).not.toContain('--force')
+  })
+
+  it('kept_running: an execution of any session of the PR is still running; the CLI is not asked to remove', async () => {
+    setCleanup('after-post')
+    db.run(`INSERT INTO command_executions (uid, command, args, started_at) VALUES ('chat', 'ocr chat (review)', '["sess-1"]', datetime('now'))`)
+    const cli = fakeCli([ROW])
+    const h = await postByUrl(cli)
+    expect(h.last('post:submit-result')).toMatchObject({ success: true, worktree: 'kept_running' })
+    expect(cli.calls.some((c) => c[0] === 'remove')).toBe(false)
+  })
+
+  it('keep + failing CLI: nothing was asked to be removed, so the outcome is none (never kept_error)', async () => {
+    setCleanup('keep')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const runCli: RunCli = async () => {
+      throw new Error('ocr not found')
+    }
+    const h = await postByUrl({ runCli })
+    expect(h.last('post:submit-result')).toMatchObject({ success: true, worktree: 'none' })
+    warn.mockRestore()
+  })
+
+  it('kept_error: an unreadable worktree list is not "none" (and never fails the post)', async () => {
+    setCleanup('after-post')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const runCli: RunCli = async () => {
+      throw new Error('ocr not found')
+    }
+    const h = await postByUrl({ runCli })
+    expect(h.last('post:submit-result')).toMatchObject({ success: true, worktree: 'kept_error' })
+    warn.mockRestore()
+  })
+
+  it('a removal failure never turns the post into a failure', async () => {
+    setCleanup('after-post')
+    // `list` works and the worktree exists, so the flow reaches `remove`, which blows up.
+    const runCli: RunCli = async (_bin, args) => {
+      if (args.includes('list')) return { stdout: JSON.stringify([ROW]), stderr: '' }
+      throw new Error('ocr exploded')
+    }
+    const h = await postByUrl({ runCli })
+    expect(h.last('post:submit-result')).toMatchObject({ success: true, worktree: 'kept_error' })
+    expect(exitCodeOfLastExecution()).toBe(0)
   })
 })

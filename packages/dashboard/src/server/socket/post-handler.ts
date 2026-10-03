@@ -14,10 +14,18 @@ import { randomUUID } from 'node:crypto'
 import type { Server as SocketIOServer, Socket } from 'socket.io'
 import type { Database } from '@open-code-review/persistence'
 import { execBinaryAsync, isGitHubReviewState, type GitHubReviewState } from '@open-code-review/platform'
+import { getWorktreeConfig } from '@open-code-review/config/worktree-config'
 import { getSession } from '../db.js'
 import { childEnv } from '../child-env.js'
 import { resolveLocalCli } from './cli-resolver.js'
 import { AiCliService, formatToolDetail, type NormalizedEvent } from '../services/ai-cli/index.js'
+import {
+  listWorktrees,
+  presentWorktree,
+  removeWorktree,
+  runningExecutionForPr,
+  type RunCli,
+} from '../services/worktrees.js'
 import { startTrackedExecution } from './execution-tracker.js'
 import {
   decideSubmitState,
@@ -127,6 +135,48 @@ async function findPrByUrl(
   }
 }
 
+/** What happened to the PR's worktree after a successful post (see `PostWorktreeOutcome` in api-types). */
+type WorktreeOutcome =
+  | 'removed'
+  | 'kept_dirty'
+  | 'kept_config'
+  | 'kept_error'
+  | 'kept_active'
+  | 'kept_running'
+  | 'none'
+
+/**
+ * `after-post` cleanup. Never throws and never affects the post's own result:
+ * every failure maps to a `kept_*` outcome (with its cause, when known).
+ * `cleanup` is read first: a user who never asked for removal must not see
+ * "could not be removed" just because the CLI is broken.
+ */
+async function cleanupWorktreeAfterPost(
+  ocrDir: string,
+  db: Database,
+  prNumber: number,
+  run: RunCli | undefined,
+): Promise<{ outcome: WorktreeOutcome; error?: string }> {
+  try {
+    const cleanup = getWorktreeConfig(ocrDir).cleanup
+    const list = await listWorktrees(ocrDir, { run })
+    // Unknown is not "none": leaving the worktree on disk unreported is the worse failure.
+    if (!list.ok) return cleanup === 'after-post' ? { outcome: 'kept_error', error: list.error } : { outcome: 'none' }
+    if (presentWorktree(list.rows, prNumber) === undefined) return { outcome: 'none' }
+    if (cleanup !== 'after-post') return { outcome: 'kept_config' }
+    if (runningExecutionForPr(db, prNumber) !== null) return { outcome: 'kept_running' }
+    const { status, error } = await removeWorktree(ocrDir, prNumber, { run })
+    if (status === 'removed') return { outcome: 'removed' }
+    if (status === 'dirty') return { outcome: 'kept_dirty' }
+    if (status === 'active-session') return { outcome: 'kept_active' }
+    return status === 'not-found' ? { outcome: 'none' } : { outcome: 'kept_error', error }
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err)
+    console.warn(`[post] worktree cleanup for PR #${prNumber} failed: ${error}`)
+    return { outcome: 'kept_error', error }
+  }
+}
+
 const INVALID_SUBMIT_PAYLOAD = { success: false, code: 'invalid-payload', error: 'Invalid payload' } as const
 
 // ── Active generation processes ──
@@ -142,7 +192,7 @@ export function registerPostHandlers(
   db: Database,
   ocrDir: string,
   aiCliService: AiCliService,
-  deps: { runGh?: RunGh } = {},
+  deps: { runGh?: RunGh; runCli?: RunCli } = {},
 ): void {
   const runGh = deps.runGh ?? execBinaryAsync
 
@@ -152,7 +202,7 @@ export function registerPostHandlers(
   // repo (the parent) is never picked by accident. Each check clears it first.
   const checkedPrs = new Map<
     number,
-    { ownership: PrOwnership; prUrl: string; viewerLogin: string | null }
+    { ownership: PrOwnership; prUrl: string; viewerLogin: string | null; sessionPr: number | null }
   >()
 
   // ── Check GitHub CLI auth + find PR ──
@@ -222,7 +272,7 @@ export function registerPostHandlers(
           console.error('Error resolving gh viewer login:', err)
         }
         const ownership = resolveOwnership(pr.authorLogin, viewerLogin)
-        checkedPrs.set(pr.prNumber, { ownership, prUrl: pr.prUrl, viewerLogin })
+        checkedPrs.set(pr.prNumber, { ownership, prUrl: pr.prUrl, viewerLogin, sessionPr: session.pr_number })
         socket.emit('post:gh-result', {
           authenticated: true,
           prNumber: pr.prNumber,
@@ -640,8 +690,18 @@ export function registerPostHandlers(
           } catch { /* link is optional */ }
 
           tracker.appendOutput(`✓ Posted to PR #${prNumber}${urlMatch ? ` — ${urlMatch}` : ''}\n`)
+          // Only the PR session's own worktree is ever touched (`sessionPr`).
+          const { outcome: worktree, error: worktreeError } =
+            checked.sessionPr === prNumber
+              ? await cleanupWorktreeAfterPost(ocrDir, db, prNumber, deps.runCli)
+              : { outcome: 'none' as const, error: undefined }
+          if (worktree !== 'none') {
+            tracker.appendOutput(`▸ Worktree: ${worktree}${worktreeError ? ` (${worktreeError})` : ''}\n`)
+          }
           tracker.finish(0)
-          socket.emit('post:submit-result', { success: true, commentUrl: urlMatch, state, downgraded })
+          socket.emit('post:submit-result', {
+            success: true, commentUrl: urlMatch, state, downgraded, worktree,
+          })
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : 'Unknown error'
           tracker.appendOutput(`✗ ${errMsg}\n`)

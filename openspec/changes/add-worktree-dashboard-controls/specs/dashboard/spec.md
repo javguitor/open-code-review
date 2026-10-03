@@ -43,7 +43,7 @@ The dashboard SHALL show a PR session's worktree state and let the user remove i
 
 - **GIVEN** a PR session
 - **WHEN** the session page renders
-- **THEN** it shows the worktree path, whether it exists, whether it has uncommitted changes, and the cleanup mode in effect
+- **THEN** it shows the worktree path, whether it exists, whether it has uncommitted changes, and the cleanup mode in effect; when the worktree list cannot be read (CLI failure) the state is shown as "unknown", never as absent
 
 #### Scenario: Remove
 
@@ -52,11 +52,21 @@ The dashboard SHALL show a PR session's worktree state and let the user remove i
 
 #### Scenario: Refuse while running
 
-- **GIVEN** a running execution for the session
+- **GIVEN** a running execution for any session of the same PR (rows without a recorded process count only within the last 2 hours)
 - **WHEN** the user tries to remove the worktree
 - **THEN** the request is refused with a message naming the execution
 
 #### Scenario: Post dialog outcome
 
 - **WHEN** a review is posted successfully
-- **THEN** the success step reports whether the worktree was removed, kept because dirty, or kept by configuration, with a "Remove worktree" button in the kept cases
+- **THEN** the success step reports whether the worktree was removed, kept because dirty, or kept by configuration, or kept because it could not be removed, with a "Remove worktree" button only for `kept_dirty` (as Force), `kept_config` and `kept_error`
+
+#### Scenario: Kept while a review is open
+
+- **WHEN** a review is posted successfully while an open review session still uses the worktree
+- **THEN** the success step reports it as kept (`kept_active`) and offers no button and no Force
+
+#### Scenario: Kept while a command runs
+
+- **WHEN** a review is posted successfully while an execution of the PR is running
+- **THEN** the success step reports it as kept (`kept_running`) and offers no button

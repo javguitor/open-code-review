@@ -1,0 +1,27 @@
+const settings = {
+  'settings.title': 'Settings',
+  'settings.subtitle': 'Project options stored in `.ocr/config.yaml`. Comments and other keys in the file are preserved.',
+  'settings.loading': 'Loading settings...',
+  'settings.worktrees_title': 'PR worktrees',
+  'settings.worktree_dir': 'Worktree directory',
+  'settings.resolved_path': 'Resolves to',
+  'settings.dir_exists': 'exists',
+  'settings.dir_missing': 'does not exist yet',
+  'settings.cleanup': 'Cleanup',
+  'settings.cleanup_keep': 'Keep',
+  'settings.cleanup_keep_desc': 'Never remove worktrees automatically; remove them by hand.',
+  'settings.cleanup_on-close': 'On close',
+  'settings.cleanup_on-close_desc': 'Remove the worktree when the session is closed.',
+  'settings.cleanup_after-post': 'After post',
+  'settings.cleanup_after-post_desc': 'Remove the worktree once the review is posted to GitHub (kept if it has uncommitted changes).',
+  'settings.language': 'Language',
+  'settings.language_en': 'English',
+  'settings.language_es': 'Spanish',
+  'settings.save': 'Save',
+  'settings.saved': 'Saved. Open pages pick the language up on reload.',
+  'settings.error_dir_required': 'The directory cannot be empty.',
+  'settings.error_cleanup_invalid': 'Choose one of the cleanup modes.',
+  'settings.error_language_required': 'Choose a language.',
+}
+
+export { settings }

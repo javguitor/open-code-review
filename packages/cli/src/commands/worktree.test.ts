@@ -188,6 +188,7 @@ describe("ocr worktree remove (command)", () => {
     // Commander keeps option values between parses on the same instance.
     removeSub.setOptionValue("allStale", undefined);
     removeSub.setOptionValue("force", undefined);
+    removeSub.setOptionValue("json", undefined);
     let code = 0;
     vi.spyOn(process, "exit").mockImplementation(((c?: number) => {
       code = c ?? 0;
@@ -229,6 +230,41 @@ describe("ocr worktree remove (command)", () => {
     expect(existsSync(path)).toBe(true);
     expect(await run("1", "--force")).toBe(0);
     expect(existsSync(path)).toBe(false);
+  });
+
+  describe("--json", () => {
+    const lastJson = () => JSON.parse(logs.at(-1)!);
+
+    it("prints status removed with the path (exit 0)", async () => {
+      await ensureDatabase(ocrDir);
+      const path = addWorktree(1);
+      expect(await run("1", "--json")).toBe(0);
+      expect(lastJson()).toEqual({ pr_number: 1, status: "removed", path });
+      expect(existsSync(path)).toBe(false);
+    });
+
+    it("prints status dirty and exits 1 without removing", async () => {
+      await ensureDatabase(ocrDir);
+      const path = addWorktree(1);
+      writeFileSync(join(path, "scratch.txt"), "x");
+      expect(await run("1", "--json")).toBe(1);
+      expect(lastJson()).toEqual({ pr_number: 1, status: "dirty", path });
+      expect(existsSync(path)).toBe(true);
+    });
+
+    it("prints status active-session and exits 1 without removing", async () => {
+      const path = addWorktree(1);
+      await addSession("s1", 1, "active");
+      expect(await run("1", "--json")).toBe(1);
+      expect(lastJson()).toEqual({ pr_number: 1, status: "active-session" });
+      expect(existsSync(path)).toBe(true);
+    });
+
+    it("prints status not-found for an unknown PR", async () => {
+      await ensureDatabase(ocrDir);
+      expect(await run("9", "--json")).toBe(1);
+      expect(lastJson()).toEqual({ pr_number: 9, status: "not-found" });
+    });
   });
 
   it("--all-stale reports a failing PR, continues with the rest and exits 1", async () => {
