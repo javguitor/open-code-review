@@ -24,8 +24,8 @@ the worktree is removed.
 - **Settings screen** (`/settings`) that reads and writes a small allow-list of
   `.ocr/config.yaml` keys: `worktrees.dir`, `worktrees.cleanup`, `language`. Writes go
   through a new comment-preserving writer in `@open-code-review/config`
-  (`config-writer.ts`, built on `yaml`'s `parseDocument`/`setIn`/`toString`, which keep
-  comments and formatting — verified with yaml 2.8). Every other key stays untouched.
+  (`config-writer.ts`: `yaml`'s `parseDocument` locates the value and the edit is a text
+  splice, so comments and formatting stay byte-identical). Every other key stays untouched.
   The screen validates paths (absolute or repo-relative; `~` allowed) and shows the
   resolved absolute directory and whether it exists.
 - **Chat runs in the session's code root**: for PR sessions (`pr_number` set) the chat
@@ -49,11 +49,11 @@ editor.
   Cleanup After Post"), `dashboard` (ADDED "Settings Screen", ADDED "Chat in the Code
   Root", ADDED "Worktree Removal from the Dashboard").
 - Affected code: `packages/shared/config/src/config-writer.ts` (new) + export + tests;
-  `worktree-config.ts` (`after-post`); `packages/cli` worktree removal reused (stage 3's
-  `removePrWorktree`); `packages/dashboard/src/server/routes/config.ts` (`PATCH
+  `worktree-config.ts` (`after-post`); `packages/cli` `ocr worktree remove --json` (the dashboard
+  runs the CLI, never imports it); `packages/dashboard/src/server/routes/config.ts` (`PATCH
   /api/config`), new `routes/worktrees.ts`, `socket/chat-handler.ts` (cwd),
-  `socket/post-handler.ts` (after-post hook), `services/worktree-path.ts`;
+  `socket/post-handler.ts` (after-post hook), `services/worktrees.ts`;
   `packages/dashboard/src/client/features/settings/*` (new), session detail + post
   dialog, router, sidebar entry, i18n `settings.*`/`sessions.worktree_*`.
 - Depends on stage 3 being merged (worktree config, `pr_number` on sessions,
-  `removePrWorktree`).
+  `ocr worktree`).
