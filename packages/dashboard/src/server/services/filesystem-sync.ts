@@ -390,11 +390,14 @@ export class FilesystemSync {
       // MAX(): never lower a count the CLI already advanced — `ocr state begin`
       // opens round N+1 before its `rounds/round-N+1/` directory exists, and a
       // sync in that window would otherwise reset the round to N.
+      // Only touch the row (and `updated_at`) when a count actually advances:
+      // a no-op resync on every dashboard start made every session look
+      // "updated seconds ago" in the list.
       this.db.run(
         `UPDATE sessions SET current_round = MAX(current_round, ?), current_map_run = MAX(current_map_run, ?),
            updated_at = datetime('now')
-         WHERE id = ?`,
-        [currentRound, currentMapRun, sessionId],
+         WHERE id = ? AND (current_round < ? OR current_map_run < ?)`,
+        [currentRound, currentMapRun, sessionId, currentRound, currentMapRun],
       )
     } else {
       // Skip empty sessions — directories with no parseable artifacts are
