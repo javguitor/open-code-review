@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSocket, useSocketEvent } from '../../../providers/socket-provider'
+import type { GitHubReviewState } from '@open-code-review/platform/verdict'
 import type { PostReviewStep, PostCheckResult, ChatToolStatus } from '../../../lib/api-types'
+import { initialReviewState } from '../../../lib/review-state'
 
 export type ActivityLogEntry = {
   tool: string
@@ -18,16 +20,19 @@ type UsePostReviewReturn = {
   elapsedSeconds: number
   postResult: { success: boolean; commentUrl?: string | null; error?: string } | null
   error: string | null
+  reviewState: GitHubReviewState
+  setReviewState: (state: GitHubReviewState) => void
   checkGitHub: (sessionId: string) => void
   generate: (sessionId: string, roundNumber: number) => void
   cancelGeneration: (sessionId: string, roundNumber: number) => void
   saveDraft: (sessionId: string, roundNumber: number, content: string) => void
   submitToGitHub: (prNumber: number, content: string) => void
+  recheck: () => void
   reset: () => void
   setStep: (step: PostReviewStep) => void
 }
 
-export function usePostReview(): UsePostReviewReturn {
+export function usePostReview(verdict: string | null): UsePostReviewReturn {
   const { socket } = useSocket()
 
   const [step, setStep] = useState<PostReviewStep>('idle')
@@ -38,6 +43,14 @@ export function usePostReview(): UsePostReviewReturn {
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([])
   const [postResult, setPostResult] = useState<{ success: boolean; commentUrl?: string | null; error?: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [reviewState, setReviewState] = useState<GitHubReviewState>('comment')
+
+  // Latest values for callbacks that must not go stale or re-subscribe
+  const verdictRef = useRef(verdict)
+  verdictRef.current = verdict
+  const reviewStateRef = useRef(reviewState)
+  reviewStateRef.current = reviewState
+  const lastSessionIdRef = useRef<string | null>(null)
 
   const streamingRef = useRef('')
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
@@ -62,6 +75,7 @@ export function usePostReview(): UsePostReviewReturn {
     'post:gh-result',
     useCallback((data) => {
       setCheckResult(data)
+      setReviewState(initialReviewState(verdictRef.current, data.ownership))
       if (data.authenticated && data.prNumber) {
         setStep('ready')
       } else {
@@ -167,6 +181,7 @@ export function usePostReview(): UsePostReviewReturn {
   const checkGitHub = useCallback(
     (sessionId: string) => {
       if (!socket) return
+      lastSessionIdRef.current = sessionId
       setStep('checking')
       setError(null)
       setCheckResult(null)
@@ -174,6 +189,10 @@ export function usePostReview(): UsePostReviewReturn {
     },
     [socket],
   )
+
+  const recheck = useCallback(() => {
+    if (lastSessionIdRef.current) checkGitHub(lastSessionIdRef.current)
+  }, [checkGitHub])
 
   const generate = useCallback(
     (sessionId: string, roundNumber: number) => {
@@ -211,7 +230,7 @@ export function usePostReview(): UsePostReviewReturn {
       if (!socket) return
       setStep('posting')
       setError(null)
-      socket.emit('post:submit', { prNumber, content })
+      socket.emit('post:submit', { prNumber, content, state: reviewStateRef.current })
     },
     [socket],
   )
@@ -225,6 +244,7 @@ export function usePostReview(): UsePostReviewReturn {
     setActivityLog([])
     setPostResult(null)
     setError(null)
+    setReviewState('comment')
     streamingRef.current = ''
   }, [])
 
@@ -238,11 +258,14 @@ export function usePostReview(): UsePostReviewReturn {
     elapsedSeconds,
     postResult,
     error,
+    reviewState,
+    setReviewState,
     checkGitHub,
     generate,
     cancelGeneration,
     saveDraft,
     submitToGitHub,
+    recheck,
     reset,
     setStep,
   }

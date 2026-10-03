@@ -335,10 +335,13 @@ export type CommandEventsResponse = {
   events: StreamEvent[]
 }
 
+export type PrOwnership = 'own' | 'other' | 'unknown'
+
 export type PostCheckResult = {
   authenticated: boolean
   prNumber: number | null
   prUrl: string | null
   branch: string | null
+  ownership: PrOwnership
   error?: string
 }

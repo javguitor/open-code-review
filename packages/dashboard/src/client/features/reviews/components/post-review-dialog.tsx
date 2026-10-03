@@ -22,6 +22,12 @@ import {
 } from "lucide-react";
 import { cn } from "../../../lib/utils";
 import { MarkdownRenderer } from "../../../components/markdown/markdown-renderer";
+import { GITHUB_REVIEW_STATES } from "@open-code-review/platform/verdict";
+import {
+  REVIEW_STATE_LABELS,
+  isStateSelectable,
+  lockReason,
+} from "../../../lib/review-state";
 import { usePostReview, type ActivityLogEntry } from "../hooks/use-post-review";
 
 type PostReviewDialogProps = {
@@ -29,6 +35,7 @@ type PostReviewDialogProps = {
   roundNumber: number;
   finalContent: string;
   savedHumanReview?: string;
+  verdict: string | null;
 }
 
 function formatElapsedTime(seconds: number): string {
@@ -67,6 +74,7 @@ export function PostReviewDialog({
   roundNumber,
   finalContent,
   savedHumanReview,
+  verdict,
 }: PostReviewDialogProps) {
   const [open, setOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -84,6 +92,9 @@ export function PostReviewDialog({
     elapsedSeconds,
     postResult,
     error,
+    reviewState,
+    setReviewState,
+    recheck,
     checkGitHub,
     generate,
     cancelGeneration,
@@ -91,7 +102,7 @@ export function PostReviewDialog({
     submitToGitHub,
     reset,
     setStep,
-  } = usePostReview();
+  } = usePostReview(verdict);
   const [activityExpanded, setActivityExpanded] = useState(true);
   const hasAutoCollapsed = useRef(false);
   const [draftSaved, setDraftSaved] = useState(false);
@@ -156,6 +167,53 @@ export function PostReviewDialog({
   };
 
   const prNumber = checkResult?.prNumber ?? 0;
+
+  const ownership = checkResult?.ownership;
+  const reason = lockReason(ownership);
+  const stateSelector = (
+    <div className="space-y-1.5">
+      <div
+        role="group"
+        aria-label="GitHub review state"
+        className="inline-flex rounded-md border border-zinc-200 p-0.5 dark:border-zinc-700"
+      >
+        {GITHUB_REVIEW_STATES.map((state) => (
+          <button
+            key={state}
+            type="button"
+            aria-pressed={reviewState === state}
+            disabled={!isStateSelectable(state, ownership)}
+            onClick={() => setReviewState(state)}
+            className={cn(
+              "rounded px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+              reviewState === state
+                ? "bg-blue-600 text-white"
+                : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800",
+            )}
+          >
+            {REVIEW_STATE_LABELS[state]}
+          </button>
+        ))}
+      </div>
+      {(reason || (verdict && ownership === "other")) && (
+        <p className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+          <span>
+            {reason ?? `Suggested from the round verdict: ${verdict}`}
+          </span>
+          {ownership === "unknown" && (
+            <button
+              type="button"
+              onClick={recheck}
+              className="inline-flex items-center gap-1 rounded border border-zinc-200 px-1.5 py-0.5 font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Re-check
+            </button>
+          )}
+        </p>
+      )}
+    </div>
+  );
 
   return (
     <>
@@ -225,6 +283,8 @@ export function PostReviewDialog({
                     </p>
                   </div>
 
+                  {stateSelector}
+
                   <div className="grid gap-3 sm:grid-cols-2">
                     {/* Post team review directly */}
                     <button
@@ -238,7 +298,8 @@ export function PostReviewDialog({
                         </span>
                       </div>
                       <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                        Post the original multi-reviewer synthesis as-is.
+                        Post the original multi-reviewer synthesis as-is, with the
+                        selected review state.
                       </p>
                     </button>
 
@@ -440,14 +501,14 @@ export function PostReviewDialog({
                   <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                     Review posted to GitHub
                   </p>
-                  {postResult?.commentUrl && (
+                  {(postResult?.commentUrl ?? checkResult?.prUrl) && (
                     <a
-                      href={postResult.commentUrl}
+                      href={postResult?.commentUrl ?? checkResult?.prUrl ?? undefined}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
                     >
-                      View comment
+                      {postResult?.commentUrl ? "View review" : "View pull request"}
                       <ExternalLink className="h-3.5 w-3.5" />
                     </a>
                   )}
@@ -482,6 +543,7 @@ export function PostReviewDialog({
               {/* Preview footer — regenerate, save, post */}
               {step === "preview" && (
                 <>
+                  <div className="mr-auto">{stateSelector}</div>
                   <button
                     onClick={() => generate(sessionId, roundNumber)}
                     className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
