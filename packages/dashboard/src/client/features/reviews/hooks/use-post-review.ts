@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSocket, useSocketEvent } from '../../../providers/socket-provider'
 import type { GitHubReviewState } from '@open-code-review/platform/verdict'
-import type { PostReviewStep, PostCheckResult, ChatToolStatus } from '../../../lib/api-types'
-import { initialReviewState } from '../../../lib/review-state'
+import type { PostReviewStep, PostCheckResult, PostSubmitResult, ChatToolStatus } from '../../../lib/api-types'
+import { applyCheckResult, initialReviewState } from '../../../lib/review-state'
 
 export type ActivityLogEntry = {
   tool: string
@@ -18,15 +18,16 @@ type UsePostReviewReturn = {
   toolStatus: ChatToolStatus | null
   activityLog: ActivityLogEntry[]
   elapsedSeconds: number
-  postResult: { success: boolean; commentUrl?: string | null; error?: string } | null
+  postResult: PostSubmitResult | null
   error: string | null
+  needsRecheck: boolean
   reviewState: GitHubReviewState
   setReviewState: (state: GitHubReviewState) => void
   checkGitHub: (sessionId: string) => void
   generate: (sessionId: string, roundNumber: number) => void
   cancelGeneration: (sessionId: string, roundNumber: number) => void
   saveDraft: (sessionId: string, roundNumber: number, content: string) => void
-  submitToGitHub: (prNumber: number, content: string) => void
+  submitToGitHub: (prNumber: number, content: string, state: GitHubReviewState) => void
   recheck: () => void
   reset: () => void
   setStep: (step: PostReviewStep) => void
@@ -41,15 +42,23 @@ export function usePostReview(verdict: string | null): UsePostReviewReturn {
   const [generatedContent, setGeneratedContent] = useState('')
   const [toolStatus, setToolStatus] = useState<ChatToolStatus | null>(null)
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([])
-  const [postResult, setPostResult] = useState<{ success: boolean; commentUrl?: string | null; error?: string } | null>(null)
+  const [postResult, setPostResult] = useState<PostSubmitResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [reviewState, setReviewState] = useState<GitHubReviewState>('comment')
+  const [needsRecheck, setNeedsRecheck] = useState(false)
 
   // Latest values for callbacks that must not go stale or re-subscribe
   const verdictRef = useRef(verdict)
   verdictRef.current = verdict
+  const stepRef = useRef(step)
+  stepRef.current = step
   const reviewStateRef = useRef(reviewState)
   reviewStateRef.current = reviewState
+  // A check started from idle/error is the dialog's first look at the PR, so
+  // the verdict-derived state applies; from ready/preview it keeps the user's pick.
+  const freshCheckRef = useRef(true)
+  // Step the in-flight submit started from, restored on a needs-recheck failure
+  const submitOriginRef = useRef<PostReviewStep>('ready')
   const lastSessionIdRef = useRef<string | null>(null)
 
   const streamingRef = useRef('')
@@ -75,10 +84,22 @@ export function usePostReview(verdict: string | null): UsePostReviewReturn {
     'post:gh-result',
     useCallback((data) => {
       setCheckResult(data)
-      setReviewState(initialReviewState(verdictRef.current, data.ownership))
+      setNeedsRecheck(false)
       if (data.authenticated && data.prNumber) {
-        setStep('ready')
+        const next = applyCheckResult({
+          step: stepRef.current,
+          reviewState: reviewStateRef.current,
+          verdict: verdictRef.current,
+          ownership: data.ownership,
+        })
+        setStep(next.step)
+        setReviewState(
+          freshCheckRef.current
+            ? initialReviewState(verdictRef.current, data.ownership)
+            : next.reviewState,
+        )
       } else {
+        setReviewState(initialReviewState(verdictRef.current, data.ownership))
         setError(data.error ?? 'GitHub check failed')
         setStep('error')
       }
@@ -163,15 +184,20 @@ export function usePostReview(verdict: string | null): UsePostReviewReturn {
   )
 
   // ── Submit result ──
-  useSocketEvent<{ success: boolean; commentUrl?: string | null; error?: string }>(
+  useSocketEvent<PostSubmitResult>(
     'post:submit-result',
     useCallback((data) => {
       setPostResult(data)
       if (data.success) {
         setStep('posted')
       } else {
-        setError(data.error ?? 'Failed to post to GitHub')
-        setStep('error')
+        setError(data.error)
+        if (data.code === 'needs-recheck') {
+          setNeedsRecheck(true)
+          setStep(submitOriginRef.current)
+        } else {
+          setStep('error')
+        }
       }
     }, []),
   )
@@ -182,6 +208,7 @@ export function usePostReview(verdict: string | null): UsePostReviewReturn {
     (sessionId: string) => {
       if (!socket) return
       lastSessionIdRef.current = sessionId
+      freshCheckRef.current = stepRef.current === 'idle' || stepRef.current === 'error'
       setStep('checking')
       setError(null)
       setCheckResult(null)
@@ -191,8 +218,18 @@ export function usePostReview(verdict: string | null): UsePostReviewReturn {
   )
 
   const recheck = useCallback(() => {
-    if (lastSessionIdRef.current) checkGitHub(lastSessionIdRef.current)
-  }, [checkGitHub])
+    const sessionId = lastSessionIdRef.current
+    if (!sessionId) return
+    const current = stepRef.current
+    if (current === 'idle' || current === 'ready' || current === 'error') {
+      checkGitHub(sessionId)
+    } else if (current === 'preview' && socket) {
+      // Stay in preview: the draft and the selection must survive the check
+      freshCheckRef.current = false
+      setError(null)
+      socket.emit('post:check-gh', { sessionId })
+    }
+  }, [checkGitHub, socket])
 
   const generate = useCallback(
     (sessionId: string, roundNumber: number) => {
@@ -226,11 +263,12 @@ export function usePostReview(verdict: string | null): UsePostReviewReturn {
   )
 
   const submitToGitHub = useCallback(
-    (prNumber: number, content: string) => {
+    (prNumber: number, content: string, state: GitHubReviewState) => {
       if (!socket) return
+      submitOriginRef.current = stepRef.current
       setStep('posting')
       setError(null)
-      socket.emit('post:submit', { prNumber, content, state: reviewStateRef.current })
+      socket.emit('post:submit', { prNumber, content, state })
     },
     [socket],
   )
@@ -245,6 +283,7 @@ export function usePostReview(verdict: string | null): UsePostReviewReturn {
     setPostResult(null)
     setError(null)
     setReviewState('comment')
+    setNeedsRecheck(false)
     streamingRef.current = ''
   }, [])
 
@@ -258,6 +297,7 @@ export function usePostReview(verdict: string | null): UsePostReviewReturn {
     elapsedSeconds,
     postResult,
     error,
+    needsRecheck,
     reviewState,
     setReviewState,
     checkGitHub,

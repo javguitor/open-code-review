@@ -2,7 +2,7 @@ import {
   reviewStateFromVerdict,
   type GitHubReviewState,
 } from '@open-code-review/platform/verdict'
-import type { PrOwnership } from './api-types'
+import type { PostReviewStep, PrOwnership } from './api-types'
 
 export const REVIEW_STATE_LABELS: Record<GitHubReviewState, string> = {
   approve: 'Approve',
@@ -37,4 +37,25 @@ export function lockReason(ownership: PrOwnership | undefined): string | null {
     return 'GitHub does not allow approving or requesting changes on your own pull request.'
   }
   return 'Could not determine the pull request author.'
+}
+
+/**
+ * Applies a `post:gh-result` to the dialog without losing the user's place:
+ * the step only advances out of `checking` (a re-check from `ready` or
+ * `preview` stays put), and the selected state survives unless the new
+ * ownership no longer allows it.
+ */
+export function applyCheckResult(input: {
+  step: PostReviewStep
+  reviewState: GitHubReviewState
+  verdict: string | null | undefined
+  ownership: PrOwnership
+}): { step: PostReviewStep; reviewState: GitHubReviewState } {
+  const { step, reviewState, verdict, ownership } = input
+  return {
+    step: step === 'checking' ? 'ready' : step,
+    reviewState: isStateSelectable(reviewState, ownership)
+      ? reviewState
+      : initialReviewState(verdict, ownership),
+  }
 }

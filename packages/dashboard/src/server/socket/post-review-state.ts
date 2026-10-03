@@ -23,30 +23,34 @@ export function resolveOwnership(
   return author === viewer ? 'own' : 'other'
 }
 
+export const NEEDS_RECHECK_ERROR = 'PR ownership unknown — re-check GitHub before posting'
+
 export type SubmitStateDecision =
   | { ok: true; state: GitHubReviewState; downgraded: boolean }
-  | { ok: false; error: string }
+  | { ok: false; code: 'needs-recheck'; error: string }
 
 /**
  * Decide the state to submit. GitHub rejects approve / request-changes on your
- * own PR (422), so `own` is downgraded to `comment`; `unknown` (or never
- * checked) is rejected rather than guessed.
+ * own PR (422), so `own` is downgraded to `comment`. A PR with no entry (never
+ * checked, or the check was replaced) or `unknown` ownership is rejected for
+ * every state rather than guessed: without a check there is no stored URL to
+ * target.
  */
 export function decideSubmitState(
   requested: GitHubReviewState,
   ownership: PrOwnership | undefined,
 ): SubmitStateDecision {
-  if (requested === 'comment') return { ok: true, state: 'comment', downgraded: false }
   switch (ownership) {
     case 'own':
-      return { ok: true, state: 'comment', downgraded: true }
+      return { ok: true, state: 'comment', downgraded: requested !== 'comment' }
     case 'other':
       return { ok: true, state: requested, downgraded: false }
     case 'unknown':
     case undefined:
       return {
         ok: false,
-        error: 'PR ownership unknown — re-check GitHub before approving or requesting changes',
+        code: 'needs-recheck',
+        error: NEEDS_RECHECK_ERROR,
       }
     default: {
       const exhaustive: never = ownership
@@ -56,7 +60,7 @@ export function decideSubmitState(
 }
 
 /**
- * Argument vector for `gh pr review`. `target` is the PR URL when known: a
+ * Argument vector for `gh pr review`. `target` is always the stored PR URL: a
  * bare number resolves against gh's default repo, which in a fork with an
  * `upstream` remote can be the parent repo.
  */
@@ -77,4 +81,34 @@ const PR_URL = /^https:\/\/github\.com\/([^/\s]+)\/([^/\s]+)\/pull\/(\d+)\/?(?:[
 export function reviewsApiPath(prUrl: string): string | null {
   const m = PR_URL.exec(prUrl)
   return m ? `repos/${m[1]}/${m[2]}/pulls/${m[3]}/reviews` : null
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+/**
+ * The `html_url` of the viewer's most recent review. `reviewsJson` is the
+ * output of `gh api --paginate --slurp` (an array of pages), but a flat array
+ * is accepted too. `null` when the viewer is unknown, nothing matches, or the
+ * JSON is malformed.
+ */
+export function reviewUrlForViewer(reviewsJson: string, viewerLogin: string | null): string | null {
+  const viewer = viewerLogin?.trim().toLowerCase()
+  if (!viewer) return null
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(reviewsJson)
+  } catch {
+    return null
+  }
+  if (!Array.isArray(parsed)) return null
+  let url: string | null = null
+  for (const item of parsed.flat()) {
+    if (!isRecord(item) || !isRecord(item.user)) continue
+    const { login } = item.user
+    if (typeof login !== 'string' || login.toLowerCase() !== viewer) continue
+    if (typeof item.html_url === 'string' && item.html_url.startsWith('https://')) url = item.html_url
+  }
+  return url
 }

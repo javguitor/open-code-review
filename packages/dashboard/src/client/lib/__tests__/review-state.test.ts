@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import type { GitHubReviewState } from '@open-code-review/platform/verdict'
-import type { PrOwnership } from '../api-types'
+import type { PostReviewStep, PrOwnership } from '../api-types'
 import {
   REVIEW_STATE_LABELS,
+  applyCheckResult,
   initialReviewState,
   isStateSelectable,
   lockReason,
@@ -75,5 +76,35 @@ describe('REVIEW_STATE_LABELS', () => {
       'request-changes': 'Request changes',
       comment: 'Comment',
     })
+  })
+})
+
+describe('applyCheckResult', () => {
+  const base = { reviewState: 'comment' as GitHubReviewState, verdict: 'APPROVE', ownership: 'other' as PrOwnership }
+
+  it('moves from checking to ready', () => {
+    expect(applyCheckResult({ ...base, step: 'checking' }).step).toBe('ready')
+  })
+
+  it.each<PostReviewStep>(['preview', 'ready'])('keeps the %s step', (step) => {
+    expect(applyCheckResult({ ...base, step }).step).toBe(step)
+  })
+
+  it('keeps a selection that is still selectable', () => {
+    expect(applyCheckResult({ ...base, step: 'ready', reviewState: 'request-changes' }).reviewState).toBe(
+      'request-changes',
+    )
+  })
+
+  it.each<PrOwnership>(['own', 'unknown'])('resets a gated selection when ownership becomes %s', (ownership) => {
+    expect(applyCheckResult({ ...base, step: 'ready', reviewState: 'approve', ownership }).reviewState).toBe(
+      'comment',
+    )
+  })
+
+  it.each<PrOwnership>(['own', 'unknown', 'other'])('always keeps comment (ownership %s)', (ownership) => {
+    expect(applyCheckResult({ ...base, step: 'ready', reviewState: 'comment', ownership }).reviewState).toBe(
+      'comment',
+    )
   })
 })
