@@ -8,8 +8,6 @@ import type { SessionSummary } from '../../../lib/api-types'
 
 type StaleBadgeProps = {
   session: SessionSummary
-  /** Show "Check for updates" even when the PR is known to be current (detail/round pages). */
-  alwaysShowCheck?: boolean
 }
 
 const BUTTON =
@@ -19,7 +17,7 @@ const BUTTON =
  * Stale-review indicator for PR-targeted sessions. Renders nothing without a
  * `pr_url`. Safe inside a card `<Link>`: handlers stop the click navigating.
  */
-export function StaleBadge({ session, alwaysShowCheck = false }: StaleBadgeProps) {
+export function StaleBadge({ session }: StaleBadgeProps) {
   const { t } = useT()
   const { socket } = useSocket()
   const navigate = useNavigate()
@@ -34,7 +32,6 @@ export function StaleBadge({ session, alwaysShowCheck = false }: StaleBadgeProps
   if (!session.pr_url) return null
 
   const isStale = session.stale === true
-  const showCheck = isStale || session.stale === null || alwaysShowCheck
   const act = (fn: () => void) => (e: MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -48,12 +45,10 @@ export function StaleBadge({ session, alwaysShowCheck = false }: StaleBadgeProps
           {t('sessions.stale_badge', { sha: (session.pr_head_sha ?? '').slice(0, 7) })}
         </span>
       )}
-      {showCheck && (
-        <button type="button" className={BUTTON} disabled={check.isPending} onClick={act(() => check.mutate())}>
-          <RefreshCw className="h-3 w-3" />
-          {check.isPending ? t('sessions.checking_updates') : t('sessions.check_updates')}
-        </button>
-      )}
+      <button type="button" className={BUTTON} disabled={check.isPending} onClick={act(() => check.mutate())}>
+        <RefreshCw className="h-3 w-3" />
+        {check.isPending ? t('sessions.checking_updates') : t('sessions.check_updates')}
+      </button>
       {isStale && (
         <button type="button" className={BUTTON} disabled={!socket} onClick={act(reReview)}>
           {t('sessions.re_review')}

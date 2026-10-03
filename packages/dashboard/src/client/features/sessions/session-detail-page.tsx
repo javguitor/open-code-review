@@ -182,7 +182,7 @@ export function SessionDetailPage() {
 
         {session.pr_url && (
           <div className="mt-4 space-y-2 text-sm text-zinc-600 dark:text-zinc-300">
-            <StaleBadge session={session} alwaysShowCheck />
+            <StaleBadge session={session} />
             <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1">
               <dt className="text-zinc-500 dark:text-zinc-400">{t('sessions.pr_title')}</dt>
               <dd><a href={session.pr_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline dark:text-blue-400">#{session.pr_number}</a></dd>

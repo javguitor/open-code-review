@@ -86,7 +86,7 @@ export function RoundPage() {
         {t('reviews.back_to_session')}
       </Link>
 
-      {session?.pr_url && <StaleBadge session={session} alwaysShowCheck />}
+      {session?.pr_url && <StaleBadge session={session} />}
 
       <div className="flex items-start justify-between gap-4">
         <div>
