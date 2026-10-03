@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react'
 import { useT } from '../../lib/i18n'
@@ -14,18 +14,22 @@ import {
   verificationRefused,
   verificationStarted,
   reconcileVerifications,
-  verifyingFindingIds,
+  verifyingFindingKeys,
+  refusedTargetOf,
 } from '../../lib/verification-requests'
+import { findingRef, refKey, verifyCommandFor } from '../../lib/finding-ref'
+import { showCountedPerRow } from '../../lib/round-kind'
 import { useRound } from '../reviews/hooks/use-reviews'
 import { isLive } from '../../lib/live-findings'
 import type { DecisionStatus, DiffFile, FindingView } from '../../lib/api-types'
 import {
   GENERAL_KEY,
-  alsoReportedBy,
+  alsoReportedList,
   buildFileEntries,
   chatPrefillKey,
   contextRange,
   diffFilePath,
+  findingIdFromSearch,
   normalizePath,
   orderedFindingIds,
   reviewerHandle,
@@ -59,13 +63,24 @@ function locationOf(f: FindingView): string {
   return f.line_start != null ? `${f.file_path}:${f.line_start}` : f.file_path
 }
 
+/**
+ * Keyed by session and round so no selection or pending state survives a move
+ * to another round: ids of reviewer and synthesized findings collide, and a
+ * stale id from another round could select an unrelated finding.
+ */
 export function WorkbenchPage() {
+  const { id: sessionId = '', round: roundStr = '' } = useParams<{ id: string; round: string }>()
+  return <WorkbenchBody key={`${sessionId}/${roundStr}`} />
+}
+
+function WorkbenchBody() {
   const { t } = useT()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { socket } = useSocket()
   const { id: sessionId = '', round: roundStr } = useParams<{ id: string; round: string }>()
   const roundNumber = parseInt(roundStr ?? '0', 10)
+  const [searchParams] = useSearchParams()
 
   const { data: round, isLoading: roundLoading } = useRound(sessionId, roundNumber)
   const diffQuery = useRoundDiff(sessionId, roundNumber)
@@ -73,7 +88,8 @@ export function WorkbenchPage() {
   const decide = useDecideFinding(sessionId, roundNumber)
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
-  const [selectedId, setSelectedId] = useState<number | null>(null)
+  // `?finding=` opens a synthesized finding from the reviewer page.
+  const [selectedId, setSelectedId] = useState<number | null>(() => findingIdFromSearch(searchParams.get('finding')))
   const [contextOn, setContextOn] = useState(false)
   const [dialog, setDialog] = useState<Extract<DecisionStatus, 'dismissed' | 'wont_fix'> | null>(null)
   const [verifications, setVerifications] = useState(NO_VERIFICATION_REQUESTS)
@@ -82,7 +98,7 @@ export function WorkbenchPage() {
   // Verify runs in progress, hydrated from the server and kept live by the socket,
   // so reloading or navigating away and back does not re-enable the button.
   const { tabs } = useCommandState()
-  const verifying = useMemo(() => verifyingFindingIds(tabs), [tabs])
+  const verifying = useMemo(() => verifyingFindingKeys(tabs), [tabs])
   useEffect(() => {
     const running = new Set(tabs.filter((t) => t.status === 'running').map((t) => t.executionId))
     setVerifications((s) => reconcileVerifications(s, running))
@@ -107,8 +123,9 @@ export function WorkbenchPage() {
     setVerifications((s) => verificationFinished(s, evt.execution_id))
     refresh()
   })
-  useSocketEvent<{ error?: string; finding_id?: number }>('command:error', (evt) => {
-    setVerifications((s) => verificationRefused(s, evt.error ?? '', evt.finding_id))
+  // A refused `verify --synthesis` names `synthesis_id`, not `finding_id`: read both to release the right request.
+  useSocketEvent<{ error?: string; finding_id?: number; synthesis_id?: number }>('command:error', (evt) => {
+    setVerifications((s) => verificationRefused(s, evt.error ?? '', refusedTargetOf(evt)))
   })
 
   const findings = useMemo(() => findingsQuery.data ?? [], [findingsQuery.data])
@@ -116,9 +133,13 @@ export function WorkbenchPage() {
   const entries = useMemo(() => buildFileEntries(diff?.files ?? [], findings), [diff, findings])
   const orderedIds = useMemo(() => orderedFindingIds(entries), [entries])
 
-  const entry = entries.find((e) => e.key === selectedKey) ?? entries[0] ?? null
-  const selected =
-  findings.find((f) => f.id === selectedId) ?? firstActive(entry?.findings) ?? null
+  const entry =
+    entries.find((e) => e.key === selectedKey) ??
+    entries.find((e) => selectedId !== null && e.findings.some((f) => f.id === selectedId)) ??
+    entries[0] ??
+    null
+  const selected = findings.find((f) => f.id === selectedId) ?? firstActive(entry?.findings) ?? null
+  const selectedRef = selected ? findingRef(selected) : null
 
   const selectFinding = useCallback(
     (id: number) => {
@@ -155,7 +176,7 @@ export function WorkbenchPage() {
   const changeDecision = useCallback(
     (status: DecisionStatus, reason?: string) => {
       if (!selected || !isLive(selected)) return
-      decide.mutate({ findingId: selected.id, status, reason }, { onSuccess: () => setDialog(null) })
+      decide.mutate({ ref: findingRef(selected), status, reason }, { onSuccess: () => setDialog(null) })
     },
     [decide, selected],
   )
@@ -196,9 +217,9 @@ export function WorkbenchPage() {
   }, [dialog, orderedIds, selected, selectFinding, changeDecision, openDialog])
 
   const requestVerification = () => {
-    if (!selected || !isLive(selected) || verifying.has(selected.id)) return
-    socket?.emit('command:run', { command: `verify ${selected.id}` })
-    setVerifications((s) => addRequest(s, selected.id))
+    if (!selectedRef || !selected || !isLive(selected) || verifying.has(refKey(selectedRef))) return
+    socket?.emit('command:run', { command: verifyCommandFor(selectedRef) })
+    setVerifications((s) => addRequest(s, selectedRef))
   }
 
   const ask = () => {
@@ -220,9 +241,7 @@ export function WorkbenchPage() {
 
   const open = round?.open_counts
   const handles = new Map((round?.reviewer_outputs ?? []).map((o) => [o.id, reviewerHandle(o)]))
-  const alsoReported = selected
-    ? alsoReportedBy(selected, findings).map((f) => ({ id: f.id, handle: handles.get(f.reviewer_output_id) ?? '?' }))
-    : []
+  const alsoReported = selected ? alsoReportedList(selected, findings, handles) : []
   const hasContext = !!range && !!selected?.file_path
 
   return (
@@ -254,7 +273,9 @@ export function WorkbenchPage() {
             <Chip>{t('workbench.open_blockers', { count: open.blockers })}</Chip>
             <Chip>{t('workbench.open_should_fix', { count: open.should_fix })}</Chip>
             <Chip>{t('workbench.open_suggestions', { count: open.suggestions })}</Chip>
-            <span className="text-xs text-zinc-500 dark:text-zinc-400">({t('workbench.counted_per_row')})</span>
+            {showCountedPerRow(round) && (
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">({t('workbench.counted_per_row')})</span>
+            )}
           </>
         )}
       </div>
@@ -341,8 +362,10 @@ export function WorkbenchPage() {
                 alsoReportedBy={alsoReported}
                 onSelectFinding={selectFinding}
                 isDeciding={decide.isPending}
-                verificationRequested={verifying.has(selected.id) || verifications.pending.some((p) => p.findingId === selected.id)}
-                verificationError={verifications.errors[selected.id] ?? null}
+                verificationRequested={
+                  !!selectedRef && (verifying.has(refKey(selectedRef)) || verifications.pending.some((p) => p.key === refKey(selectedRef)))
+                }
+                verificationError={selectedRef ? (verifications.errors[refKey(selectedRef)] ?? null) : null}
                 onConfirm={() => changeDecision('confirmed')}
                 onDismiss={() => openDialog('dismissed')}
                 onFixed={() => changeDecision('fixed')}

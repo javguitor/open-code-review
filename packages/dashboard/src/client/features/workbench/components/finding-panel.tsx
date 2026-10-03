@@ -4,11 +4,13 @@ import { useT } from '../../../lib/i18n'
 import { formatDateTime } from '../../../lib/date-utils'
 import { StatusBadge } from '../../../components/ui/status-badge'
 import type { FindingRevision, FindingView } from '../../../lib/api-types'
-import { decisionStatusOf } from '../../../lib/workbench'
+import { decisionStatusOf, formatLocation, otherLocations } from '../../../lib/workbench'
+import { findingRef, noteTargetId } from '../../../lib/finding-ref'
 import { isLive } from '../../../lib/live-findings'
 import { decisionLabelKey, verificationLabelKey } from '../labels'
 import { NotesPanel } from '../../notes/components/notes-panel'
 import { useFindingDetail } from '../hooks/use-workbench'
+import { MergedSources } from './merged-sources'
 
 const BUTTON =
   'inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
@@ -78,13 +80,15 @@ function RevisionItem({ revision }: { revision: FindingRevision }) {
 export function FindingPanel(props: FindingPanelProps) {
   const { finding, isDeciding, verificationRequested } = props
   const { t } = useT()
-  const { data: detail } = useFindingDetail(finding.id)
+  const ref = findingRef(finding)
+  const { data: detail } = useFindingDetail(ref)
   const live = isLive(finding)
   const decision = decisionStatusOf(finding)
   const previous = finding.previous_round_decision
   const severityRevised = finding.synthesis_severity !== finding.severity
   const categoryRevised = finding.synthesis_category !== finding.category
   const revisions = detail?.revisions ?? []
+  const otherLocs = otherLocations(finding)
 
   return (
     <div className={cn('space-y-4 p-4', finding.retired_at && 'opacity-70')}>
@@ -134,6 +138,16 @@ export function FindingPanel(props: FindingPanelProps) {
         </p>
       )}
 
+      {otherLocs.length > 0 && (
+        <Section title={t('workbench.other_locations')}>
+          <ul className="space-y-0.5 break-all font-mono text-xs text-zinc-600 dark:text-zinc-400">
+            {otherLocs.map((loc, i) => (
+              <li key={`${loc.file_path}:${loc.line_start ?? ''}:${i}`}>{formatLocation(loc)}</li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
       {props.alsoReportedBy.length > 0 && (
         <p className="text-xs text-zinc-600 dark:text-zinc-400">
           <span className="text-zinc-500">{t('workbench.also_reported_by')}: </span>
@@ -165,6 +179,8 @@ export function FindingPanel(props: FindingPanelProps) {
           </pre>
         </Section>
       )}
+
+      {finding.kind === 'synthesis' && <MergedSources sources={finding.sources} />}
 
       <Section title={t('workbench.verification')}>
         {finding.verification_status ? (
@@ -250,7 +266,7 @@ export function FindingPanel(props: FindingPanelProps) {
         )}
       </Section>
 
-      <NotesPanel targetType="finding" targetId={String(finding.id)} />
+      <NotesPanel targetType="finding" targetId={noteTargetId(ref)} />
 
       {live && (
         <button type="button" onClick={props.onAsk} className={BUTTON}>

@@ -25,11 +25,11 @@
 - [x] 4.6 `verify --synthesis <id>` command validation and prompt (merged claim plus each source's original text)
 
 ## 5. Client
-- [ ] 5.1 Workbench list, markers and panel on synthesized findings; read-only "Merged from N reviewer findings" section; no "also reported by" for synthesized rounds
-- [ ] 5.2 Round page counts without the per-reviewer-row label for synthesized rounds
-- [ ] 5.3 Reviewer detail page: each reviewer finding links to its synthesized finding and shows its decision
-- [ ] 5.4 Hint on sources decided before the round gained synthesized findings
-- [ ] 5.5 i18n `en` and `es` keys; client tests for grouping, counts and legacy rounds
+- [x] 5.1 Workbench list, markers and panel on synthesized findings; read-only "Merged from N reviewer findings" section; no "also reported by" for synthesized rounds
+- [x] 5.2 Round page counts without the per-reviewer-row label for synthesized rounds
+- [x] 5.3 Reviewer detail page: each reviewer finding links to its synthesized finding and shows its decision
+- [x] 5.4 Hint on sources decided before the round gained synthesized findings
+- [x] 5.5 i18n `en` and `es` keys; client tests for grouping, counts and legacy rounds
 
 ## 6. Skill
 - [x] 6.1 Edit the sources in `packages/agents/skills/ocr/references/`: `final-template.md` (ids on items), `workflow.md` Phase 7 (emit `synthesis_findings`, validation list), `language-policy.md` (tokens), `verifier-task.md` (synthesized input)

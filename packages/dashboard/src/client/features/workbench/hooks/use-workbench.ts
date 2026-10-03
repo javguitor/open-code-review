@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchApi } from '../../../lib/utils'
+import { findingApiPath, refKey, type FindingRef } from '../../../lib/finding-ref'
 import type {
   DecisionStatus,
   DiffFile,
@@ -67,20 +68,20 @@ export function useWorkbenchFindings(sessionId: string, round: number) {
   })
 }
 
-/** Finding plus its revision history. */
-export function useFindingDetail(findingId: number | null) {
+/** Finding plus its revision history (and, for a synthesized finding, its sources). */
+export function useFindingDetail(ref: FindingRef | null) {
   return useQuery<FindingDetail>({
-    queryKey: ['findings', findingId, 'detail'],
-    queryFn: () => fetchApi<FindingDetail>(`/api/findings/${findingId}`),
-    enabled: findingId !== null,
+    queryKey: ['findings', ref ? refKey(ref) : null, 'detail'],
+    queryFn: () => fetchApi<FindingDetail>(findingApiPath(ref!)),
+    enabled: ref !== null,
   })
 }
 
 export function useDecideFinding(sessionId: string, round: number) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ findingId, status, reason }: { findingId: number; status: DecisionStatus; reason?: string }) =>
-      fetchApi(`/api/findings/${findingId}/decision`, {
+    mutationFn: ({ ref, status, reason }: { ref: FindingRef; status: DecisionStatus; reason?: string }) =>
+      fetchApi(findingApiPath(ref, '/decision'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(reason ? { status, reason } : { status }),

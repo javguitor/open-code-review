@@ -9,6 +9,7 @@ import type {
 } from '../../../lib/api-types'
 import type { DecisionStatus, RoundDetail, RoundFinding } from '../types'
 import { decisionBody } from '../decisions'
+import { findingApiPath, type FindingRef } from '../../../lib/finding-ref'
 
 export function useAllReviews() {
   const queryClient = useQueryClient()
@@ -89,17 +90,17 @@ export function useUpdateFindingStatus() {
 
   return useMutation({
     mutationFn: ({
-      findingId,
+      ref,
       status,
       reason,
     }: {
-      findingId: number
+      ref: FindingRef
       status: DecisionStatus
       reason?: string
     }) =>
       // /decision (not the legacy /progress) so every change lands in the
       // revision log and emits `round:updated`; it accepts read/acknowledged too.
-      fetchApi(`/api/findings/${findingId}/decision`, {
+      fetchApi(findingApiPath(ref, '/decision'), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(decisionBody(status, reason)),
