@@ -333,3 +333,13 @@ The system SHALL provide `/ocr:map` as the command for generating code review ma
 - **THEN** the system lists them with their session and head sha, or removes them; `remove` deletes the worktree and `refs/ocr/pr/<n>` only
 - **AND** `remove <n>` refuses a dirty worktree, and a PR with an active session, unless `--force` is given
 - **AND** `--all-stale` removes every worktree whose PR has no active session, including worktrees with no session at all
+
+### Requirement: Verify Command
+
+The system SHALL provide `/ocr:verify <finding-id>` to run the finding verifier.
+
+#### Scenario: Verify a finding
+
+- **GIVEN** user invokes `/ocr:verify 42`
+- **WHEN** finding 42 belongs to a round of the current session
+- **THEN** the verifier task runs and the finding's verification status and note are updated through `ocr finding verify`
