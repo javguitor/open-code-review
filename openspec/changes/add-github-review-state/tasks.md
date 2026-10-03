@@ -107,9 +107,9 @@ session `2026-10-03-test-review-state-probe` built with `ocr state`, verdict REQ
 
 ## 7. Hardening after the OCR review of PR #2 (should-fix items)
 
-- [ ] 7.1 Server: reject any `post:submit` for a PR not in the socket's checked map with `code: "needs-recheck"` (all states); validate `prNumber` as a positive integer (`code: "invalid-payload"`); clear the map on every `post:check-gh`; store the viewer login with the entry; resolve the review link with `gh api --paginate` filtered by that login; include `state` and `downgraded` in the success result.
-- [ ] 7.2 Server tests: `gh pr review` failure path; `prNumber: -1` / `1.5`; unchecked `comment` rejected; double `post:check-gh` (second finds no PR → nothing to submit against); link filter picks the viewer's last review; recorder throws on unscripted `gh` commands.
-- [ ] 7.3 Client: `post:gh-result` handler is step-neutral (changes step only from `checking`) and resets `reviewState` only when the current selection is no longer selectable; `submitToGitHub(prNumber, content, state)` takes the state explicitly (drop `reviewStateRef`); `needs-recheck` error keeps the step and shows Re-check regardless of ownership; success step says "Posted as comment" when `downgraded`.
-- [ ] 7.4 Client tests: extract the check-result reducer as a pure function `(step, prevState, verdict, data) => { step, reviewState }` and test it from `preview`/`ready`/`checking`.
-- [ ] 7.5 `nx run-many -t lint test typecheck` green; `openspec validate add-github-review-state --strict` green.
+- [x] 7.1 Server: reject any `post:submit` for a PR not in the socket's checked map with `code: "needs-recheck"` (all states); validate `prNumber` as a positive integer (`code: "invalid-payload"`); clear the map on every `post:check-gh`; store the viewer login with the entry; resolve the review link with `gh api --paginate` filtered by that login; include `state` and `downgraded` in the success result.
+- [x] 7.2 Server tests: `gh pr review` failure path; `prNumber: -1` / `1.5`; unchecked `comment` rejected; double `post:check-gh` (second finds no PR → nothing to submit against); link filter picks the viewer's last review; recorder throws on unscripted `gh` commands.
+- [x] 7.3 Client: `post:gh-result` handler is step-neutral (changes step only from `checking`) and resets `reviewState` only when the current selection is no longer selectable; `submitToGitHub(prNumber, content, state)` takes the state explicitly (drop `reviewStateRef`); `needs-recheck` error keeps the step and shows Re-check regardless of ownership; success step says "Posted as comment" when `downgraded`.
+- [x] 7.4 Client tests: extract the check-result reducer as a pure function `(step, prevState, verdict, data) => { step, reviewState }` and test it from `preview`/`ready`/`checking`.
+- [x] 7.5 `nx run-many -t lint test typecheck` green; `openspec validate add-github-review-state --strict` green.
 
