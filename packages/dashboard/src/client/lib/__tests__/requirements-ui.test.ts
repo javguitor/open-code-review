@@ -64,11 +64,22 @@ describe('previewExcerpt', () => {
 describe('refreshRequirementsCommand', () => {
   it('targets the PR URL when present, else the branch', () => {
     expect(refreshRequirementsCommand({ pr_url: 'https://github.com/o/r/pull/1', branch: 'feat/x' }, 'https://x.io/t/1')).toBe(
-      'review https://github.com/o/r/pull/1 --requirements https://x.io/t/1',
+      'review https://github.com/o/r/pull/1 --requirements "https://x.io/t/1"',
     )
     expect(refreshRequirementsCommand({ pr_url: null, branch: 'feat/x' }, 'https://x.io/t/1')).toBe(
-      'review feat/x --requirements https://x.io/t/1',
+      'review feat/x --requirements "https://x.io/t/1"',
     )
+  })
+})
+
+describe('refreshRequirementsCommand with comments', () => {
+  it('passes --with-comments only when the original source had them', () => {
+    const base = { pr_url: null, branch: 'feat/x' }
+    expect(refreshRequirementsCommand({ ...base, requirements_with_comments: true }, 'https://x.io/t/1')).toBe(
+      'review feat/x --with-comments --requirements "https://x.io/t/1"',
+    )
+    expect(refreshRequirementsCommand({ ...base, requirements_with_comments: false }, 'https://x.io/t/1')).not.toContain('--with-comments')
+    expect(refreshRequirementsCommand({ ...base, requirements_with_comments: null }, 'https://x.io/t/1')).not.toContain('--with-comments')
   })
 })
 

@@ -1,4 +1,5 @@
 import type { MessageKey } from './i18n/en'
+import { requirementsArgs } from './command-string'
 import type { RequirementsPreview } from './api-types'
 
 /** True when the review target is a pull request (`pr:<n>` or a GitHub PR URL). */
@@ -58,10 +59,11 @@ export function previewExcerpt(preview: string, count = 6): string {
 
 /** Command that re-reviews a session against its requirements source (PR URL wins over branch). */
 export function refreshRequirementsCommand(
-  session: { pr_url: string | null; branch: string },
+  session: { pr_url: string | null; branch: string; requirements_with_comments?: boolean | null },
   requirementsUrl: string,
 ): string {
-  return `review ${session.pr_url ?? session.branch} --requirements ${requirementsUrl}`
+  const flags = requirementsArgs(requirementsUrl, session.requirements_with_comments === true)
+  return ['review', session.pr_url ?? session.branch, ...flags].join(' ')
 }
 
 /** Only http(s) URLs may become links (the source can also be a file path). */

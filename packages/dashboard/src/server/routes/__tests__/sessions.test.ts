@@ -179,12 +179,12 @@ describe('POST /api/sessions/:id/check-updates', () => {
     expect(status).toBe(200)
     expect(body).toEqual({
       head_sha: 'aaa', stale: true, pr_head_sha: 'ccc',
-      requirements_title: null, requirements_stale: null, requirements_current_updated_at: null,
+      requirements_title: null, requirements_with_comments: null, requirements_stale: null, requirements_current_updated_at: null,
     })
     expect(headCalls).toEqual([{ url: PR_URL, force: true }])
   })
 
-  it('stale known + forced failure keeps stale and returns 502', async () => {
+  it('stale known + forced PR failure keeps stale and reports pr_error in a 200', async () => {
     insert('pr', { pr_url: PR_URL, head_sha: 'aaa', pr_number: 7 })
     let fail = false
     realGh = async () => {
@@ -194,8 +194,9 @@ describe('POST /api/sessions/:id/check-updates', () => {
     expect((await api('GET', '')).body[0]).toMatchObject({ stale: true, pr_head_sha: 'ccc' })
     fail = true
     const res = await api('POST', '/pr/check-updates')
-    expect(res.status).toBe(502)
-    expect(res.body.error).toEqual(expect.any(String))
+    expect(res.status).toBe(200)
+    expect(res.body.pr_error).toEqual(expect.any(String))
+    expect(res.body).toMatchObject({ stale: null, pr_head_sha: null })
     expect((await api('GET', '')).body[0]).toMatchObject({ stale: true, pr_head_sha: 'ccc' })
   })
 
@@ -246,14 +247,37 @@ describe('requirements staleness', () => {
     expect(reqCalls).toEqual([])
   })
 
-  it('uses cacheOnly for closed sessions in the list but a TTL lookup for detail', async () => {
-    withCard('c', { status: 'closed' })
+  it('serves requirements cacheOnly on list and detail, even for active sessions', async () => {
+    withCard('c', { status: 'active' })
     await api('GET', '')
     await api('GET', '/c')
     expect(reqCalls).toEqual([
       { url: CARD, force: false, cacheOnly: true },
-      { url: CARD, force: false, cacheOnly: false },
+      { url: CARD, force: false, cacheOnly: true },
     ])
+  })
+
+  it('exposes requirements_with_comments from source.json', async () => {
+    withCard()
+    mkdirSync(join(ocrDir, 'sessions', 'r', 'requirements'), { recursive: true })
+    writeFileSync(join(ocrDir, 'sessions', 'r', 'requirements', 'source.json'), JSON.stringify({ title: 'T', with_comments: true }))
+    expect((await api('GET', '/r')).body.requirements_with_comments).toBe(true)
+    expect((await api('GET', '')).body[0].requirements_with_comments).toBe(true)
+  })
+
+  it('a PR-head failure still returns the requirements result, and both errors can coexist', async () => {
+    insert('both', { pr_url: PR_URL, head_sha: 'aaa', pr_number: 7, requirements_source_url: CARD, requirements_updated_at: '2026-10-01T10:00:00.000Z' })
+    realGh = async () => {
+      throw new Error('offline')
+    }
+    reqHeads.set(CARD, '2026-10-05T00:00:00.000Z')
+    const ok = await api('POST', '/both/check-updates')
+    expect(ok.status).toBe(200)
+    expect(ok.body).toMatchObject({ pr_error: expect.any(String), requirements_stale: true })
+    reqFail = true
+    const bad = await api('POST', '/both/check-updates')
+    expect(bad.body.pr_error).toEqual(expect.any(String))
+    expect(bad.body.requirements_error).toMatch(/no token/)
   })
 
   it('check-updates forces the lookup and reports the result', async () => {

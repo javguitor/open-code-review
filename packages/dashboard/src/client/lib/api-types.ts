@@ -40,6 +40,8 @@ export type SessionSummary = {
   requirements_source_url: string | null
   requirements_updated_at: string | null
   requirements_title: string | null
+  /** Whether the source was fetched with `--with-comments`; null when unknown. */
+  requirements_with_comments: boolean | null
   /** true = the source changed after the review; null = n/a or the lookup failed. */
   requirements_stale: boolean | null
   requirements_current_updated_at: string | null
@@ -49,6 +51,8 @@ export type SessionSummary = {
 export type CheckUpdatesResponse = Pick<SessionSummary, 'head_sha' | 'stale' | 'pr_head_sha'> &
   Pick<SessionSummary, 'requirements_stale' | 'requirements_current_updated_at'> & {
     requirements_error?: string
+    /** The PR-head lookup failed (the requirements fields are still valid). */
+    pr_error?: string
   }
 
 export type RequirementsSourceType = 'clickup' | 'github-issue' | 'github-pr' | 'file' | 'text'

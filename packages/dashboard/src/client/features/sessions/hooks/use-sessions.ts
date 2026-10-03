@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useMutationState, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSocketEvent } from '../../../providers/socket-provider'
 import { fetchApi } from '../../../lib/utils'
 import type { CheckUpdatesResponse, SessionSummary } from '../../../lib/api-types'
@@ -38,12 +38,29 @@ export function useSession(id: string) {
   return query
 }
 
-/** Forces the server to re-read the PR head, then refreshes the session queries. */
+/**
+ * Forces the server to re-read the PR head and the requirements source, then
+ * refreshes the session queries. `StaleBadge` and `RequirementsBlock` both call
+ * this for the same session, so the result/error/pending state is read from
+ * react-query's shared mutation cache (keyed by session id) rather than from
+ * each instance's own `useMutation` — otherwise whichever component did not
+ * trigger the check would never see its outcome.
+ */
 export function useCheckUpdates(id: string) {
   const queryClient = useQueryClient()
-  return useMutation<CheckUpdatesResponse, Error>({
+  const mutationKey = ['check-updates', id]
+  const { mutate } = useMutation<CheckUpdatesResponse, Error>({
+    mutationKey,
     mutationFn: () =>
       fetchApi<CheckUpdatesResponse>(`/api/sessions/${id}/check-updates`, { method: 'POST' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sessions'] }),
   })
+  const states = useMutationState({ filters: { mutationKey }, select: (m) => m.state })
+  const last = states[states.length - 1]
+  return {
+    mutate: () => mutate(),
+    isPending: last?.status === 'pending',
+    isError: last?.status === 'error',
+    data: last?.data as CheckUpdatesResponse | undefined,
+  }
 }

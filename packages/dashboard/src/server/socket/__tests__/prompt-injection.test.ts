@@ -275,6 +275,18 @@ describe('buildPrompt — structural ordering', () => {
   })
 })
 
+describe('shellSplit', () => {
+  it('keeps a quoted multi-word --requirements value as one token', () => {
+    expect(shellSplit('review pr:1 --requirements "a b c" --fresh')).toEqual([
+      'review', 'pr:1', '--requirements', 'a b c', '--fresh',
+    ])
+  })
+
+  it('treats \\" and \\\\ inside double quotes as literal characters', () => {
+    expect(shellSplit('--requirements "say \\"hi\\" C:\\\\x"')).toEqual(['--requirements', 'say "hi" C:\\x'])
+  })
+})
+
 describe('buildPrompt — argument parsing (S15)', () => {
   // shellSplit collapses a quoted value into a single token before buildPrompt
   // sees it, so each subArgs element below is exactly what the parser receives.

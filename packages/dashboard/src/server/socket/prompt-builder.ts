@@ -7,7 +7,11 @@
  * isolation. `prompt-injection.test.ts` covers `buildPrompt` / `escapeUserHeaders`.
  */
 
-/** Split a command string into tokens, respecting single and double quotes. */
+/**
+ * Split a command string into tokens, respecting single and double quotes.
+ * Inside double quotes, `\"` and `\\` are literal characters (the dashboard's
+ * `quoteArg` escapes free text that way); any other backslash is kept as is.
+ */
 export function shellSplit(str: string): string[] {
   const tokens: string[] = []
   let current = ''
@@ -15,7 +19,11 @@ export function shellSplit(str: string): string[] {
   for (let i = 0; i < str.length; i++) {
     const ch = str[i]!
     if (quote) {
-      if (ch === quote) {
+      const next = str[i + 1]
+      if (quote === '"' && ch === '\\' && (next === '"' || next === '\\')) {
+        current += next
+        i++
+      } else if (ch === quote) {
         quote = null
       } else {
         current += ch

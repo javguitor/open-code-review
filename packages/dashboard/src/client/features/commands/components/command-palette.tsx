@@ -6,6 +6,7 @@ import { cn } from '../../../lib/utils'
 import { useReviewers } from '../hooks/use-reviewers'
 import { ReviewerDefaults, type ReviewerSelection } from './reviewer-defaults'
 import { ReviewerDialog } from './reviewer-dialog'
+import { extractQuotedFlag, quoteArg, requirementsArgs, unescapeDoubleQuoted } from '../../../lib/command-string'
 import { RequirementsPreview } from '../../requirements/components/requirements-preview'
 
 // ── Command registry ──
@@ -69,9 +70,9 @@ export type ParsedCommand = {
 function extractReviewerFlags(raw: string): { cleaned: string; entries: { description: string; count: number }[] } {
   const entries: { description: string; count: number }[] = []
   // Match --reviewer optionally followed by N: then a quoted string
-  const cleaned = raw.replace(/--reviewer\s+(?:(\d+):)?(?:"([^"]*?)"|'([^']*?)')/g, (_match, countStr, dq, sq) => {
+  const cleaned = raw.replace(/--reviewer\s+(?:(\d+):)?(?:"((?:[^"\\]|\\.)*)"|'([^']*?)')/g, (_match, countStr, dq, sq) => {
     entries.push({
-      description: dq ?? sq ?? '',
+      description: dq !== undefined ? unescapeDoubleQuoted(dq) : (sq ?? ''),
       count: parseInt(countStr ?? '1', 10) || 1,
     })
     return ''
@@ -81,7 +82,9 @@ function extractReviewerFlags(raw: string): { cleaned: string; entries: { descri
 
 export function parseCommandString(raw: string): ParsedCommand | null {
   // Extract --reviewer flags first (they contain spaces that break split)
-  const { cleaned, entries: reviewerEntries } = extractReviewerFlags(raw)
+  const { cleaned: withoutReviewers, entries: reviewerEntries } = extractReviewerFlags(raw)
+  // --requirements takes ONE value (quoted when it has spaces), like the server parses it.
+  const { cleaned, values: requirementsValues } = extractQuotedFlag(withoutReviewers, 'requirements')
 
   const normalized = cleaned.replace(/^ocr\s+/, '')
   const parts = normalized.split(/\s+/)
@@ -104,19 +107,6 @@ export function parseCommandString(raw: string): ParsedCommand | null {
       const teamStr = parts[i + 1] ?? ''
       team = parseTeamArg(teamStr)
       i += 2
-    } else if (token === '--requirements' && i + 1 < parts.length) {
-      // Consume remaining tokens as requirements (must be last)
-      const remaining = parts.slice(i + 1)
-      // Stop at --team if it appears after --requirements
-      const teamIdx = remaining.indexOf('--team')
-      if (teamIdx >= 0) {
-        params['requirements'] = remaining.slice(0, teamIdx).join(' ')
-        const teamStr = remaining[teamIdx + 1] ?? ''
-        team = parseTeamArg(teamStr)
-      } else {
-        params['requirements'] = remaining.join(' ')
-      }
-      break
     } else if (!token.startsWith('--')) {
       params['target'] = token
       i++
@@ -124,6 +114,8 @@ export function parseCommandString(raw: string): ParsedCommand | null {
       i++
     }
   }
+
+  if (requirementsValues[0] !== undefined) params['requirements'] = requirementsValues[0]
 
   // Append ephemeral selections from --reviewer flags
   if (reviewerEntries.length > 0) {
@@ -362,24 +354,15 @@ export function CommandPalette({ isRunning, runningCount, onRunCommand, prefill,
       // Add --reviewer flags for ephemeral reviewers (with optional count prefix)
       for (const s of teamOverride) {
         if (s.description) {
-          const escaped = s.description.replace(/"/g, '\\"')
-          if (s.count > 1) {
-            parts.push('--reviewer', `${s.count}:"${escaped}"`)
-          } else {
-            parts.push('--reviewer', `"${escaped}"`)
-          }
+          const quoted = quoteArg(s.description)
+          parts.push('--reviewer', s.count > 1 ? `${s.count}:${quoted}` : quoted)
         }
       }
     }
 
-    const requirements = paramValues['requirements']
-    // Must precede --requirements: the parser treats everything after it as free text.
-    if (paramValues['withComments'] === true && typeof requirements === 'string' && requirements.trim()) {
-      parts.push('--with-comments')
-    }
-    if (typeof requirements === 'string' && requirements.trim()) {
-      parts.push('--requirements', requirements.trim())
-    }
+    parts.push(
+      ...requirementsArgs(paramValues['requirements'], paramValues['withComments'] === true),
+    )
 
     return parts.join(' ')
   }
