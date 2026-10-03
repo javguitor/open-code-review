@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseProposals, proposalChanges, proposalToCalls, toChatEntry } from '../proposals'
+import { parseProposals, proposalChanges, proposalKey, proposalToCalls, remainingCalls, toChatEntry } from '../proposals'
 import { chatPrefillKey, takeChatPrefill } from '../prefill'
 
 describe('parseProposals', () => {
@@ -61,6 +61,33 @@ describe('proposalToCalls', () => {
     expect(proposalToCalls({ finding_id: 1, status: 'confirmed', reason: 'r' }, 'c')).toEqual([
       { kind: 'decision', body: { status: 'confirmed', reason: 'r' } },
     ])
+  })
+})
+
+describe('remainingCalls', () => {
+  const calls = proposalToCalls({ finding_id: 7, severity: 'low', category: 'suggestion', status: 'wont_fix', reason: 'why' }, 'c')
+
+  it('returns every call, with its index, when none completed', () => {
+    expect(remainingCalls(calls, new Set()).map((r) => r.index)).toEqual([0, 1, 2])
+  })
+
+  it('skips completed indices and keeps the original indices', () => {
+    const rest = remainingCalls(calls, new Set([0, 1]))
+    expect(rest).toEqual([{ index: 2, call: calls[2] }])
+  })
+
+  it('returns [] when all completed', () => {
+    expect(remainingCalls(calls, new Set([0, 1, 2]))).toEqual([])
+  })
+})
+
+describe('proposalKey', () => {
+  it('differs by finding, change and conversation', () => {
+    const p = { finding_id: 1, severity: 'low' as const, reason: 'r' }
+    expect(proposalKey(p, 'c')).toBe(proposalKey({ ...p }, 'c'))
+    expect(proposalKey(p, 'c')).not.toBe(proposalKey(p, 'd'))
+    expect(proposalKey(p, 'c')).not.toBe(proposalKey({ ...p, finding_id: 2 }, 'c'))
+    expect(proposalKey(p, 'c')).not.toBe(proposalKey({ ...p, severity: 'high' }, 'c'))
   })
 })
 

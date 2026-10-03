@@ -5,6 +5,7 @@ import { StatusBadge } from '../../../components/ui/status-badge'
 import type { FindingRevision, FindingView } from '../../../lib/api-types'
 import { decisionStatusOf } from '../../../lib/workbench'
 import { decisionLabelKey, verificationLabelKey } from '../labels'
+import { NotesPanel } from '../../notes/components/notes-panel'
 import { useFindingDetail } from '../hooks/use-workbench'
 
 const BUTTON =
@@ -193,6 +194,8 @@ export function FindingPanel(props: FindingPanelProps) {
           </ul>
         )}
       </Section>
+
+      <NotesPanel targetType="finding" targetId={String(finding.id)} />
 
       <button type="button" onClick={props.onAsk} className={BUTTON}>
         <MessageSquare className="h-3.5 w-3.5" />

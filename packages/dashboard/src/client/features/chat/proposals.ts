@@ -70,6 +70,19 @@ export function proposalToCalls(p: Proposal, conversationId: string): ProposalCa
   return calls
 }
 
+/** Stable identity of a proposal, to remember which of its calls already succeeded. */
+export function proposalKey(p: Proposal, conversationId: string): string {
+  return JSON.stringify([conversationId, p.finding_id, p.severity, p.category, p.status, p.reason])
+}
+
+/** The planned calls not yet completed, with their original index (the key of `done`). */
+export function remainingCalls(
+  calls: readonly ProposalCall[],
+  done: ReadonlySet<number>,
+): { index: number; call: ProposalCall }[] {
+  return calls.flatMap((call, index) => (done.has(index) ? [] : [{ index, call }]))
+}
+
 /** old -> new pairs for the card; a field proposed at its current value is not a change. */
 export function proposalChanges(p: Proposal, finding: ProposalFindingInfo | undefined): ProposalChange[] {
   const changes: ProposalChange[] = []
