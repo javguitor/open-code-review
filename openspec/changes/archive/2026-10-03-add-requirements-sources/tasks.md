@@ -21,8 +21,8 @@
 
 ## 4. Acceptance
 
-- [ ] 4.1 `ocr requirements fetch <clickup url> --with-comments` on a real card (token in env) → `source.md`/`source.json` correct; same for a GitHub issue URL and a local file. (GitHub PR/issue and file verified 2026-10-03; ClickUp pending: no token/card available.)
+- [x] 4.1 `ocr requirements fetch <clickup url> --with-comments` on a real card (token in env) → `source.md`/`source.json` correct; same for a GitHub issue URL and a local file. Verified 2026-10-03 against a real ClickUp card (markdown description, a drop_down custom field resolved by orderindex, PR-body chip, preview, review with AC-1..AC-8, staleness after editing the card). Comment pagination and checklists remain untested against the real API (the card had none).
 - [x] 4.2 `/ocr:review pr:<n> --requirements <clickup url>` → `requirements.md` with numbered ACs (quoted/derived), reviewers' assessments reference `AC-n`, final "Requirements Assessment" table lists them.
-- [ ] 4.3 Dashboard: PR with a card link → chip → preview → launch; session banner; edit the card → "Check for updates" shows the change. (Pending: the fork has issues disabled and no ClickUp token was available on 2026-10-03; detection, preview and staleness are covered by route tests with fake runners.)
+- [x] 4.3 Dashboard: PR with a card link → chip → preview → launch; session banner; edit the card → "Check for updates" shows the change. Verified 2026-10-03 against a real ClickUp card (markdown description, a drop_down custom field resolved by orderindex, PR-body chip, preview, review with AC-1..AC-8, staleness after editing the card). Comment pagination and checklists remain untested against the real API (the card had none).
 - [x] 4.4 Missing token → clear error in CLI and dashboard; nothing written.
 - [x] 4.5 `nx run-many -t lint test typecheck` green; `openspec validate add-requirements-sources --strict`; OCR review of the branch before merge.
