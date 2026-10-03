@@ -31,9 +31,9 @@ PR into its own `git worktree`, a session tied to the reviewed commit, and a vis
 - Stale detection: the dashboard compares the session's `head_sha` with the PR's current
   `headRefOid` (`gh pr view`, cached per session for a few minutes) and shows **Stale**
   on the session card and round page, with a "Re-review (round N+1)" action that
-  re-fetches the head into the same worktree. Finding-level user decisions carry over
-  because they are keyed by finding id, not by round (existing behaviour; verified in
-  tasks).
+  re-fetches the head into the same worktree. Decisions taken on round N stay on round N
+  (keyed by finding id); round N+1 findings are new rows and start unread — carrying a
+  decision to the matching finding of the next round is out of scope.
 - Posting uses the session's `pr_number`/`pr_url` when present instead of looking the PR
   up by branch (removes the fork default-repo ambiguity for PR-targeted sessions).
 - Worktree lifecycle: `ocr worktree list|remove [--all-stale]`; `cleanup: on-close` removes
