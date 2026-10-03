@@ -27,8 +27,10 @@ const LANGUAGE_POLICY_TEMPLATE = `## Output Language
 Write all prose in **{language}**: summaries, explanations, issue descriptions, why-it-matters, suggestions, questions, discourse reasoning, synthesis narrative, chat answers. Use the natural register of that language (do not transliterate English fillers such as "tbh"/"fwiw"; use their equivalents or drop them).
 
 Keep the following **exactly as written in English** — tools parse them:
-- Section headings: \`## Summary\`, \`## What I Explored\`, \`## Requirements Assessment\`, \`## Findings\`, \`### Finding N: <title>\`, \`## What's Working Well\`, \`## Clarifying Questions\`, \`## Questions for Other Reviewers\`, \`## Verdict\`, \`## Blockers\`, \`## Should Fix\`, \`## Suggestions\`, \`## Consensus & Dissent\`, \`## Individual Reviews\`, \`## Discourse from <reviewer>\`, and map headings/table columns.
+- Section headings: \`## Summary\`, \`## What I Explored\`, \`## Requirements Assessment\`, \`## Findings\`, \`### Finding N: <title>\`, \`## What's Working Well\`, \`## Clarifying Questions\`, \`## Questions for Other Reviewers\`, \`## Verdict\`, \`## Blockers\`, \`## Should Fix\`, \`## Suggestions\`, \`## Consensus & Dissent\`, \`## Individual Reviews\`, \`## Discourse from <reviewer>\`.
 - Field labels: \`Severity\`, \`Location\`, \`File\`, \`Lines\`, \`Issue\`, \`Why It Matters\`, \`Suggestion\`, \`Requirements Impact\`, \`Flagged by\`, \`Type\`, \`Date\`, \`Reviewers\`, \`Mode\`.
+- Synthesis counts (bold lines): \`**Blockers**: N\`, \`**Should Fix**: N\`, \`**Suggestions**: N\`.
+- Map: \`## Section N: <title>\` headings, the table columns \`Done\`, \`File\`, \`Role\`, \`Type\`, \`Description\`, and the bold labels \`**Files**\` and \`**The Story**:\`.
 - Vocabularies: verdicts \`APPROVE\` / \`REQUEST CHANGES\` / \`NEEDS DISCUSSION\`; severities \`Critical\` / \`High\` / \`Medium\` / \`Low\` / \`Info\`; categories \`blocker\` / \`should_fix\` / \`suggestion\` / \`style\`; discourse verbs \`AGREE\` / \`CHALLENGE\` / \`CONNECT\` / \`SURFACE\`; status words \`Met\` / \`Partially Met\` / \`Not Met\` / \`Cannot Assess\`.
 - Code, file paths, identifiers, commands, JSON keys and values, and quoted error messages.
 
@@ -62,9 +64,11 @@ export function getOutputLanguage(ocrDir: string): string {
 
 /**
  * The output-language policy to inject into a prompt, or `null` for English
- * (the default needs no instruction).
+ * (the default needs no instruction) or for a tag that fails `LANGUAGE_TAG`.
  */
 export function languagePolicy(language: string): string | null {
+  // Invalid tags (e.g. an unsubstituted `{language}`) never reach a prompt.
+  if (!LANGUAGE_TAG.test(language)) return null;
   const tag = language.toLowerCase();
   if (tag === "en" || tag.startsWith("en-")) return null;
   return LANGUAGE_POLICY_TEMPLATE.replaceAll("{language}", language);

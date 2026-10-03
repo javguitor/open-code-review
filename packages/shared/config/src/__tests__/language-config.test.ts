@@ -1,6 +1,7 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getOutputLanguage, languagePolicy } from "../language-config.js";
 
@@ -79,5 +80,33 @@ describe("languagePolicy", () => {
     expect(policy).toContain("## Output Language");
     expect(policy).toContain("## Should Fix");
     expect(policy).not.toContain("{language}");
+  });
+});
+
+describe("languagePolicy validation", () => {
+  it("returns null for a tag that fails LANGUAGE_TAG", () => {
+    expect(languagePolicy("{language}")).toBeNull();
+    expect(languagePolicy("")).toBeNull();
+  });
+
+  it("keeps the region subtag as written", () => {
+    expect(languagePolicy("es-ES")).toContain("**es-ES**");
+  });
+});
+
+describe("language-policy.md drift", () => {
+  it("matches the policy block injected by languagePolicy", () => {
+    const mdPath = resolve(
+      dirname(fileURLToPath(import.meta.url)),
+      "../../../../agents/skills/ocr/references/language-policy.md",
+    );
+    const lines = readFileSync(mdPath, "utf-8").split("\n");
+    const start = lines.indexOf("## Output Language");
+    const end = lines.findIndex((l) => l.startsWith("When the language is"));
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const block = lines.slice(start, end).join("\n").trimEnd();
+    // `{language}` fails tag validation, so compare with a real tag on both sides.
+    expect(languagePolicy("es")?.trimEnd()).toBe(block.replaceAll("{language}", "es"));
   });
 });

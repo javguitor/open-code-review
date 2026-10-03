@@ -214,7 +214,7 @@ Extract:
 - `context_discovery.references` — Files to discover
 - `rules:` — Per-severity review rules
 
-**1a-bis. Read the Output Language**
+**1a (continued): Output Language**
 
 Read the top-level `language` key from `.ocr/config.yaml` (default `en`) and store it as `OUTPUT_LANGUAGE`. See `references/language-policy.md`.
 
@@ -639,7 +639,7 @@ instantiation strategy your host CLI supports (parallel sub-agents or sequential
    - Tech Lead guidance (including requirements assessment)
    - The diff to review
    - **Instruction to explore codebase with full agency**
-   - The output language policy (`references/language-policy.md` with `{language}` = `OUTPUT_LANGUAGE`) — omitted when `en`
+   - The output language policy (`references/language-policy.md` with `{language}` = the value read in Phase 1) — omitted when `en`
 
 7. Save each review to `.ocr/sessions/{id}/rounds/round-{current_round}/reviews/{type}-{n}.md`.
 
@@ -728,7 +728,7 @@ echo "OK Found $REVIEWER_COUNT reviewer files"
 
 3. Save discourse to `.ocr/sessions/{id}/rounds/round-{current_round}/discourse.md`.
 
-Discourse prose follows `OUTPUT_LANGUAGE`; the `AGREE`/`CHALLENGE`/`CONNECT`/`SURFACE` verbs and headings stay English (see `references/language-policy.md`).
+Discourse prose follows the configured `language`; the `AGREE`/`CHALLENGE`/`CONNECT`/`SURFACE` verbs and headings stay English (see `references/language-policy.md`).
 
 See `references/discourse.md` for detailed instructions.
 
@@ -751,7 +751,7 @@ See `references/discourse.md` for detailed instructions.
 > **Template**: See `references/final-template.md` for format
 > **Manifest**: See `references/session-files.md` for authoritative file names
 
-Synthesis prose follows `OUTPUT_LANGUAGE`; headings, labels, verdicts and categories stay English (see `references/language-policy.md`).
+Synthesis prose follows the configured `language`; headings, labels, verdicts and categories stay English (see `references/language-policy.md`).
 
 ### Steps
 
