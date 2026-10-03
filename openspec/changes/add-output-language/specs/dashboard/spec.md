@@ -7,8 +7,8 @@ Prompts the dashboard server composes itself (human-voice rewrite, Ask the Team 
 #### Scenario: Human review in the configured language
 
 - **GIVEN** `language: es`
-- **WHEN** `buildHumanReviewPrompt` is called
-- **THEN** the prompt contains a Language section instructing Spanish prose with the same register rules expressed for Spanish, and unchanged code, paths and quoted messages
+- **WHEN** the dashboard runs the human-voice rewrite (`commands/translate-review-to-single-human.md` through the AI CLI)
+- **THEN** the command instructs Spanish prose in that language's natural register, with unchanged code, paths and quoted messages
 
 #### Scenario: Chat context in the configured language
 
