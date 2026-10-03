@@ -120,6 +120,7 @@ export function RoundPage() {
               roundNumber={roundNumber}
               finalContent={finalArtifact.content}
               savedHumanReview={finalHumanArtifact?.content}
+              verdict={round.verdict}
             />
           )}
           {finalArtifact && (

@@ -3,7 +3,7 @@
  *
  * Manages the "Post to GitHub" flow: checking gh auth, generating
  * human-voice reviews via the AI CLI adapter, saving drafts, and posting
- * PR comments via gh CLI.
+ * PR reviews via gh CLI.
  */
 
 import type { ChildProcess } from 'node:child_process'
@@ -13,12 +13,22 @@ import { join, dirname, isAbsolute } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { Server as SocketIOServer, Socket } from 'socket.io'
 import type { Database } from '@open-code-review/persistence'
-import { execBinaryAsync } from '@open-code-review/platform'
+import { execBinaryAsync, isGitHubReviewState, type GitHubReviewState } from '@open-code-review/platform'
 import { getSession } from '../db.js'
 import { childEnv } from '../child-env.js'
 import { resolveLocalCli } from './cli-resolver.js'
 import { AiCliService, formatToolDetail, type NormalizedEvent } from '../services/ai-cli/index.js'
 import { startTrackedExecution } from './execution-tracker.js'
+import {
+  decideSubmitState,
+  ghReviewArgs,
+  resolveOwnership,
+  reviewsApiPath,
+  type PrOwnership,
+} from './post-review-state.js'
+
+/** The `gh` runner; injectable so tests can script the external boundary. */
+type RunGh = typeof execBinaryAsync
 
 /** Resolve session_dir to an absolute path. CLI stores relative paths (`.ocr/sessions/...`). */
 function resolveSessionDir(sessionDir: string, ocrDir: string): string {
@@ -43,7 +53,8 @@ async function findPrForBranch(
   branch: string,
   env: NodeJS.ProcessEnv,
   cwd: string,
-): Promise<{ prNumber: number; prUrl: string; resolvedBranch: string } | null> {
+  runGh: RunGh,
+): Promise<{ prNumber: number; prUrl: string; resolvedBranch: string; authorLogin: string | null } | null> {
   const candidates = [branch]
 
   // If the branch has no slash, generate candidates by restoring common prefixes
@@ -57,14 +68,19 @@ async function findPrForBranch(
 
   for (const candidate of candidates) {
     try {
-      const { stdout } = await execBinaryAsync(
+      const { stdout } = await runGh(
         'gh',
-        ['pr', 'list', '--head', candidate, '--json', 'number,url', '--limit', '1'],
+        ['pr', 'list', '--head', candidate, '--json', 'number,url,author', '--limit', '1'],
         { env, cwd, encoding: 'utf-8' },
       )
-      const prs = JSON.parse(stdout) as { number: number; url: string }[]
+      const prs = JSON.parse(stdout) as { number: number; url: string; author?: { login?: string } | null }[]
       if (prs.length > 0 && prs[0]) {
-        return { prNumber: prs[0].number, prUrl: prs[0].url, resolvedBranch: candidate }
+        return {
+          prNumber: prs[0].number,
+          prUrl: prs[0].url,
+          resolvedBranch: candidate,
+          authorLogin: prs[0].author?.login ?? null,
+        }
       }
     } catch {
       // Try next candidate
@@ -87,7 +103,16 @@ export function registerPostHandlers(
   db: Database,
   ocrDir: string,
   aiCliService: AiCliService,
+  deps: { runGh?: RunGh } = {},
 ): void {
+  const runGh = deps.runGh ?? execBinaryAsync
+
+  // Last ownership + URL resolved by post:check-gh, per PR number, for this
+  // socket. post:submit trusts this (not the client) to decide whether approve /
+  // request-changes is allowed, and targets gh at the URL so a fork's default
+  // repo (the parent) is never picked by accident.
+  const checkedPrs = new Map<number, { ownership: PrOwnership; prUrl: string }>()
+
   // ── Check GitHub CLI auth + find PR ──
   socket.on('post:check-gh', async (payload: { sessionId: string }) => {
     try {
@@ -98,6 +123,7 @@ export function registerPostHandlers(
           prNumber: null,
           prUrl: null,
           branch: null,
+          ownership: 'unknown',
           error: 'Invalid sessionId',
         })
         return
@@ -110,6 +136,7 @@ export function registerPostHandlers(
           prNumber: null,
           prUrl: null,
           branch: null,
+          ownership: 'unknown',
           error: 'Session not found',
         })
         return
@@ -120,26 +147,42 @@ export function registerPostHandlers(
       // Check gh auth
       const repoRoot = dirname(ocrDir)
       try {
-        await execBinaryAsync('gh', ['auth', 'status'], { env: childEnv().env, cwd: repoRoot, encoding: 'utf-8' })
+        await runGh('gh', ['auth', 'status'], { env: childEnv().env, cwd: repoRoot, encoding: 'utf-8' })
       } catch {
         socket.emit('post:gh-result', {
           authenticated: false,
           prNumber: null,
           prUrl: null,
           branch,
+          ownership: 'unknown',
           error: 'GitHub CLI is not authenticated. Run `gh auth login` first.',
         })
         return
       }
 
       // Find PR for branch (tries slash-restored variants if needed)
-      const pr = await findPrForBranch(branch, childEnv().env, repoRoot)
+      const pr = await findPrForBranch(branch, childEnv().env, repoRoot, runGh)
       if (pr) {
+        // Viewer lookup failure leaves ownership `unknown` — never `other`.
+        let viewerLogin: string | null = null
+        try {
+          const { stdout } = await runGh('gh', ['api', 'user', '--jq', '.login'], {
+            env: childEnv().env,
+            cwd: repoRoot,
+            encoding: 'utf-8',
+          })
+          viewerLogin = stdout.trim()
+        } catch (err) {
+          console.error('Error resolving gh viewer login:', err)
+        }
+        const ownership = resolveOwnership(pr.authorLogin, viewerLogin)
+        checkedPrs.set(pr.prNumber, { ownership, prUrl: pr.prUrl })
         socket.emit('post:gh-result', {
           authenticated: true,
           prNumber: pr.prNumber,
           prUrl: pr.prUrl,
           branch: pr.resolvedBranch,
+          ownership,
         })
       } else {
         socket.emit('post:gh-result', {
@@ -147,6 +190,7 @@ export function registerPostHandlers(
           prNumber: null,
           prUrl: null,
           branch,
+          ownership: 'unknown',
           error: `No open PR found for branch "${branch}".`,
         })
       }
@@ -157,6 +201,7 @@ export function registerPostHandlers(
         prNumber: null,
         prUrl: null,
         branch: null,
+        ownership: 'unknown',
         error: 'Internal error',
       })
     }
@@ -475,21 +520,42 @@ export function registerPostHandlers(
   // ── Submit review to GitHub ──
   socket.on(
     'post:submit',
-    async (payload: { prNumber: number; content: string }) => {
+    async (payload: { prNumber: number; content: string; state?: unknown }) => {
       try {
-        const { prNumber, content } = payload ?? {}
+        const { prNumber, content, state: rawState } = payload ?? {}
         if (typeof prNumber !== 'number' || typeof content !== 'string') {
           socket.emit('post:submit-result', { success: false, error: 'Invalid payload' })
           return
         }
 
+        // Missing state keeps the pre-review-state behaviour (a plain comment).
+        const requested: GitHubReviewState | null =
+          rawState === undefined ? 'comment' : isGitHubReviewState(rawState) ? rawState : null
+        if (requested === null) {
+          socket.emit('post:submit-result', { success: false, error: 'Invalid payload' })
+          return
+        }
+
+        const checked = checkedPrs.get(prNumber)
+        const decision = decideSubmitState(requested, checked?.ownership)
+        if (!decision.ok) {
+          socket.emit('post:submit-result', { success: false, error: decision.error })
+          return
+        }
+        const { state, downgraded } = decision
+
         // Track in command_executions
         const tracker = startTrackedExecution(
           io, db, ocrDir,
           'ocr post-to-github',
-          [`PR #${prNumber}`],
+          [`PR #${prNumber}`, `--${state}`],
         )
         tracker.appendOutput(`▸ Posting review to PR #${prNumber}...\n`)
+        if (downgraded) {
+          tracker.appendOutput(
+            `▸ Review state downgraded to comment: GitHub does not allow approving or requesting changes on your own PR\n`,
+          )
+        }
 
         // Write content to temp file for --body-file
         const tmpDir = join(tmpdir(), 'ocr-post-comments')
@@ -499,14 +565,27 @@ export function registerPostHandlers(
 
         const repoRoot = dirname(ocrDir)
         try {
-          const { stdout } = await execBinaryAsync(
+          await runGh(
             'gh',
-            ['pr', 'comment', String(prNumber), '--body-file', tmpFile],
+            ghReviewArgs(checked?.prUrl ?? String(prNumber), state, tmpFile),
             { env: childEnv().env, cwd: repoRoot, encoding: 'utf-8' },
           )
 
-          // Try to extract the comment URL from gh output
-          const urlMatch = stdout.match(/(https:\/\/github\.com\S+)/)?.[0] ?? null
+          // `gh pr review` prints nothing on success; recover the review URL
+          // best-effort. A failure here never turns the post into a failure.
+          let urlMatch: string | null = null
+          try {
+            const apiPath = checked ? reviewsApiPath(checked.prUrl) : null
+            if (apiPath) {
+              const { stdout } = await runGh(
+                'gh',
+                ['api', apiPath, '--jq', '.[-1].html_url'],
+                { env: childEnv().env, cwd: repoRoot, encoding: 'utf-8' },
+              )
+              const url = stdout.trim()
+              urlMatch = url.startsWith('https://') ? url : null
+            }
+          } catch { /* link is optional */ }
 
           tracker.appendOutput(`✓ Posted to PR #${prNumber}${urlMatch ? ` — ${urlMatch}` : ''}\n`)
           tracker.finish(0)
@@ -517,7 +596,7 @@ export function registerPostHandlers(
           tracker.finish(1)
           socket.emit('post:submit-result', {
             success: false,
-            error: `Failed to post comment: ${errMsg}`,
+            error: `Failed to post review: ${errMsg}`,
           })
         } finally {
           try { unlinkSync(tmpFile) } catch { /* ignore */ }
