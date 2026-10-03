@@ -744,3 +744,18 @@ The `sessions` table SHALL carry nullable `base_ref`, `head_ref`, `head_sha`, `p
 
 - **WHEN** `complete-round` receives JSON with `"head_sha": "<40-hex>"`
 - **THEN** it is validated as an optional string and written to `round-meta.json`; JSON without it is still accepted
+
+### Requirement: Requirements Source Columns
+
+The `sessions` table SHALL carry nullable `requirements_source_url` and `requirements_updated_at` columns.
+
+#### Scenario: Set on fetch
+
+- **WHEN** `ocr requirements fetch --session <id>` succeeds
+- **THEN** both columns are set from the source; sessions without requirements keep `NULL`
+
+#### Scenario: Additive migration
+
+- **GIVEN** existing sessions
+- **WHEN** the migration runs
+- **THEN** the columns are added with `NULL` and every reader keeps working
