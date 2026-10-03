@@ -918,7 +918,9 @@ fi
 
 2. If `--post` flag or PR target:
    - Check for `gh` CLI: `which gh`
-   - Post as PR comment: `gh pr comment {number} --body-file final.md`
+   - Post as a PR review: `gh pr review {number} --{state} --body-file final.md`
+   - `{state}` comes from the round verdict: `APPROVE` -> `approve`, `REQUEST CHANGES` -> `request-changes`, `NEEDS DISCUSSION` or no verdict -> `comment` (see `commands/post.md`)
+   - On your own PR GitHub rejects `approve`/`request-changes`; retry with `--comment` and tell the user the state was downgraded
 
 3. **Close the session**:
    ```bash
