@@ -1,7 +1,7 @@
 import { Loader2 } from 'lucide-react'
 import { cn } from '../../../lib/utils'
 import { useT } from '../../../lib/i18n'
-import { removeStatusKey } from '../../../lib/worktree-ui'
+import { removeAction, removeStatusKey } from '../../../lib/worktree-ui'
 import { useRemoveWorktree, useSessionWorktree } from '../hooks/use-session-worktree'
 
 const BUTTON_CLASS =
@@ -16,12 +16,12 @@ export function WorktreePanel({ sessionId }: { sessionId: string }) {
   if (!worktree) return null
 
   const status = remove.data?.status
-  const dirtyBlocked = status === 'dirty'
+  const action = worktree.exists ? removeAction(null, status ?? null) : null
   const message = remove.error
     ? remove.error.message
     : status
       ? t(removeStatusKey(status))
-      : null
+      : worktree.error ?? null
 
   return (
     <div className="mt-4 border-t border-zinc-200 pt-4 text-sm dark:border-zinc-800">
@@ -33,35 +33,29 @@ export function WorktreePanel({ sessionId }: { sessionId: string }) {
         <dd className="break-all font-mono">{worktree.path}</dd>
         <dt className="text-zinc-500 dark:text-zinc-400">{t('sessions.worktree_state')}</dt>
         <dd>
-          {worktree.exists
-            ? t(worktree.dirty ? 'sessions.worktree_dirty' : 'sessions.worktree_clean')
-            : t('sessions.worktree_absent')}
+          {worktree.exists === null
+            ? t('sessions.worktree_unknown')
+            : worktree.exists
+              ? t(worktree.dirty ? 'sessions.worktree_dirty' : 'sessions.worktree_clean')
+              : t('sessions.worktree_absent')}
         </dd>
         <dt className="text-zinc-500 dark:text-zinc-400">{t('sessions.worktree_cleanup')}</dt>
         <dd>{t(`settings.cleanup_${worktree.cleanup}` as 'settings.cleanup_keep')}</dd>
       </dl>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        {worktree.exists && (
+        {action && (
           <button
             type="button"
-            onClick={() => remove.mutate({})}
+            onClick={() => remove.mutate({ force: action.force })}
             disabled={remove.isPending}
-            className={BUTTON_CLASS}
+            className={cn(
+              BUTTON_CLASS,
+              action.force && 'border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30',
+            )}
           >
-            {remove.isPending && !remove.variables?.force && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {t('sessions.worktree_remove')}
-          </button>
-        )}
-        {dirtyBlocked && (
-          <button
-            type="button"
-            onClick={() => remove.mutate({ force: true })}
-            disabled={remove.isPending}
-            className={cn(BUTTON_CLASS, 'border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30')}
-          >
-            {remove.isPending && remove.variables?.force && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {t('sessions.worktree_force')}
+            {remove.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {t(action.labelKey)}
           </button>
         )}
       </div>

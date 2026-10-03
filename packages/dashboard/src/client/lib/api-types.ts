@@ -398,9 +398,11 @@ export type SessionWorktree = {
   pr_number: number
   /** Registered path, or the expected `<dir>/pr-<n>` when absent. */
   path: string
-  exists: boolean
-  dirty: boolean
+  /** Null when the CLI could not be read (see `error`): unknown, not absent. */
+  exists: boolean | null
+  dirty: boolean | null
   cleanup: WorktreeCleanup
+  error?: string
 }
 
 export type WorktreeRemoveStatus = 'removed' | 'dirty' | 'not-found' | 'active-session' | 'error'
@@ -414,7 +416,14 @@ export type WorktreeRemoveResult = {
 }
 
 /** What `after-post` cleanup did, reported on `post:submit-result`. */
-export type PostWorktreeOutcome = 'removed' | 'kept_dirty' | 'kept_config' | 'kept_error' | 'none'
+export type PostWorktreeOutcome =
+  | 'removed'
+  | 'kept_dirty'
+  | 'kept_config'
+  | 'kept_error'
+  | 'kept_active'
+  | 'kept_running'
+  | 'none'
 
 /** Server `chat:notice` payload. */
-export type ChatNotice = { conversationId: string; sessionId: string; code: 'worktree-missing' }
+export type ChatNotice = { conversationId: string; sessionId: string; code: 'worktree-missing' | 'worktree-unknown' }

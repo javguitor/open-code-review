@@ -7,7 +7,7 @@
  * scripted recorder. No internal mocks.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Server as SocketIOServer, Socket } from 'socket.io'
@@ -453,17 +453,24 @@ describe('post:submit', () => {
 })
 
 describe('post:submit worktree cleanup (after-post)', () => {
-  const ROW = { pr_number: PR_NUMBER, path: '/wt/pr-42', head_sha: 'abc', session_id: 'sess-1', session_status: 'active', dirty: false }
+  let WT_PATH: string
+  let ROW: Record<string, unknown>
 
-  /** Fake `ocr worktree`: `list` returns `rows`; `remove` replies `removal` (JSON printed even on failure). */
+  /**
+   * Fake `ocr worktree` that follows the real CLI contract: `list` returns `rows`;
+   * `remove` without --force answers `active-session` while the PR has an active
+   * session; otherwise it replies `removal` (JSON printed even on a non-zero exit).
+   */
   function fakeCli(rows: unknown[], removal: { status: string } = { status: 'removed' }) {
     const calls: string[][] = []
     const runCli: RunCli = async (_bin, args) => {
       const sub = args.slice(args.indexOf('worktree') + 1)
       calls.push(sub)
       if (sub[0] === 'list') return { stdout: JSON.stringify(rows), stderr: '' }
-      const stdout = JSON.stringify({ pr_number: PR_NUMBER, ...removal })
-      if (removal.status === 'removed') return { stdout, stderr: '' }
+      const active = (db.exec(`SELECT 1 FROM sessions WHERE pr_number = ? AND status = 'active' LIMIT 1`, [PR_NUMBER])[0]?.values.length ?? 0) > 0
+      const result = !sub.includes('--force') && active ? { status: 'active-session' } : removal
+      const stdout = JSON.stringify({ pr_number: PR_NUMBER, ...result })
+      if (result.status === 'removed') return { stdout, stderr: '' }
       throw Object.assign(new Error('exit 1'), { code: 1, stdout })
     }
     return { runCli, calls }
@@ -481,7 +488,16 @@ describe('post:submit worktree cleanup (after-post)', () => {
   }
 
   beforeEach(() => {
-    db.run('UPDATE sessions SET pr_url = ?, pr_number = ? WHERE id = ?', [PR_URL_42, PR_NUMBER, 'sess-1'])
+    // The PR's review is finished (`ocr state finish`): the CLI only removes worktrees of closed sessions.
+    db.run('DELETE FROM sessions WHERE id = ?', ['sess-1'])
+    db.run(
+      `INSERT INTO sessions (id, branch, workflow_type, status, current_phase, phase_number, current_round, current_map_run, session_dir, pr_url, pr_number)
+       VALUES ('sess-1', 'feat-x', 'review', 'closed', 'synthesis', 7, 1, 1, ?, ?, ?)`,
+      [join(ocrDir, 'sessions', 'sess-1'), PR_URL_42, PR_NUMBER],
+    )
+    WT_PATH = join(workspace, 'wt', 'pr-42')
+    mkdirSync(WT_PATH, { recursive: true })
+    ROW = { pr_number: PR_NUMBER, path: WT_PATH, head_sha: 'abc', session_id: 'sess-1', session_status: 'closed', dirty: false }
   })
 
   // A PR session resolves by `pr view`, so script that instead of `pr list`.
@@ -537,13 +553,44 @@ describe('post:submit worktree cleanup (after-post)', () => {
     expect(cli.calls).toEqual([])
   })
 
+  it('kept_active: the PR still has an active session (the CLI refuses; never forced)', async () => {
+    setCleanup('after-post')
+    db.run(`UPDATE sessions SET status = 'active' WHERE id = 'sess-1'`)
+    const cli = fakeCli([ROW])
+    const h = await postByUrl(cli)
+    expect(h.last('post:submit-result')).toMatchObject({ success: true, worktree: 'kept_active' })
+    expect(cli.calls.at(-1)).not.toContain('--force')
+  })
+
+  it('kept_running: an execution of any session of the PR is still running; the CLI is not asked to remove', async () => {
+    setCleanup('after-post')
+    db.run(`INSERT INTO command_executions (uid, command, args, started_at) VALUES ('chat', 'ocr chat (review)', '["sess-1"]', datetime('now'))`)
+    const cli = fakeCli([ROW])
+    const h = await postByUrl(cli)
+    expect(h.last('post:submit-result')).toMatchObject({ success: true, worktree: 'kept_running' })
+    expect(cli.calls.some((c) => c[0] === 'remove')).toBe(false)
+  })
+
+  it('kept_error: an unreadable worktree list is not "none" (and never fails the post)', async () => {
+    setCleanup('after-post')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const runCli: RunCli = async () => {
+      throw new Error('ocr not found')
+    }
+    const h = await postByUrl({ runCli })
+    expect(h.last('post:submit-result')).toMatchObject({ success: true, worktree: 'kept_error' })
+    warn.mockRestore()
+  })
+
   it('a removal failure never turns the post into a failure', async () => {
     setCleanup('after-post')
-    const runCli: RunCli = async () => {
+    // `list` works and the worktree exists, so the flow reaches `remove`, which blows up.
+    const runCli: RunCli = async (_bin, args) => {
+      if (args.includes('list')) return { stdout: JSON.stringify([ROW]), stderr: '' }
       throw new Error('ocr exploded')
     }
     const h = await postByUrl({ runCli })
-    expect(h.last('post:submit-result')).toMatchObject({ success: true })
+    expect(h.last('post:submit-result')).toMatchObject({ success: true, worktree: 'kept_error' })
     expect(exitCodeOfLastExecution()).toBe(0)
   })
 })

@@ -21,7 +21,7 @@ import {
   type ChatConversationRow,
 } from '../db.js'
 import { buildChatContext, type ChatTarget } from '../services/chat-context.js'
-import { codeRootForSession } from '../services/worktrees.js'
+import { codeRootForSession, worktreeRootFromContext, type RunCli } from '../services/worktrees.js'
 import { AiCliService, formatToolDetail } from '../services/ai-cli/index.js'
 import { startTrackedExecution, type TrackedExecution } from './execution-tracker.js'
 
@@ -94,7 +94,8 @@ export function registerChatHandlers(
   socket: Socket,
   db: Database,
   ocrDir: string,
-  aiCliService: AiCliService
+  aiCliService: AiCliService,
+  deps: { runCli?: RunCli } = {},
 ): void {
   socket.on('chat:send', async (payload: ChatSendPayload) => {
     try {
@@ -134,16 +135,26 @@ export function registerChatHandlers(
       // Code root: the PR worktree when the session has one, else the checkout.
       const session = getSession(db, sessionId)
       const codeRoot = session
-        ? await codeRootForSession(ocrDir, session)
+        ? await codeRootForSession(ocrDir, session, { run: deps.runCli })
         : { path: dirname(ocrDir), isWorktree: false }
-      if (session?.pr_number != null && !codeRoot.isWorktree) {
+      // Only a session that once had a worktree (its context.md says so) can "lose" it;
+      // an in-place PR review never had one.
+      const lostWorktreeRoot = session?.pr_number != null && !codeRoot.isWorktree
+        ? worktreeRootFromContext(ocrDir, sessionId)
+        : null
+      if (codeRoot.listError !== undefined) {
+        socket.emit('chat:notice', { conversationId, sessionId, code: 'worktree-unknown' })
+      } else if (lostWorktreeRoot !== null) {
         socket.emit('chat:notice', { conversationId, sessionId, code: 'worktree-missing' })
       }
 
       // Build context for first message (no session to resume)
       let prompt: string
       if (claudeSessionId) {
-        prompt = message
+        // The model was told the old code root in the first message; say so when it moved.
+        prompt = lostWorktreeRoot !== null
+          ? `Note: the code root is now ${codeRoot.path}.\n\n${message}`
+          : message
       } else {
         const target: ChatTarget = targetType === 'map_run'
           ? { type: 'map_run', sessionId, runNumber: targetId }
@@ -198,6 +209,8 @@ export function registerChatHandlers(
         `ocr chat (${chatLabel})`,
         [sessionId],
       )
+      // Recorded so a server crash leaves a row the orphan sweep can close (and the worktree guard can't stick).
+      if (proc.pid !== undefined) tracker.setPid(proc.pid, false)
       tracker.appendOutput('▸ Ask the Team — processing message...\n')
 
       // Parse normalized event stream for assistant text tokens and tool activity.

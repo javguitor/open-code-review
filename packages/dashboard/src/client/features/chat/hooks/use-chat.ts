@@ -11,7 +11,7 @@ type UseChatReturn = {
   toolHistory: ChatToolStatus[]
   error: string | null
   /** The session's worktree is gone and chat answers from the checkout. */
-  worktreeMissing: boolean
+  worktreeNotice: ChatNotice['code'] | null
 }
 
 export function useChat(
@@ -28,7 +28,7 @@ export function useChat(
   const [toolStatus, setToolStatus] = useState<ChatToolStatus | null>(null)
   const [toolHistory, setToolHistory] = useState<ChatToolStatus[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [worktreeMissing, setWorktreeMissing] = useState(false)
+  const [worktreeNotice, setWorktreeNotice] = useState<ChatNotice['code'] | null>(null)
 
   const streamingRef = useRef('')
 
@@ -105,12 +105,12 @@ export function useChat(
     ),
   )
 
-  // Notice — emitted on every message while the worktree is missing; a boolean dedupes it
+  // Notice — emitted on every message while the worktree is missing/unknown; keeping only the latest code dedupes it
   useSocketEvent<ChatNotice>(
     'chat:notice',
     useCallback(
       (data) => {
-        if (data.sessionId === sessionId && data.code === 'worktree-missing') setWorktreeMissing(true)
+        if (data.sessionId === sessionId) setWorktreeNotice(data.code)
       },
       [sessionId],
     ),
@@ -162,5 +162,5 @@ export function useChat(
     [socket, conversationId, sessionId, targetType, targetId, isStreaming],
   )
 
-  return { messages, sendMessage, isStreaming, streamingContent, toolStatus, toolHistory, error, worktreeMissing }
+  return { messages, sendMessage, isStreaming, streamingContent, toolStatus, toolHistory, error, worktreeNotice }
 }

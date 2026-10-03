@@ -32,7 +32,7 @@ import {
 } from "../../../lib/review-state";
 import { usePostReview, type ActivityLogEntry } from "../hooks/use-post-review";
 import { useT, type MessageKey } from "../../../lib/i18n";
-import { canRemoveAfterPost, removeStatusKey, worktreeOutcomeKey } from "../../../lib/worktree-ui";
+import { removeAction, removeStatusKey, worktreeOutcomeKey } from "../../../lib/worktree-ui";
 import { useRemoveWorktree } from "../../sessions/hooks/use-session-worktree";
 
 const REVIEW_STATE_LABEL_KEYS: Record<GitHubReviewState, MessageKey> = {
@@ -185,6 +185,9 @@ export function PostReviewDialog({
 
   const prNumber = checkResult?.prNumber ?? 0;
   const posted = postResult?.success ? postResult : null;
+  const worktreeAction = posted
+    ? removeAction(posted.worktree, removeWorktree.data?.status ?? null)
+    : null;
 
   const ownership = checkResult?.ownership;
   const lockKey = lockReasonKey(ownership);
@@ -536,21 +539,21 @@ export function PostReviewDialog({
                           ? t(removeStatusKey("removed"))
                           : t(worktreeOutcomeKey(posted.worktree))}
                       </p>
-                      {canRemoveAfterPost(posted.worktree) &&
-                        removeWorktree.data?.status !== "removed" && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              removeWorktree.mutate({
-                                force: posted.worktree === "kept_dirty" || removeWorktree.data?.status === "dirty",
-                              })
-                            }
-                            disabled={removeWorktree.isPending}
-                            className="rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                          >
-                            {t(posted.worktree === "kept_dirty" ? "sessions.worktree_force" : "sessions.worktree_remove")}
-                          </button>
-                        )}
+                      {worktreeAction && (
+                        <button
+                          type="button"
+                          onClick={() => removeWorktree.mutate({ force: worktreeAction.force })}
+                          disabled={removeWorktree.isPending}
+                          className={cn(
+                            "rounded-md border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-40",
+                            worktreeAction.force
+                              ? "border-red-300 text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
+                              : "border-zinc-200 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800",
+                          )}
+                        >
+                          {t(worktreeAction.labelKey)}
+                        </button>
+                      )}
                       {(removeWorktree.error ||
                         (removeWorktree.data && removeWorktree.data.status !== "removed")) && (
                         <p className="text-xs text-red-600 dark:text-red-400">

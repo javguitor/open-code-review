@@ -10,14 +10,14 @@
 - [x] 2.2 `services/worktrees.ts`: `listWorktrees`/`removeWorktree`/`codeRootForSession` via `ocr worktree … --json` (no `packages/cli` import); tests with a fake runner.
 - [x] 2.3 `chat-handler.ts`: `cwd` from `codeRootForSession`; first-message context states the code root; fallback note emitted as a `chat:notice`.
 - [x] 2.4 `routes/worktrees.ts`: `POST /api/sessions/:id/worktree/remove { force }` → tracked `ocr worktree remove <n> [--force]`; refuses while an execution for the session is running; `GET /api/sessions/:id/worktree` → `{ path, exists, dirty }`.
-- [x] 2.5 `post-handler.ts`: on successful submit and `cleanup: after-post`, remove the session's worktree (non-force); include `worktree: removed | kept_dirty | kept_config | kept_error | none` in `post:submit-result`.
+- [x] 2.5 `post-handler.ts`: on successful submit and `cleanup: after-post`, remove the session's worktree (non-force); include `worktree: removed | kept_dirty | kept_active | kept_running | kept_config | kept_error | none` in `post:submit-result`.
 - [x] 2.6 Tests for 2.1, 2.4, 2.5 (classical; `gh`/`git`/`ocr` runners injectable).
 
 ## 3. Dashboard client
 
 - [x] 3.1 `features/settings/settings-page.tsx` + route `/settings` + sidebar entry: fields for worktree directory (with resolved path and existence), cleanup mode (radio with one-line explanations), language (select en/es); Save → `PATCH /api/config`; success/error states; i18n `settings.*`.
 - [x] 3.2 Session detail: worktree block (path, exists, dirty, cleanup mode) with "Remove worktree" (and "Force" when dirty); hidden for non-PR sessions.
-- [x] 3.3 Post dialog success step: worktree outcome line and a "Remove worktree" button when `kept_dirty`, `kept_config` or `kept_error`.
+- [x] 3.3 Post dialog success step: worktree outcome line and a "Remove worktree" button when `kept_dirty` (Force), `kept_config` or `kept_error`; none for `kept_active`/`kept_running`.
 - [x] 3.4 Chat panel: show the code-root note when the server reports a fallback.
 - [x] 3.5 Tests for pure helpers (validation of settings input; cleanup copy mapping).
 

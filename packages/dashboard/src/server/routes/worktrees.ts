@@ -12,24 +12,13 @@ import type { Database } from '@open-code-review/persistence'
 import { getWorktreeConfig } from '@open-code-review/config/worktree-config'
 import { getSession } from '../db.js'
 import { startTrackedExecution } from '../socket/execution-tracker.js'
-import { listWorktrees, removeWorktree, type RunCli } from '../services/worktrees.js'
-
-/**
- * Id of a still-running execution linked to the session: bound through
- * `workflow_id` (command runner) or carrying the session id as an arg
- * (chat, post generation). Null when none.
- */
-function runningExecutionFor(db: Database, sessionId: string): number | null {
-  const res = db.exec(
-    `SELECT id FROM command_executions
-      WHERE finished_at IS NULL
-        AND (workflow_id = ? OR instr(COALESCE(args, ''), '"' || ? || '"') > 0)
-      ORDER BY id DESC LIMIT 1`,
-    [sessionId, sessionId],
-  )
-  const id = res[0]?.values[0]?.[0]
-  return typeof id === 'number' ? id : null
-}
+import {
+  listWorktrees,
+  presentWorktree,
+  removeWorktree,
+  runningExecutionForPr,
+  type RunCli,
+} from '../services/worktrees.js'
 
 export function createWorktreesRouter(
   io: SocketIOServer,
@@ -48,10 +37,19 @@ export function createWorktreesRouter(
         return
       }
       const { dir, cleanup } = getWorktreeConfig(ocrDir)
-      const row = (await listWorktrees(ocrDir, deps)).find((w) => w.pr_number === session.pr_number)
+      const expectedPath = join(dir, `pr-${session.pr_number}`)
+      const list = await listWorktrees(ocrDir, deps)
+      if (!list.ok) {
+        // Unknown, not absent: the panel must not claim "does not exist".
+        res.json({
+          pr_number: session.pr_number, path: expectedPath, exists: null, dirty: null, cleanup, error: list.error,
+        })
+        return
+      }
+      const row = presentWorktree(list.rows, session.pr_number)
       res.json({
         pr_number: session.pr_number,
-        path: row?.path ?? join(dir, `pr-${session.pr_number}`),
+        path: row?.path ?? expectedPath,
         exists: row !== undefined,
         dirty: row?.dirty ?? false,
         cleanup,
@@ -70,10 +68,10 @@ export function createWorktreesRouter(
         res.status(404).json({ error: 'No PR worktree for this session' })
         return
       }
-      const running = runningExecutionFor(db, session.id)
+      const running = runningExecutionForPr(db, session.pr_number)
       if (running !== null) {
         res.status(409).json({
-          error: `Execution #${running} is still running for this session; wait for it to finish.`,
+          error: `Execution #${running} is still running for this PR; wait for it to finish.`,
           execution: running,
         })
         return

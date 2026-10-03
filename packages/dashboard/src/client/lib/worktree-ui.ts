@@ -51,6 +51,8 @@ const OUTCOME_KEYS: Record<PostWorktreeOutcome, MessageKey> = {
   kept_dirty: 'post.worktree_kept_dirty',
   kept_config: 'post.worktree_kept_config',
   kept_error: 'post.worktree_kept_error',
+  kept_active: 'post.worktree_kept_active',
+  kept_running: 'post.worktree_kept_running',
   none: 'post.worktree_none',
 }
 
@@ -58,9 +60,24 @@ export function worktreeOutcomeKey(outcome: PostWorktreeOutcome): MessageKey {
   return OUTCOME_KEYS[outcome]
 }
 
-/** Outcomes where the worktree is still on disk and the user may remove it. */
-export function canRemoveAfterPost(outcome: PostWorktreeOutcome): boolean {
-  return outcome === 'kept_dirty' || outcome === 'kept_config' || outcome === 'kept_error'
+export type RemoveAction = { force: boolean; labelKey: MessageKey }
+
+/**
+ * The one remove button to offer after a post (`outcome`) and/or a remove attempt
+ * (`lastStatus`), or null when there is nothing to do. `force` and the "Force"
+ * label always travel together, so a click that discards changes says so.
+ * An active session is never forceable from the UI: that review must be finished.
+ */
+export function removeAction(
+  outcome: PostWorktreeOutcome | null,
+  lastStatus: WorktreeRemoveStatus | null,
+): RemoveAction | null {
+  if (outcome === 'removed' || outcome === 'none' || outcome === 'kept_running' || outcome === 'kept_active') {
+    return null
+  }
+  if (lastStatus === 'removed' || lastStatus === 'not-found' || lastStatus === 'active-session') return null
+  const force = outcome === 'kept_dirty' || lastStatus === 'dirty'
+  return { force, labelKey: force ? 'sessions.worktree_force' : 'sessions.worktree_remove' }
 }
 
 const REMOVE_KEYS: Record<WorktreeRemoveStatus, MessageKey> = {

@@ -109,12 +109,13 @@ const sessions = {
   'sessions.worktree_clean': 'Presente, sin cambios sin confirmar',
   'sessions.worktree_dirty': 'Presente, con cambios sin confirmar',
   'sessions.worktree_absent': 'No existe',
+  'sessions.worktree_unknown': 'Desconocido: no se ha podido leer la lista de worktrees',
   'sessions.worktree_remove': 'Eliminar worktree',
   'sessions.worktree_force': 'Forzar eliminación',
   'sessions.worktree_removed': 'Worktree eliminado.',
   'sessions.worktree_dirty_blocked': 'El worktree tiene cambios sin confirmar y se ha conservado. Forzar la eliminación los descarta.',
   'sessions.worktree_not_found': 'No se ha encontrado ningún worktree para esta pull request.',
-  'sessions.worktree_active_session': 'El worktree está en uso por una sesión activa y no se ha eliminado.',
+  'sessions.worktree_active_session': 'Sigue abierta una revisión de esta PR; termínala primero.',
   'sessions.worktree_remove_error': 'No se ha podido eliminar el worktree.',
 }
 

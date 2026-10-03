@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildSettingsPatch,
-  canRemoveAfterPost,
+  removeAction,
   removeStatusKey,
   worktreeOutcomeKey,
 } from '../worktree-ui'
@@ -49,17 +49,55 @@ describe('buildSettingsPatch', () => {
 })
 
 describe('worktree outcome mapping', () => {
-  const outcomes: PostWorktreeOutcome[] = ['removed', 'kept_dirty', 'kept_config', 'kept_error', 'none']
+  const outcomes: PostWorktreeOutcome[] = ['removed', 'kept_dirty', 'kept_config', 'kept_error', 'kept_active', 'kept_running', 'none']
   it('maps every outcome to an existing i18n key', () => {
     for (const o of outcomes) expect(en).toHaveProperty([worktreeOutcomeKey(o)])
-  })
-
-  it('offers removal only when the worktree is still on disk', () => {
-    expect(outcomes.filter(canRemoveAfterPost)).toEqual(['kept_dirty', 'kept_config', 'kept_error'])
   })
 
   it('maps every remove status to an existing i18n key', () => {
     const statuses: WorktreeRemoveStatus[] = ['removed', 'dirty', 'not-found', 'active-session', 'error']
     for (const s of statuses) expect(en).toHaveProperty([removeStatusKey(s)])
+  })
+})
+
+describe('removeAction', () => {
+  const REMOVE = { force: false, labelKey: 'sessions.worktree_remove' }
+  const FORCE = { force: true, labelKey: 'sessions.worktree_force' }
+
+  it('offers a plain remove for kept_config / kept_error and for a fresh panel', () => {
+    expect(removeAction('kept_config', null)).toEqual(REMOVE)
+    expect(removeAction('kept_error', null)).toEqual(REMOVE)
+    expect(removeAction(null, null)).toEqual(REMOVE)
+  })
+
+  it('offers Force (with the Force label) for kept_dirty or after a dirty refusal', () => {
+    expect(removeAction('kept_dirty', null)).toEqual(FORCE)
+    expect(removeAction('kept_config', 'dirty')).toEqual(FORCE)
+    expect(removeAction(null, 'dirty')).toEqual(FORCE)
+  })
+
+  it('never pairs force with a non-Force label, whatever the inputs', () => {
+    const outcomes = [null, 'removed', 'kept_dirty', 'kept_config', 'kept_error', 'kept_active', 'kept_running', 'none'] as const
+    const statuses = [null, 'removed', 'dirty', 'not-found', 'active-session', 'error'] as const
+    for (const o of outcomes) {
+      for (const st of statuses) {
+        const a = removeAction(o, st)
+        if (a) expect(a.labelKey).toBe(a.force ? 'sessions.worktree_force' : 'sessions.worktree_remove')
+      }
+    }
+  })
+
+  it('offers nothing for an active session: no Force, finish the review first', () => {
+    expect(removeAction('kept_active', null)).toBeNull()
+    expect(removeAction('kept_config', 'active-session')).toBeNull()
+    expect(removeAction(null, 'active-session')).toBeNull()
+  })
+
+  it('offers nothing once removed, when nothing exists, or while a command is running', () => {
+    expect(removeAction('removed', null)).toBeNull()
+    expect(removeAction('none', null)).toBeNull()
+    expect(removeAction('kept_running', null)).toBeNull()
+    expect(removeAction('kept_config', 'removed')).toBeNull()
+    expect(removeAction(null, 'not-found')).toBeNull()
   })
 })

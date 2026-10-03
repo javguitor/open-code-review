@@ -19,7 +19,13 @@ import { getSession } from '../db.js'
 import { childEnv } from '../child-env.js'
 import { resolveLocalCli } from './cli-resolver.js'
 import { AiCliService, formatToolDetail, type NormalizedEvent } from '../services/ai-cli/index.js'
-import { listWorktrees, removeWorktree, type RunCli } from '../services/worktrees.js'
+import {
+  listWorktrees,
+  presentWorktree,
+  removeWorktree,
+  runningExecutionForPr,
+  type RunCli,
+} from '../services/worktrees.js'
 import { startTrackedExecution } from './execution-tracker.js'
 import {
   decideSubmitState,
@@ -130,7 +136,14 @@ async function findPrByUrl(
 }
 
 /** What happened to the PR's worktree after a successful post (see `PostWorktreeOutcome` in api-types). */
-type WorktreeOutcome = 'removed' | 'kept_dirty' | 'kept_config' | 'kept_error' | 'none'
+type WorktreeOutcome =
+  | 'removed'
+  | 'kept_dirty'
+  | 'kept_config'
+  | 'kept_error'
+  | 'kept_active'
+  | 'kept_running'
+  | 'none'
 
 /**
  * `after-post` cleanup. Never throws and never affects the post's own result:
@@ -138,16 +151,21 @@ type WorktreeOutcome = 'removed' | 'kept_dirty' | 'kept_config' | 'kept_error' |
  */
 async function cleanupWorktreeAfterPost(
   ocrDir: string,
+  db: Database,
   prNumber: number,
   run: RunCli | undefined,
 ): Promise<WorktreeOutcome> {
   try {
-    const exists = (await listWorktrees(ocrDir, { run })).some((w) => w.pr_number === prNumber)
-    if (!exists) return 'none'
+    const list = await listWorktrees(ocrDir, { run })
+    // Unknown is not "none": leaving the worktree on disk unreported is the worse failure.
+    if (!list.ok) return 'kept_error'
+    if (presentWorktree(list.rows, prNumber) === undefined) return 'none'
     if (getWorktreeConfig(ocrDir).cleanup !== 'after-post') return 'kept_config'
+    if (runningExecutionForPr(db, prNumber) !== null) return 'kept_running'
     const { status } = await removeWorktree(ocrDir, prNumber, { run })
     if (status === 'removed') return 'removed'
     if (status === 'dirty') return 'kept_dirty'
+    if (status === 'active-session') return 'kept_active'
     return status === 'not-found' ? 'none' : 'kept_error'
   } catch {
     return 'kept_error'
@@ -670,7 +688,7 @@ export function registerPostHandlers(
           // Only the PR session's own worktree is ever touched (`sessionPr`).
           const worktree =
             checked.sessionPr === prNumber
-              ? await cleanupWorktreeAfterPost(ocrDir, prNumber, deps.runCli)
+              ? await cleanupWorktreeAfterPost(ocrDir, db, prNumber, deps.runCli)
               : 'none'
           if (worktree !== 'none') tracker.appendOutput(`▸ Worktree: ${worktree}\n`)
           tracker.finish(0)

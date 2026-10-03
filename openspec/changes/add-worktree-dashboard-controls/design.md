@@ -46,13 +46,16 @@ never writes it. `yaml` 2.8 is already a dependency of `@open-code-review/config
   that worktree, else `repoRoot`. The chat may read files (`maxTurns: 10`; it was 1,
   which ended the process on the first Read). The chat
   context's first message states the code root; when it falls back, the dashboard shows
-  the note. Resumed conversations keep their original cwd per message (no mid-
-  conversation switch). Verified: `claude --resume` works from a different cwd, so a
-  fallback mid-conversation does not break the chat.
+  the note (only when the session's `context.md` recorded a worktree as **Code root**;
+  an in-place review never had one). The cwd is recomputed on every message, so when a
+  worktree disappears mid-conversation the chat continues from the checkout and the
+  resumed prompt is prefixed with `Note: the code root is now <path>.` so the model
+  knows. A worktree whose directory is gone (`prunable`) counts as absent. Verified:
+  `claude --resume` works from a different cwd, so the fallback does not break the chat.
 - **Decision: cleanup modes.** `keep` (default), `on-close` (stage 3 semantics, kept for
   back-compat), `after-post` (new): `post-handler.ts`, on `post:submit-result.success`,
   runs `ocr worktree remove <n> --json` for the session's PR and reports
-  `worktree: removed | kept_dirty | kept_config | kept_error | none`; a dirty worktree is
+  `worktree: removed | kept_dirty | kept_config | kept_error | kept_active | kept_running | none`; a dirty worktree is
   not removed and the success step shows "Worktree kept: uncommitted changes" with a
   Force button.
   Recommended default in the template comment: `after-post`.
