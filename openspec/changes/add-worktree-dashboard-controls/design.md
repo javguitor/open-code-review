@@ -1,0 +1,82 @@
+## Context
+
+After `add-pr-worktree-review`: `getWorktreeConfig(ocrDir)` → `{ dir (absolute),
+cleanup: 'keep' | 'on-close' }`; worktree path = `<dir>/pr-<n>`; sessions carry
+`pr_number`, `pr_url`, `head_sha`; `ocr worktree remove <n> [--force]` exists
+(`packages/cli/src/commands/worktree.ts`, `removePrWorktree`). The dashboard reads
+config through `readDashboardConfig` (startup) and `getOutputLanguage` (per request),
+never writes it. `yaml` 2.8 is already a dependency of `@open-code-review/config`.
+
+## Goals / Non-Goals
+
+- Goals: the three steps of the flow from the dashboard without hand-editing YAML;
+  config edits never destroy the user's comments or unrelated keys; the worktree lives
+  exactly as long as the review (discussion included) and is removed on the user's
+  terms.
+- Non-Goals: a generic config editor; editing `default_team`/`models` (the team page
+  already covers the team); remote repos.
+
+## Decisions
+
+- **Decision: allow-listed, comment-preserving writes.** `config-writer.ts`:
+  `setConfigValues(ocrDir, patch: { 'worktrees.dir'?: string; 'worktrees.cleanup'?:
+  WorktreeCleanup; language?: string })` → `parseDocument(text)` (or a new document if
+  the file is missing), `setIn(path, value)` per key, atomic write (temp file + rename),
+  returns the new text. Unknown keys are rejected at the type level and at runtime.
+  Values are validated with the same rules as the readers (`LANGUAGE_TAG`, cleanup
+  enum, non-empty path).
+  - Alternative: rewrite the file from the parsed object. Rejected: drops comments and
+    the template's documentation blocks ("config preserved across updates").
+- **Decision: `PATCH /api/config`** with the same allow-list; response = resolved view
+  (`worktrees.dir` absolute, `exists: boolean`, `cleanup`, `language`). Readers that
+  cache at startup (`readDashboardConfig`) are not affected because the allow-listed
+  keys are read per request; `language` already is. The settings screen reloads the
+  config query after saving and tells the user that open pages pick the language up on
+  reload.
+- **Decision: chat cwd = code root.** `services/worktree-path.ts`:
+  `codeRootForSession(ocrDir, session)` → worktree path if `pr_number` and the path is
+  a registered worktree (`git worktree list --porcelain`), else `repoRoot`. The chat
+  context's first message states the code root; when it falls back, the dashboard shows
+  the note. Resumed conversations keep their original cwd per message (no mid-
+  conversation switch).
+- **Decision: cleanup modes.** `keep` (default), `on-close` (stage 3 semantics, kept for
+  back-compat), `after-post` (new): `post-handler.ts`, on `post:submit-result.success`,
+  calls `removePrWorktree(n)` for the session's PR; a dirty worktree is not removed and
+  the success step shows "Worktree kept: uncommitted changes" with a Force button.
+  Recommended default in the template comment: `after-post`.
+  - Alternative: remove on approve only. Rejected: a "request changes" review usually
+    means a new round later, but keeping the worktree should be the user's choice via
+    `keep`, not an implicit rule tied to the state.
+- **Decision: removal UI calls the CLI**, not git directly: `POST
+  /api/sessions/:id/worktree/remove { force?: boolean }` runs `ocr worktree remove <n>
+  [--force]` through the tracked command runner (visible in Commands, same code path as
+  the CLI) and returns the result.
+
+## Risks / Trade-offs
+
+- Writing the user's config from a web UI: mitigated by the allow-list, validation,
+  atomic write and comment preservation; a failed parse of the existing file aborts
+  the write with the parser error (never overwrites a file it cannot parse).
+- Chat in the worktree exposes the PR's files to the model exactly as reviewers already
+  see them; no new trust surface.
+- Removing a worktree while a review/verify execution is still running on it: the
+  removal route refuses when a tracked execution for that session is `running`.
+
+## Migration Plan
+
+Additive: new cleanup value, new routes, new screen. Existing `on-close` keeps working.
+Rollback: revert; config files edited through the UI remain valid YAML.
+
+## Open Questions
+
+- Should the settings screen also expose `ai_cli`? (It is read at startup; proposed: no,
+  until the dashboard can re-detect adapters without a restart.)
+
+## How to execute this change (handoff)
+
+Same working agreement as the previous changes (Sonnet subagents per task block,
+disjoint files, commit per block, OCR review in Spanish before merge, archive after).
+Execute after `add-pr-worktree-review` is merged. Prior art: `language-config.ts`
+(reader shape) for the writer's tests; `post-handler.ts` for the after-post hook and its
+`runGh`-style injectable tests; `lib/i18n` for the new copy; `features/reviewers` for a
+simple settings-like page layout.
