@@ -79,7 +79,6 @@ const commands = {
   'commands.meta_model': 'Model',
   'commands.meta_workflow': 'Workflow',
   'commands.resume_title': 'Copy a resume command to continue this AI session in your terminal',
-  'commands.resume_in_terminal': 'Resume in terminal',
   'commands.view_label': 'View:',
   'commands.raw_output': 'Raw output',
   'commands.timeline': 'Timeline',

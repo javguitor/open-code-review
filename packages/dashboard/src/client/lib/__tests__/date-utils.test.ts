@@ -7,6 +7,7 @@ import {
   formatElapsed,
   formatDuration,
 } from '../date-utils'
+import { translate, type MessageKey, type MessageVars } from '../i18n'
 
 // ── formatDate ────────────────────────────────────────────────────────────────
 
@@ -92,41 +93,49 @@ describe('formatDateTime', () => {
 // are a fixed duration in the past relative to "now" at test execution time.
 
 describe('timeAgo', () => {
+  const en = (key: MessageKey, vars?: MessageVars) => translate('en', key, vars)
+  const es = (key: MessageKey, vars?: MessageVars) => translate('es', key, vars)
+
   /** Return an ISO UTC string for a point that many milliseconds in the past. */
   function msAgo(ms: number): string {
     return new Date(Date.now() - ms).toISOString()
   }
 
   it('returns "just now" for a timestamp less than 60 seconds ago', () => {
-    expect(timeAgo(msAgo(30_000))).toBe('just now')
+    expect(timeAgo(msAgo(30_000), en)).toBe('just now')
   })
 
   it('returns "just now" for a timestamp 0 seconds ago', () => {
-    expect(timeAgo(msAgo(0))).toBe('just now')
+    expect(timeAgo(msAgo(0), en)).toBe('just now')
   })
 
   it('returns a minutes string for a timestamp 5 minutes ago', () => {
-    expect(timeAgo(msAgo(5 * 60_000))).toBe('5m ago')
+    expect(timeAgo(msAgo(5 * 60_000), en)).toBe('5m ago')
   })
 
   it('returns a minutes string for a timestamp 59 minutes ago', () => {
-    expect(timeAgo(msAgo(59 * 60_000))).toBe('59m ago')
+    expect(timeAgo(msAgo(59 * 60_000), en)).toBe('59m ago')
   })
 
   it('returns an hours string for a timestamp 2 hours ago', () => {
-    expect(timeAgo(msAgo(2 * 60 * 60_000))).toBe('2h ago')
+    expect(timeAgo(msAgo(2 * 60 * 60_000), en)).toBe('2h ago')
   })
 
   it('returns an hours string for a timestamp 23 hours ago', () => {
-    expect(timeAgo(msAgo(23 * 60 * 60_000))).toBe('23h ago')
+    expect(timeAgo(msAgo(23 * 60 * 60_000), en)).toBe('23h ago')
   })
 
   it('returns a days string for a timestamp 1 day ago', () => {
-    expect(timeAgo(msAgo(24 * 60 * 60_000))).toBe('1d ago')
+    expect(timeAgo(msAgo(24 * 60 * 60_000), en)).toBe('1d ago')
   })
 
   it('returns a days string for a timestamp 7 days ago', () => {
-    expect(timeAgo(msAgo(7 * 24 * 60 * 60_000))).toBe('7d ago')
+    expect(timeAgo(msAgo(7 * 24 * 60 * 60_000), en)).toBe('7d ago')
+  })
+
+  it('localizes through the given translator', () => {
+    expect(timeAgo(msAgo(30_000), es)).toBe('ahora mismo')
+    expect(timeAgo(msAgo(5 * 60_000), es)).toBe(translate('es', 'layout.time_minutes_ago', { n: 5 }))
   })
 })
 

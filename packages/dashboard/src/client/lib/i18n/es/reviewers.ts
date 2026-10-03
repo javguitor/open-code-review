@@ -44,7 +44,6 @@ const reviewers = {
   'reviewers.loading_team': 'Cargando equipo…',
   'reviewers.no_reviewers_available': 'No hay revisores disponibles. Ejecuta `/ocr:sync-reviewers` desde tu IDE para poblar la biblioteca de abajo.',
   'reviewers.default_model': '(modelo por defecto)',
-  'reviewers.default_model_detail': 'Usa el valor por defecto del CLI anfitrión',
   'reviewers.mixed_models': 'Mixto · {count} modelos',
   'reviewers.modified_unsaved': 'Modificado — sin guardar',
   'reviewers.new_badge': 'Nuevo',
@@ -63,8 +62,6 @@ const reviewers = {
   // Edit dialog
   'reviewers.reviewer_count': 'Número de revisores',
   'reviewers.reviewer_count_hint': 'Cuántas revisiones independientes produce esta persona por ronda.',
-  'reviewers.decrease_count': 'Reducir el número',
-  'reviewers.increase_count': 'Aumentar el número',
   'reviewers.model': 'Modelo',
   'reviewers.same_model': 'Mismo modelo',
   'reviewers.per_reviewer': 'Por revisor',

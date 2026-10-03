@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Loader2, Minus, Plus, RotateCcw, UserPlus, X } from 'lucide-react'
 import { cn } from '../../../lib/utils'
 import { useT } from '../../../lib/i18n'
-import { RichText } from '../../commands/components/rich-text'
+import { RichText } from '../../../components/ui/rich-text'
 import { useAiCli } from '../../../hooks/use-ai-cli'
 import { ReviewerIcon } from '../../commands/components/reviewer-icon'
 import { ModelSelect, type ModelSelectOption } from '../../../components/ui/model-select'
@@ -99,7 +99,7 @@ export function DefaultTeamSection({ className }: DefaultTeamSectionProps) {
 
   const modelOptions: ModelSelectOption[] = useMemo(() => {
     const base: ModelSelectOption[] = [
-      { id: '', label: t('reviewers.default_model'), detail: t('reviewers.default_model_detail') },
+      { id: '', label: t('reviewers.default_model'), detail: t('commands.default_model_detail') },
     ]
     if (modelList?.models) {
       for (const m of modelList.models) {
@@ -771,7 +771,7 @@ function EditTeamReviewerDialog({
                 type="button"
                 onClick={() => onCountChange(Math.max(1, count - 1))}
                 disabled={count <= 1}
-                aria-label={t('reviewers.decrease_count')}
+                aria-label={t('commands.decrease_count')}
                 className="px-2 py-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-30 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
               >
                 <Minus className="h-3.5 w-3.5" />
@@ -782,7 +782,7 @@ function EditTeamReviewerDialog({
               <button
                 type="button"
                 onClick={() => onCountChange(count + 1)}
-                aria-label={t('reviewers.increase_count')}
+                aria-label={t('commands.increase_count')}
                 className="px-2 py-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
               >
                 <Plus className="h-3.5 w-3.5" />

@@ -29,7 +29,6 @@ const reviews = {
   'reviews.reviewer_count_one': '{count} reviewer',
   'reviews.reviewer_count_other': '{count} reviewers',
   'reviews.ask_team': 'Ask the Team',
-  'reviews.resume_terminal': 'Resume in terminal',
   'reviews.resume_terminal_title':
     "Copy a resume command to continue this review's AI conversation in your terminal",
   'reviews.reviewers': 'Reviewers',
@@ -67,7 +66,6 @@ const reviews = {
   'reviews.triage_aria': 'Triage status for {title}',
 
   // Address feedback
-  'reviews.close_dialog': 'Close dialog',
   'reviews.address_feedback': 'Address Feedback',
   'reviews.address_run_desc':
     'Run an AI agent to corroborate, validate, and implement changes from this review — in the dashboard or your own terminal.',

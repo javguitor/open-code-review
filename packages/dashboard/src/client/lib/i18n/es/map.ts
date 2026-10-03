@@ -8,7 +8,6 @@ const map = {
   'map.no_sections': 'No hay secciones en esta ejecución del map.',
   'map.clear_progress': 'Borrar progreso',
   'map.clearing': 'Borrando...',
-  'map.close_dialog': 'Cerrar diálogo',
   'map.clear_confirm_title': '¿Borrar todo el progreso?',
   'map.clear_confirm_body': 'Se desmarcarán todos los archivos revisados de esta ejecución del map. Esta acción no se puede deshacer.',
   'map.section_dependencies': 'Dependencias entre secciones',

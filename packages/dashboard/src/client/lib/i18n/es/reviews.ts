@@ -29,7 +29,6 @@ const reviews = {
   'reviews.reviewer_count_one': '{count} revisor',
   'reviews.reviewer_count_other': '{count} revisores',
   'reviews.ask_team': 'Preguntar al equipo',
-  'reviews.resume_terminal': 'Continuar en la terminal',
   'reviews.resume_terminal_title':
     'Copiar un comando para continuar la conversación de IA de esta revisión en la terminal',
   'reviews.reviewers': 'Revisores',
@@ -68,7 +67,6 @@ const reviews = {
   'reviews.triage_aria': 'Estado de triaje de {title}',
 
   // Address feedback
-  'reviews.close_dialog': 'Cerrar el diálogo',
   'reviews.address_feedback': 'Atender feedback',
   'reviews.address_run_desc':
     'Ejecutar un agente de IA que contraste, valide e implemente los cambios de esta revisión, en el dashboard o en la terminal propia.',

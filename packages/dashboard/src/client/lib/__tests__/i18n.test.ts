@@ -1,7 +1,19 @@
 import { describe, it, expect } from 'vitest'
-import { interpolate, resolveLanguage, translate } from '../i18n'
+import { interpolate, resolveLanguage, translate, translateKey } from '../i18n'
 import { en } from '../i18n/en'
 import { es } from '../i18n/es'
+import type { MessageKey } from '../i18n'
+
+// Keys exempt from the same-English-same-Spanish rule. Each one agrees in
+// gender/number with a different noun, or is a noun where its twin is a command name.
+const INTENTIONAL_DIVERGENCE: ReadonlySet<string> = new Set<string>([
+  'commands.status_all', // "Todos": filters commands (masculine); the others filter reviews/sessions
+  'reviews.review', // noun "Revisión"; the twins are the /review command and workflow names
+  'reviewers.tier_custom', // singular "Personalizado"; the twins are plural
+  'sessions.liveness_stalled', // "Detenida" (sesión) vs "Detenido" (comando)
+  'sessions.liveness_orphaned', // "Huérfana" (sesión) vs "Huérfano" (comando)
+  'sessions.phase_complete', // "Completada" (fase) vs "Completado" (resultado)
+])
 
 describe('resolveLanguage', () => {
   it('resolves es and es-* case-insensitively', () => {
@@ -25,6 +37,10 @@ describe('translate', () => {
     expect(translate('es', 'status.needs_review')).toBe('Pendiente de revisar')
   })
 
+  it('returns the key itself for an unknown key, with or without vars', () => {
+    expect(translateKey('es', 'no.existe')).toBe('no.existe')
+    expect(translateKey('es', 'no.existe', { n: 1 })).toBe('no.existe')
+  })
 })
 
 describe('interpolate', () => {
@@ -43,5 +59,36 @@ describe('dictionaries', () => {
     for (const [key, value] of [...Object.entries(en), ...Object.entries(es)]) {
       expect(value, key).not.toBe('')
     }
+  })
+
+  it('keeps the same {placeholders} in en and es for every key', () => {
+    const vars = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort()
+    for (const key of Object.keys(en)) {
+      const k = key as MessageKey
+      expect(vars(es[k]), key).toEqual(vars(en[k]))
+    }
+  })
+
+  it('pairs every *_one key with a *_other sibling and vice versa', () => {
+    const keys = new Set(Object.keys(en))
+    for (const key of keys) {
+      if (key.endsWith('_one')) expect(keys.has(key.replace(/_one$/, '_other')), key).toBe(true)
+      if (key.endsWith('_other')) expect(keys.has(key.replace(/_other$/, '_one')), key).toBe(true)
+    }
+  })
+
+  it('translates identical English copy identically, except for the listed keys', () => {
+    const byEnglish = new Map<string, MessageKey[]>()
+    for (const key of Object.keys(en) as MessageKey[]) {
+      byEnglish.set(en[key], [...(byEnglish.get(en[key]) ?? []), key])
+    }
+    const offenders: string[] = []
+    for (const [text, group] of byEnglish) {
+      const live = group.filter((key) => !INTENTIONAL_DIVERGENCE.has(key))
+      if (live.length > 1 && new Set(live.map((key) => es[key])).size > 1) {
+        offenders.push(`${JSON.stringify(text)}: ${live.map((key) => `${key}=${es[key]}`).join(' | ')}`)
+      }
+    }
+    expect(offenders).toEqual([])
   })
 })

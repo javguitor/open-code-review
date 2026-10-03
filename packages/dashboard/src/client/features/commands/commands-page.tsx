@@ -9,7 +9,7 @@ import { CommandPalette, parseCommandString, type ParsedCommand } from './compon
 import { WorkflowOutput } from './components/workflow-output'
 import { CommandHistory } from './components/command-history'
 import { TabBar } from './components/tab-bar'
-import { RichText } from './components/rich-text'
+import { RichText } from '../../components/ui/rich-text'
 
 const CLI_DISPLAY_NAMES: Record<string, string> = {
   claude: 'Claude Code',

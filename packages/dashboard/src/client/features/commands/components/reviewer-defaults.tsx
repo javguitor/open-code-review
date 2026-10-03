@@ -1,7 +1,7 @@
 import { X, Settings2, PenLine } from 'lucide-react'
 import { useT } from '../../../lib/i18n'
 import { cn } from '../../../lib/utils'
-import { RichText } from './rich-text'
+import { RichText } from '../../../components/ui/rich-text'
 import { ReviewerIcon } from './reviewer-icon'
 import type { ReviewerMeta } from '../hooks/use-reviewers'
 

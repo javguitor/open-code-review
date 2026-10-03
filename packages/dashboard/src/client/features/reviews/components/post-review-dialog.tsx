@@ -28,7 +28,7 @@ import {
 } from "@open-code-review/platform/verdict";
 import {
   isStateSelectable,
-  lockReason,
+  lockReasonKey,
 } from "../../../lib/review-state";
 import { usePostReview, type ActivityLogEntry } from "../hooks/use-post-review";
 import { useT, type MessageKey } from "../../../lib/i18n";
@@ -182,11 +182,8 @@ export function PostReviewDialog({
   const posted = postResult?.success ? postResult : null;
 
   const ownership = checkResult?.ownership;
-  const lock = lockReason(ownership);
-  const reason =
-    lock === null
-      ? null
-      : t(ownership === "own" ? "reviews.lock_own" : "reviews.lock_unknown");
+  const lockKey = lockReasonKey(ownership);
+  const reason = lockKey === null ? null : t(lockKey);
   const stateSelector = (
     <div className="space-y-1.5">
       <div
@@ -274,7 +271,7 @@ export function PostReviewDialog({
               <button
                 onClick={close}
                 className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-                aria-label={t("reviews.close_dialog")}
+                aria-label={t("common.close_dialog")}
               >
                 <X className="h-5 w-5" />
               </button>

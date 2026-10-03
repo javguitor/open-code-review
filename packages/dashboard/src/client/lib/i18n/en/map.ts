@@ -8,7 +8,6 @@ const map = {
   'map.no_sections': 'No sections found in this map run.',
   'map.clear_progress': 'Clear Progress',
   'map.clearing': 'Clearing...',
-  'map.close_dialog': 'Close dialog',
   'map.clear_confirm_title': 'Clear all progress?',
   'map.clear_confirm_body': 'This will uncheck all reviewed files for this map run. This action cannot be undone.',
   'map.section_dependencies': 'Section Dependencies',

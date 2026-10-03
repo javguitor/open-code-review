@@ -49,7 +49,12 @@ function verdictStyle(verdict: string): string {
 }
 
 /** Statuses that indicate the user has addressed the review. */
-const RESOLVED_STATUSES = new Set(['changes_made', 'acknowledged', 'dismissed'])
+const RESOLVED_STATUSES = ['changes_made', 'acknowledged', 'dismissed'] as const
+type ResolvedStatus = (typeof RESOLVED_STATUSES)[number]
+
+function isResolvedStatus(value: string | null): value is ResolvedStatus {
+  return RESOLVED_STATUSES.some((status) => status === value)
+}
 
 export function SessionCard({ session }: SessionCardProps) {
   const { t } = useT()
@@ -66,7 +71,7 @@ export function SessionCard({ session }: SessionCardProps) {
 
   // Determine if the latest review round has been triaged as resolved
   const roundStatus = session.latest_round_status
-  const isResolved = roundStatus != null && RESOLVED_STATUSES.has(roundStatus)
+  const resolvedStatus = isResolvedStatus(roundStatus) ? roundStatus : null
 
   return (
     <Link
@@ -92,10 +97,10 @@ export function SessionCard({ session }: SessionCardProps) {
         <span className="text-zinc-300 dark:text-zinc-700">|</span>
         {session.latest_verdict ? (
           <span className="flex items-center gap-1.5">
-            {isResolved ? (
+            {resolvedStatus ? (
               // Show the triage status instead of the raw verdict
               <span className="inline-flex items-center rounded bg-zinc-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-zinc-500 dark:text-zinc-400">
-                {t(`status.${roundStatus as 'changes_made' | 'acknowledged' | 'dismissed'}`)}
+                {t(`status.${resolvedStatus}`)}
               </span>
             ) : (
               <>

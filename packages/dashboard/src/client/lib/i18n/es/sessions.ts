@@ -26,7 +26,7 @@ const sessions = {
   'sessions.phase_context': 'Contexto',
   'sessions.phase_change_context': 'Contexto del cambio',
   'sessions.phase_analysis': 'Análisis',
-  'sessions.phase_reviews': 'Reviews',
+  'sessions.phase_reviews': 'Revisiones',
   'sessions.phase_aggregation': 'Agregación',
   'sessions.phase_discourse': 'Discusión',
   'sessions.phase_synthesis': 'Síntesis',

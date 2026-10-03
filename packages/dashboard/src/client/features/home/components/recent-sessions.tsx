@@ -37,7 +37,7 @@ export function RecentSessions({ sessions }: RecentSessionsProps) {
             <WorkflowIcon className="h-3.5 w-3.5 shrink-0 text-zinc-400" />
             <StatusBadge variant={session.status} />
             <span className="shrink-0 text-xs text-zinc-400 dark:text-zinc-500">
-              {timeAgo(session.updated_at)}
+              {timeAgo(session.updated_at, t)}
             </span>
           </Link>
         )

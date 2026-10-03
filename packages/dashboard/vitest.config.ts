@@ -17,7 +17,7 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   root: import.meta.dirname,
   test: {
-    include: ['src/**/__tests__/**/*.test.ts'],
+    include: ['src/**/*.test.ts'],
     environment: 'node',
     coverage: {
       provider: 'v8',

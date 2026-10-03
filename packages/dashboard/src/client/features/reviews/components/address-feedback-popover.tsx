@@ -74,7 +74,7 @@ export function AddressFeedbackPopover({ sessionId, roundNumber }: AddressFeedba
             <button
               onClick={close}
               className="absolute right-4 top-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-              aria-label={t('reviews.close_dialog')}
+              aria-label={t('common.close_dialog')}
             >
               <X className="h-4 w-4" />
             </button>

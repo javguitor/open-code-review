@@ -46,7 +46,6 @@ const reviewers = {
   'reviewers.loading_team': 'Loading team…',
   'reviewers.no_reviewers_available': 'No reviewers available. Run `/ocr:sync-reviewers` from your IDE to populate the library below.',
   'reviewers.default_model': '(default model)',
-  'reviewers.default_model_detail': "Use the host CLI's default",
   'reviewers.mixed_models': 'Mixed · {count} models',
   'reviewers.modified_unsaved': 'Modified — unsaved',
   'reviewers.new_badge': 'New',
@@ -65,8 +64,6 @@ const reviewers = {
   // Edit dialog
   'reviewers.reviewer_count': 'Reviewer count',
   'reviewers.reviewer_count_hint': 'How many independent reviews this persona produces per round.',
-  'reviewers.decrease_count': 'Decrease count',
-  'reviewers.increase_count': 'Increase count',
   'reviewers.model': 'Model',
   'reviewers.same_model': 'Same model',
   'reviewers.per_reviewer': 'Per reviewer',
