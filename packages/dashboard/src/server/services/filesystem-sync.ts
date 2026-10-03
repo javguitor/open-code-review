@@ -8,6 +8,7 @@ import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs'
 import { join, basename, dirname, relative, sep } from 'node:path'
 import { watch, type FSWatcher } from 'chokidar'
 import {
+  FINDING_SEVERITIES,
   commitReasonClose,
   insertEvent,
   insertSession,
@@ -18,7 +19,7 @@ import type { Server as SocketIOServer } from 'socket.io'
 import { parseMapMd } from './parsers/map-parser.js'
 import { parseReviewerOutput } from './parsers/reviewer-parser.js'
 import { parseFinalMd } from './parsers/final-parser.js'
-import { reconcileFindings } from './finding-reconcile.js'
+import { reconcileFindings, reconcileSynthesisFindings } from './finding-reconcile.js'
 import { emitRoundUpdated } from './round-events.js'
 
 // ── Types ──
@@ -170,7 +171,7 @@ export class FilesystemSync {
           this.processGenericArtifact(sessionId, 'diff', diffPath, roundNumber)
         }
 
-        // verifications/finding-<id>.md — after round-meta so the findings exist
+        // verifications/{finding,synthesis}-<id>.md — after round-meta so the findings exist
         const verificationsDir = join(roundDir, 'verifications')
         if (existsSync(verificationsDir)) {
           for (const f of readdirSync(verificationsDir)) {
@@ -849,6 +850,17 @@ export class FilesystemSync {
         should_fix?: number
         suggestions?: number
       }
+      synthesis_findings?: Array<{
+        key?: string
+        title?: string
+        severity?: string
+        category?: string
+        locations?: Array<{ file_path?: string; line_start?: number; line_end?: number }>
+        summary?: string
+        evidence?: string
+        flagged_by?: string[]
+        sources?: Array<{ reviewer?: string; index?: number }>
+      }>
       reviewers?: Array<{
         type?: string
         instance?: number
@@ -925,6 +937,10 @@ export class FilesystemSync {
       // Derive the round directory for constructing reviewer .md file paths
       const roundDir = dirname(filePath)
 
+      // Row ids of every reviewer finding by `<type>-<instance>`, in `findings[]` order:
+      // the synthesized findings' `sources` resolve against these.
+      const reviewerRowIds = new Map<string, number[]>()
+
       // Process each reviewer
       for (const reviewer of meta.reviewers) {
         const reviewerType = reviewer.type ?? 'unknown'
@@ -952,7 +968,7 @@ export class FilesystemSync {
         if (!outputId) continue
 
         // Update in place (ids, decisions, revisions and verification must survive re-parses).
-        reconcileFindings(
+        const rowIds = reconcileFindings(
           this.db,
           outputId,
           findings.map((finding) => ({
@@ -969,7 +985,35 @@ export class FilesystemSync {
           })),
           sqlNow(),
         )
+        reviewerRowIds.set(`${reviewerType}-${instanceNumber}`, rowIds)
       }
+
+      // Synthesized findings after the reviewer rows (they link to them). Always run, with
+      // an empty list when the file has none: a re-finalized round that lost its
+      // `synthesis_findings` must retire/delete the stale rows so it reads as legacy again.
+      reconcileSynthesisFindings(
+        this.db,
+        roundId,
+        (Array.isArray(meta.synthesis_findings) ? meta.synthesis_findings : []).map((sf) => ({
+          key: sf.key ?? '',
+          title: sf.title ?? '',
+          severity: (FINDING_SEVERITIES as readonly string[]).includes(sf.severity ?? '') ? sf.severity! : 'info',
+          category: sf.category ?? null,
+          locations: (sf.locations ?? []).flatMap((l) =>
+            typeof l.file_path === 'string'
+              ? [{ file_path: l.file_path, line_start: l.line_start, line_end: l.line_end }]
+              : [],
+          ),
+          summary: sf.summary ?? null,
+          flaggedBy: Array.isArray(sf.flagged_by) ? sf.flagged_by : undefined,
+          evidence: typeof sf.evidence === 'string' ? sf.evidence : undefined,
+          sourceFindingIds: (sf.sources ?? []).flatMap((src) => {
+            const id = reviewerRowIds.get((src.reviewer ?? '').replace(/^@/, ''))?.[src.index ?? -1]
+            return id === undefined ? [] : [id]
+          }),
+        })),
+        sqlNow(),
+      )
 
       this.db.run('COMMIT')
     } catch (err) {
@@ -1232,24 +1276,29 @@ export class FilesystemSync {
   // ── Verification report path ──
 
   /**
-   * Link `verifications/finding-<id>.md` to its finding when the CLI has not
+   * Link `verifications/finding-<id>.md` (or `synthesis-<id>.md`, for a synthesized finding) to its finding when the CLI has not
    * already recorded a path (`ocr finding verify --file` is authoritative).
    * The stored path is repo-relative (`.ocr/sessions/...`), like the CLI's.
    */
   private processVerificationFile(sessionId: string, roundNumber: number, filePath: string): void {
-    const m = basename(filePath).match(/^finding-(\d+)\.md$/)
+    const m = basename(filePath).match(/^(finding|synthesis)-(\d+)\.md$/)
     if (!m) return
-    const findingId = parseInt(m[1] ?? '0', 10)
+    const synthesized = m[1] === 'synthesis'
+    const findingId = parseInt(m[2] ?? '0', 10)
     const stored = join(basename(dirname(this.sessionsDir)), 'sessions', relative(this.sessionsDir, filePath))
     // Native statement: the engine's `run()` discards the change count.
     const res = this.db
       .prepare(
-        `UPDATE review_findings SET verification_file = ?
-         WHERE id = ? AND verification_file IS NULL
-           AND reviewer_output_id IN (
-             SELECT ro.id FROM reviewer_outputs ro
-             JOIN review_rounds rr ON rr.id = ro.round_id
-             WHERE rr.session_id = ? AND rr.round_number = ?)`,
+        synthesized
+          ? `UPDATE synthesis_findings SET verification_file = ?
+             WHERE id = ? AND verification_file IS NULL
+               AND round_id IN (SELECT id FROM review_rounds WHERE session_id = ? AND round_number = ?)`
+          : `UPDATE review_findings SET verification_file = ?
+             WHERE id = ? AND verification_file IS NULL
+               AND reviewer_output_id IN (
+                 SELECT ro.id FROM reviewer_outputs ro
+                 JOIN review_rounds rr ON rr.id = ro.round_id
+                 WHERE rr.session_id = ? AND rr.round_number = ?)`,
       )
       .run(stored.split(sep).join('/'), findingId, sessionId, roundNumber)
     if (Number(res.changes) > 0) emitRoundUpdated(this.io, sessionId, roundNumber)
@@ -1395,7 +1444,7 @@ export class FilesystemSync {
     }
 
     // rounds/round-N/verifications/finding-<id>.md
-    const verificationMatch = relFromSessions.match(/rounds\/round-(\d+)\/verifications\/finding-\d+\.md$/)
+    const verificationMatch = relFromSessions.match(/rounds\/round-(\d+)\/verifications\/(?:finding|synthesis)-\d+\.md$/)
     if (verificationMatch) {
       const roundNumber = parseInt(verificationMatch[1] ?? '0', 10)
       this.processVerificationFile(sessionId, roundNumber, filePath)

@@ -419,6 +419,31 @@ export function getRevisionStatsForRound(db: Database, roundId: number): Map<num
   return stats
 }
 
+/** Same as `getRevisionStatsForRound`, over `synthesis_finding_revisions` (keyed by synthesized id). */
+export function getSynthesisRevisionStatsForRound(db: Database, roundId: number): Map<number, FindingRevisionStats> {
+  const rows = resultToRows<{ finding_id: number; field: string; old_value: string | null }>(
+    db.exec(
+      `SELECT r.synthesis_finding_id AS finding_id, r.field, r.old_value
+       FROM synthesis_finding_revisions r
+       JOIN synthesis_findings sf ON sf.id = r.synthesis_finding_id
+       WHERE sf.round_id = ?
+       ORDER BY r.id ASC`,
+      [roundId]
+    )
+  )
+  const stats = new Map<number, FindingRevisionStats>()
+  for (const r of rows) {
+    const s = stats.get(r.finding_id) ?? {
+      finding_id: r.finding_id, revision_count: 0, synthesis_severity: null, synthesis_category: null,
+    }
+    s.revision_count++
+    if (r.field === 'severity' && s.synthesis_severity === null) s.synthesis_severity = r.old_value
+    if (r.field === 'category' && s.synthesis_category === null) s.synthesis_category = r.old_value
+    stats.set(r.finding_id, s)
+  }
+  return stats
+}
+
 export type DecidedFindingRow = {
   finding_id: number
   title: string
@@ -438,6 +463,31 @@ export function getDecidedFindingsForRound(db: Database, roundId: number): Decid
        JOIN reviewer_outputs ro ON ro.id = rf.reviewer_output_id
        WHERE ro.round_id = ? AND ufp.decided_at IS NOT NULL AND rf.retired_at IS NULL
        ORDER BY ufp.decided_at DESC, ufp.id DESC`,
+      [roundId]
+    )
+  )
+}
+
+export type DecidedSynthesisRow = {
+  finding_id: number
+  title: string
+  /** JSON text of the full locations array (primary first), or null. */
+  locations_json: string | null
+  file_path: string | null
+  status: FindingProgressRow['status']
+  reason: string | null
+  decided_at: string
+}
+
+/** Live synthesized findings of a round carrying a final human decision, most recent first. */
+export function getDecidedSynthesisFindingsForRound(db: Database, roundId: number): DecidedSynthesisRow[] {
+  return resultToRows<DecidedSynthesisRow>(
+    db.exec(
+      `SELECT sf.id AS finding_id, sf.title, sf.locations_json, sf.file_path, d.status, d.reason, d.decided_at
+       FROM synthesis_finding_decisions d
+       JOIN synthesis_findings sf ON sf.id = d.synthesis_finding_id
+       WHERE sf.round_id = ? AND d.decided_at IS NOT NULL AND sf.retired_at IS NULL
+       ORDER BY d.decided_at DESC, d.id DESC`,
       [roundId]
     )
   )
@@ -796,6 +846,7 @@ export type StatsResult = {
 }
 
 export function getStats(db: Database): StatsResult {
+  const resolvedList = [...RESOLVED_DECISIONS].map(() => '?').join(', ')
   const row = resultToRow<StatsResult>(
     db.exec(
       `SELECT
@@ -804,12 +855,21 @@ export function getStats(db: Database): StatsResult {
         (SELECT COUNT(*) FROM review_rounds WHERE verdict IS NOT NULL) as completed_reviews,
         (SELECT COUNT(*) FROM map_runs) as total_map_runs,
         (SELECT COUNT(*) FROM map_files) as total_files_tracked,
-        (SELECT COUNT(*) FROM review_findings rf
-         LEFT JOIN user_finding_progress ufp ON ufp.finding_id = rf.id
-         WHERE rf.is_blocker = 1 AND rf.retired_at IS NULL
-           AND (ufp.status IS NULL OR ufp.status NOT IN (${[...RESOLVED_DECISIONS].map(() => '?').join(', ')}))
+        (
+          -- reviewer rows only count in rounds that do not use synthesis (no live synthesized row)
+          (SELECT COUNT(*) FROM review_findings rf
+           JOIN reviewer_outputs ro ON ro.id = rf.reviewer_output_id
+           LEFT JOIN user_finding_progress ufp ON ufp.finding_id = rf.id
+           WHERE rf.is_blocker = 1 AND rf.retired_at IS NULL
+             AND NOT EXISTS (SELECT 1 FROM synthesis_findings x WHERE x.round_id = ro.round_id AND x.retired_at IS NULL)
+             AND (ufp.status IS NULL OR ufp.status NOT IN (${resolvedList}))
+          ) + (SELECT COUNT(*) FROM synthesis_findings sf
+           LEFT JOIN synthesis_finding_decisions sd ON sd.synthesis_finding_id = sf.id
+           WHERE sf.is_blocker = 1 AND sf.retired_at IS NULL
+             AND (sd.status IS NULL OR sd.status NOT IN (${resolvedList}))
+          )
         ) as unresolved_blockers`,
-      [...RESOLVED_DECISIONS]
+      [...RESOLVED_DECISIONS, ...RESOLVED_DECISIONS]
     )
   )
 

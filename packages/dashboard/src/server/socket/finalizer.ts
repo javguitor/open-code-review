@@ -29,14 +29,15 @@
 
 import type { Server as SocketIOServer } from 'socket.io'
 import type { Database } from '@open-code-review/persistence'
-import { appendCommandLog, CANCELLED_EXIT_CODE } from '@open-code-review/persistence'
+import { appendCommandLog, CANCELLED_EXIT_CODE, getSynthesisFinding } from '@open-code-review/persistence'
 import { reconcileWorkflowOnExit } from '@open-code-review/persistence/state'
 import {
   deriveCommandOutcome,
   deriveCancellationReason,
   getWorkflowCompletenessForExecution,
 } from '../services/command-outcome.js'
-import { emitRoundUpdatedForFinding } from '../services/round-events.js'
+import { emitRoundUpdated, emitRoundUpdatedForFinding } from '../services/round-events.js'
+import { parseVerifyArgs } from './prompt-builder.js'
 import { activeCommands, type ProcessEntry } from './process-registry.js'
 
 /**
@@ -73,7 +74,7 @@ export function tryClaimFinalization(entry: ProcessEntry | undefined): boolean {
 }
 
 /**
- * A finished `verify <finding-id>` run may have recorded a verdict: tell the
+ * A finished `verify <finding-id>` / `verify --synthesis <id>` run may have recorded a verdict: tell the
  * pages of that finding's session so the workbench refreshes without a reload.
  */
 function emitVerifyRoundUpdated(io: SocketIOServer, db: Database, executionId: number): void {
@@ -81,8 +82,13 @@ function emitVerifyRoundUpdated(io: SocketIOServer, db: Database, executionId: n
     const row = db.exec('SELECT command, args FROM command_executions WHERE id = ?', [executionId])[0]?.values[0]
     if (typeof row?.[0] !== 'string' || !/^(?:ocr\s+)?verify(?:\s|$)/.test(row[0])) return
     const args: unknown = JSON.parse(typeof row[1] === 'string' ? row[1] : '[]')
-    const findingId = Array.isArray(args) ? Number(args[0]) : NaN
-    if (Number.isInteger(findingId)) emitRoundUpdatedForFinding(io, db, findingId)
+    const target = Array.isArray(args) ? parseVerifyArgs(args.map(String)) : null
+    if (target?.kind === 'synthesis') {
+      const synthesis = getSynthesisFinding(db, target.id)
+      if (synthesis) emitRoundUpdated(io, synthesis.session_id, synthesis.round_number)
+    } else if (target) {
+      emitRoundUpdatedForFinding(io, db, target.id)
+    }
   } catch (err) {
     console.error('[finalizer] could not emit round:updated for verify:', err)
   }

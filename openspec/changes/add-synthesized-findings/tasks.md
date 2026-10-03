@@ -11,18 +11,18 @@
 - [x] 2.4 Exit-7 messages name the offending key or source; tests for every rejection and for payloads without `synthesis_findings`
 
 ## 3. Ingestion
-- [ ] 3.1 `reconcileFindings` returns row ids by incoming index
-- [ ] 3.2 New `reconcileSynthesisFindings`: match by `key` plus normalized primary file, update in place, retire when a decision or revisions exist, delete otherwise, rebuild source links
-- [ ] 3.3 `filesystem-sync.processRoundMeta` runs it after the reviewer rows; idempotent on rescan; ingest `verifications/synthesis-<id>.md`
-- [ ] 3.4 Tests: rescan keeps ids and decisions, renumbered keys never move a decision, retired rows leave counts
+- [x] 3.1 `reconcileFindings` returns row ids by incoming index
+- [x] 3.2 New `reconcileSynthesisFindings`: match by `key` plus normalized primary file, update in place, retire when a decision or revisions exist, delete otherwise, rebuild source links
+- [x] 3.3 `filesystem-sync.processRoundMeta` runs it after the reviewer rows; idempotent on rescan; ingest `verifications/synthesis-<id>.md`
+- [x] 3.4 Tests: rescan keeps ids and decisions, renumbered keys never move a decision, retired rows leave counts
 
 ## 4. CLI and dashboard server
-- [ ] 4.1 `ocr finding verify|revise|show --synthesis-id <id>`
-- [ ] 4.2 Routes `/api/synthesis-findings/:id` (decision, revisions, verification request); the round findings endpoint returns synthesized findings with `sources` when the round has them
-- [ ] 4.3 Round counts, `open_counts` and `verdict_after_decisions` computed over live synthesized findings
-- [ ] 4.4 Previous-round hint: synthesized to synthesized, fallback to the previous round's reviewer rows
-- [ ] 4.5 Chat: context lists synthesized findings, proposals validated against the round's kind
-- [ ] 4.6 `verify --synthesis <id>` command validation and prompt (merged claim plus each source's original text)
+- [x] 4.1 `ocr finding verify|revise|show --synthesis-id <id>`
+- [x] 4.2 Routes `/api/synthesis-findings/:id` (decision, revisions, verification request); the round findings endpoint returns synthesized findings with `sources` when the round has them
+- [x] 4.3 Round counts, `open_counts` and `verdict_after_decisions` computed over live synthesized findings
+- [x] 4.4 Previous-round hint: synthesized to synthesized, fallback to the previous round's reviewer rows
+- [x] 4.5 Chat: context lists synthesized findings, proposals validated against the round's kind
+- [x] 4.6 `verify --synthesis <id>` command validation and prompt (merged claim plus each source's original text)
 
 ## 5. Client
 - [ ] 5.1 Workbench list, markers and panel on synthesized findings; read-only "Merged from N reviewer findings" section; no "also reported by" for synthesized rounds

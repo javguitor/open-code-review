@@ -25,6 +25,8 @@ beforeEach(async () => {
   db.run("INSERT INTO reviewer_outputs (round_id, reviewer_type, file_path) VALUES (1, 'r', 'f.md')")
   db.run("INSERT INTO review_findings (reviewer_output_id, title, severity, category) VALUES (1, 'live', 'high', 'blocker')")
   db.run("INSERT INTO review_findings (reviewer_output_id, title, severity, category, retired_at) VALUES (1, 'old', 'high', 'blocker', datetime('now'))")
+  db.run("INSERT INTO synthesis_findings (round_id, key, title, severity, category) VALUES (1, 'S1', 'live merged', 'high', 'blocker')")
+  db.run("INSERT INTO synthesis_findings (round_id, key, title, severity, category, retired_at) VALUES (1, 'S2', 'old merged', 'high', 'blocker', datetime('now'))")
   emitted = []
   const handlers = new Map<string, (p: unknown) => void>()
   const socket = {
@@ -63,6 +65,41 @@ describe('verify guards', () => {
     run('verify 2')
     expect(emitted[0]!.payload).toMatchObject({ finding_id: 2 })
     expect(String(emitted[0]!.payload['error'])).toMatch(/retired/)
+  })
+
+  it('refuses ambiguous or malformed verify forms before touching anything', () => {
+    for (const cmd of ['verify 1 --synthesis 1', 'verify --synthesis 1 2', 'verify --synthesis 0', 'verify --synthesis', 'verify -3']) {
+      emitted.length = 0
+      run(cmd)
+      expect(emitted).toHaveLength(1)
+      expect(String(emitted[0]!.payload['error'])).toMatch(/Usage: verify/)
+    }
+    expect(emitted[0]!.payload).not.toHaveProperty('synthesis_id')
+  })
+
+  it('names a refused synthesized verify by synthesis_id, not finding_id (id spaces collide)', () => {
+    run('verify --synthesis 99')
+    expect(emitted[0]!.payload).toMatchObject({ synthesis_id: 99 })
+    expect(emitted[0]!.payload).not.toHaveProperty('finding_id')
+    expect(String(emitted[0]!.payload['error'])).toMatch(/Synthesized finding 99 not found/)
+  })
+
+  it('refuses a retired synthesized finding', () => {
+    run('verify --synthesis 2')
+    expect(emitted[0]!.payload).toMatchObject({ synthesis_id: 2 })
+    expect(String(emitted[0]!.payload['error'])).toMatch(/Synthesized finding 2 is retired/)
+  })
+
+  it('treats `verify 1` and `verify --synthesis 1` as different targets for the duplicate guard', () => {
+    activeCommands.set(1, fakeEntry(1, 'verify 1', ['1']))
+    run('verify --synthesis 1') // not blocked by the reviewer-finding run; stops at the AI guard
+    expect(String(emitted[0]!.payload['error'])).not.toMatch(/already running/)
+
+    emitted.length = 0
+    activeCommands.set(2, fakeEntry(2, 'verify --synthesis 1', ['--synthesis', '1']))
+    run('verify --synthesis 1')
+    expect(emitted[0]!.payload).toMatchObject({ synthesis_id: 1 })
+    expect(String(emitted[0]!.payload['error'])).toMatch(/synthesized finding 1 is already running/)
   })
 
   it('GET /commands/active data carries command and args', () => {

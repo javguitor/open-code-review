@@ -106,11 +106,31 @@ export function escapeUserHeaders(value: string): string {
   )
 }
 
-export const VERIFY_ARGS_ERROR = 'Usage: verify <finding-id> (a positive integer).'
+export const VERIFY_ARGS_ERROR =
+  'Usage: verify <finding-id> | verify --synthesis <synthesized-finding-id> (exactly one positive integer).'
 
-/** `verify` takes exactly one positive-integer finding id; returns an error message or null. */
+export type VerifyTarget = { kind: 'reviewer' | 'synthesis'; id: number }
+
+const POSITIVE_INT = /^[1-9]\d*$/
+
+/**
+ * `verify <id>` (reviewer finding) or `verify --synthesis <id>` (synthesized
+ * finding): exactly one positive-integer id and nothing else. The two id spaces
+ * collide numerically, so the form carries the kind; both forms together, extra
+ * tokens and non-integers are all rejected (null).
+ */
+export function parseVerifyArgs(subArgs: string[]): VerifyTarget | null {
+  const [first, second] = subArgs
+  if (subArgs.length === 1 && POSITIVE_INT.test(first!)) return { kind: 'reviewer', id: Number(first) }
+  if (subArgs.length === 2 && first === '--synthesis' && POSITIVE_INT.test(second!)) {
+    return { kind: 'synthesis', id: Number(second) }
+  }
+  return null
+}
+
+/** Returns an error message, or null when `subArgs` is a valid `verify` form. */
 export function validateVerifyArgs(subArgs: string[]): string | null {
-  return subArgs.length === 1 && /^[1-9]\d*$/.test(subArgs[0]!) ? null : VERIFY_ARGS_ERROR
+  return parseVerifyArgs(subArgs) ? null : VERIFY_ARGS_ERROR
 }
 
 /** Accepted PR target forms: `pr:<n>` or `https://github.com/<owner>/<repo>/pull/<n>`. */
@@ -214,8 +234,23 @@ export function buildPrompt(opts: BuildPromptOptions): {
   if (baseCommand === 'verify') {
     // Validated upstream (validateVerifyArgs); re-checked so a bad id can never reach the prompt.
     targetError = validateVerifyArgs(subArgs)
-    if (!targetError && !opts.verifyTarget) targetError = `Finding ${subArgs[0]} not found`
-    userContentLines.push(`Finding ID: ${escapeUserHeaders(subArgs[0] ?? '')}`)
+    const verifyArgs = parseVerifyArgs(subArgs)
+    if (!targetError && !opts.verifyTarget) {
+      targetError =
+        verifyArgs?.kind === 'synthesis'
+          ? `Synthesized finding ${verifyArgs.id} not found`
+          : `Finding ${verifyArgs?.id} not found`
+    }
+    if (verifyArgs?.kind === 'synthesis') {
+      // The id is a validated integer. The verifier reads the merged claim AND each source's
+      // original text with `ocr finding show --synthesis-id`, and writes verifications/synthesis-<id>.md.
+      userContentLines.push(`Synthesized finding ID: ${verifyArgs.id}`)
+      userContentLines.push(
+        `Verify the merged claim and every source's original text: ocr finding show --synthesis-id ${verifyArgs.id} --json`,
+      )
+    } else {
+      userContentLines.push(`Finding ID: ${escapeUserHeaders(subArgs[0] ?? '')}`)
+    }
     if (opts.verifyTarget) {
       userContentLines.push(`Session: ${escapeUserHeaders(opts.verifyTarget.sessionId)}`)
       userContentLines.push(`Round: ${opts.verifyTarget.roundNumber}`)

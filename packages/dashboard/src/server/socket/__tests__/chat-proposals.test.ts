@@ -125,3 +125,33 @@ describe('chat proposals', () => {
     expect(done.proposals).toEqual([])
   })
 })
+
+describe('chat proposals in a round that uses synthesis', () => {
+  beforeEach(() => {
+    // Reviewer finding 2 and synthesized finding 1 merge reviewer findings 1+2; synthesized id 1 collides with reviewer id 1.
+    db.run("INSERT INTO review_findings (reviewer_output_id, title, severity, category) VALUES (1, 'Null deref again', 'high', 'blocker')")
+    db.run("INSERT INTO synthesis_findings (round_id, key, title, severity, category) VALUES (1, 'S1', 'Merged null deref', 'high', 'blocker')")
+    db.run("INSERT INTO synthesis_finding_sources (synthesis_finding_id, finding_id) VALUES (1, 1), (1, 2)")
+  })
+
+  it('lists only the synthesized findings (with their keys) in the prompt', async () => {
+    await chat('hello')
+    expect(prompts[0]).toContain('- 1 (S1): Merged null deref')
+    expect(prompts[0]).not.toContain('Null deref again')
+    expect(prompts[0]).not.toContain('- 1: Null deref')
+  })
+
+  it('accepts a proposal on a synthesized id and ignores an id that only exists as a reviewer finding', async () => {
+    const ok = { finding_id: 1, severity: 'low', reason: REASON }
+    const done = await chat(`${block({ finding_id: 2, severity: 'low', reason: REASON })}\n${block(ok)}`)
+    expect(done.proposals).toEqual([ok])
+    expect(console.warn).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not list or accept a retired synthesized finding', async () => {
+    db.run("INSERT INTO synthesis_findings (round_id, key, title, severity, category, retired_at) VALUES (1, 'S2', 'Gone merged', 'low', 'suggestion', datetime('now'))")
+    const done = await chat(block({ finding_id: 2, status: 'fixed', reason: REASON }))
+    expect(prompts[0]).not.toContain('Gone merged')
+    expect(done.proposals).toEqual([])
+  })
+})

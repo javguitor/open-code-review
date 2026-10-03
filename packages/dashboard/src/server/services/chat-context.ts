@@ -10,7 +10,8 @@ import { join } from 'node:path'
 import { getOutputLanguage, languagePolicy } from '@open-code-review/config/language-config'
 
 /** A finding of the round under discussion (id as the dashboard knows it). */
-export type ChatContextFinding = { id: number; title: string }
+/** `key` (S1, S2…) is set for synthesized findings, whose ids are not reviewer-finding ids. */
+export type ChatContextFinding = { id: number; title: string; key?: string }
 
 export type ChatTarget =
   | { type: 'map_run'; sessionId: string; runNumber: number }
@@ -134,7 +135,11 @@ function buildReviewRoundContext(
 
 /** Tells the model how to propose a change to a finding; the user, not the model, applies it. */
 function proposalInstructions(findings: ChatContextFinding[]): string {
-  const list = findings.map((f) => `- ${f.id}: ${f.title.replace(/\s+/g, ' ').trim()}`)
+  const synthesized = findings.some((f) => f.key !== undefined)
+  const list = findings.map((f) => {
+    const title = f.title.replace(/\s+/g, ' ').trim()
+    return f.key === undefined ? `- ${f.id}: ${title}` : `- ${f.id} (${f.key}): ${title}`
+  })
   return [
     '<finding-proposals>',
     'You may propose a change to a finding of THIS round (never of another round) when the user',
@@ -145,7 +150,9 @@ function proposalInstructions(findings: ChatContextFinding[]): string {
     '```',
     '',
     'Include at least one of severity, category or status. The user decides whether to apply it;',
-    'you cannot change findings yourself. Finding ids of this round:',
+    synthesized
+      ? 'you cannot change findings yourself. This round triages SYNTHESIZED findings (each merges the reviewers\' findings about one problem, as in final.md). Use the numeric id, not the S-key; reviewer findings cannot be proposed on. Synthesized finding ids of this round (key in parentheses):'
+      : 'you cannot change findings yourself. Finding ids of this round:',
     ...list,
     '</finding-proposals>',
   ].join('\n')
