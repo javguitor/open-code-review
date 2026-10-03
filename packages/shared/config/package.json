@@ -15,6 +15,11 @@
       "source": "./src/dashboard-config.ts",
       "default": "./src/dashboard-config.ts"
     },
+    "./language-config": {
+      "types": "./src/language-config.ts",
+      "source": "./src/language-config.ts",
+      "default": "./src/language-config.ts"
+    },
     "./runtime-config": {
       "types": "./src/runtime-config.ts",
       "source": "./src/runtime-config.ts",
