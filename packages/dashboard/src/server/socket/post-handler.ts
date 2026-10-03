@@ -14,10 +14,12 @@ import { randomUUID } from 'node:crypto'
 import type { Server as SocketIOServer, Socket } from 'socket.io'
 import type { Database } from '@open-code-review/persistence'
 import { execBinaryAsync, isGitHubReviewState, type GitHubReviewState } from '@open-code-review/platform'
+import { getWorktreeConfig } from '@open-code-review/config/worktree-config'
 import { getSession } from '../db.js'
 import { childEnv } from '../child-env.js'
 import { resolveLocalCli } from './cli-resolver.js'
 import { AiCliService, formatToolDetail, type NormalizedEvent } from '../services/ai-cli/index.js'
+import { listWorktrees, removeWorktree, type RunCli } from '../services/worktrees.js'
 import { startTrackedExecution } from './execution-tracker.js'
 import {
   decideSubmitState,
@@ -127,6 +129,31 @@ async function findPrByUrl(
   }
 }
 
+/** What happened to the PR's worktree after a successful post (see `PostWorktreeOutcome` in api-types). */
+type WorktreeOutcome = 'removed' | 'kept_dirty' | 'kept_config' | 'kept_error' | 'none'
+
+/**
+ * `after-post` cleanup. Never throws and never affects the post's own result:
+ * every failure maps to a `kept_*` outcome.
+ */
+async function cleanupWorktreeAfterPost(
+  ocrDir: string,
+  prNumber: number,
+  run: RunCli | undefined,
+): Promise<WorktreeOutcome> {
+  try {
+    const exists = (await listWorktrees(ocrDir, { run })).some((w) => w.pr_number === prNumber)
+    if (!exists) return 'none'
+    if (getWorktreeConfig(ocrDir).cleanup !== 'after-post') return 'kept_config'
+    const { status } = await removeWorktree(ocrDir, prNumber, { run })
+    if (status === 'removed') return 'removed'
+    if (status === 'dirty') return 'kept_dirty'
+    return status === 'not-found' ? 'none' : 'kept_error'
+  } catch {
+    return 'kept_error'
+  }
+}
+
 const INVALID_SUBMIT_PAYLOAD = { success: false, code: 'invalid-payload', error: 'Invalid payload' } as const
 
 // ── Active generation processes ──
@@ -142,7 +169,7 @@ export function registerPostHandlers(
   db: Database,
   ocrDir: string,
   aiCliService: AiCliService,
-  deps: { runGh?: RunGh } = {},
+  deps: { runGh?: RunGh; runCli?: RunCli } = {},
 ): void {
   const runGh = deps.runGh ?? execBinaryAsync
 
@@ -152,7 +179,7 @@ export function registerPostHandlers(
   // repo (the parent) is never picked by accident. Each check clears it first.
   const checkedPrs = new Map<
     number,
-    { ownership: PrOwnership; prUrl: string; viewerLogin: string | null }
+    { ownership: PrOwnership; prUrl: string; viewerLogin: string | null; sessionPr: number | null }
   >()
 
   // ── Check GitHub CLI auth + find PR ──
@@ -222,7 +249,7 @@ export function registerPostHandlers(
           console.error('Error resolving gh viewer login:', err)
         }
         const ownership = resolveOwnership(pr.authorLogin, viewerLogin)
-        checkedPrs.set(pr.prNumber, { ownership, prUrl: pr.prUrl, viewerLogin })
+        checkedPrs.set(pr.prNumber, { ownership, prUrl: pr.prUrl, viewerLogin, sessionPr: session.pr_number })
         socket.emit('post:gh-result', {
           authenticated: true,
           prNumber: pr.prNumber,
@@ -640,8 +667,16 @@ export function registerPostHandlers(
           } catch { /* link is optional */ }
 
           tracker.appendOutput(`✓ Posted to PR #${prNumber}${urlMatch ? ` — ${urlMatch}` : ''}\n`)
+          // Only the PR session's own worktree is ever touched (`sessionPr`).
+          const worktree =
+            checked.sessionPr === prNumber
+              ? await cleanupWorktreeAfterPost(ocrDir, prNumber, deps.runCli)
+              : 'none'
+          if (worktree !== 'none') tracker.appendOutput(`▸ Worktree: ${worktree}\n`)
           tracker.finish(0)
-          socket.emit('post:submit-result', { success: true, commentUrl: urlMatch, state, downgraded })
+          socket.emit('post:submit-result', {
+            success: true, commentUrl: urlMatch, state, downgraded, worktree,
+          })
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : 'Unknown error'
           tracker.appendOutput(`✗ ${errMsg}\n`)

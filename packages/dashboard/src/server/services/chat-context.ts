@@ -18,8 +18,9 @@ export type ChatTarget =
  *
  * For map runs, reads the map.md file.
  * For review rounds, reads final.md and all reviewer markdown files.
+ * When `codeRoot` is given, states where the code under review lives.
  */
-export function buildChatContext(ocrDir: string, target: ChatTarget): string {
+export function buildChatContext(ocrDir: string, target: ChatTarget, codeRoot?: string): string {
   const sessionsDir = join(ocrDir, 'sessions')
 
   const context =
@@ -27,8 +28,11 @@ export function buildChatContext(ocrDir: string, target: ChatTarget): string {
       ? buildMapRunContext(sessionsDir, target.sessionId, target.runNumber)
       : buildReviewRoundContext(sessionsDir, target.sessionId, target.roundNumber)
 
+  const withRoot = codeRoot
+    ? `${context}\n\nThe code under review is at ${codeRoot} (your working directory); read files from there.`
+    : context
   const policy = languagePolicy(getOutputLanguage(ocrDir))
-  return policy ? `${context}\n\n${policy}` : context
+  return policy ? `${withRoot}\n\n${policy}` : withRoot
 }
 
 function buildMapRunContext(

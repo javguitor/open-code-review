@@ -26,6 +26,7 @@ import { createNotesRouter } from './routes/notes.js'
 import { createStatsRouter } from './routes/stats.js'
 import { createCommandsRouter } from './routes/commands.js'
 import { createConfigRouter } from './routes/config.js'
+import { createWorktreesRouter } from './routes/worktrees.js'
 import { createChatRouter } from './routes/chat.js'
 import { createReviewersRouter, watchReviewersMeta } from './routes/reviewers.js'
 import { createAgentSessionsRouter } from './routes/agent-sessions.js'
@@ -542,6 +543,7 @@ export async function startServer(options: StartServerOptions): Promise<void> {
   app.use('/api/commands', createCommandsRouter(db, ocrDir))
   app.use('/api/config', createConfigRouter(ocrDir, aiCliService))
   app.use('/api/sessions', createChatRouter(db))
+  app.use('/api/sessions', createWorktreesRouter(io, db, ocrDir))
   app.use('/api/reviewers', createReviewersRouter(ocrDir))
   // Pull-on-read for agent_session-backed routes: they read tables
   // (sessions, agent_sessions) that the CLI writes via atomic rename.

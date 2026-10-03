@@ -27,7 +27,7 @@ afterEach(() => {
 });
 
 describe("getWorktreeConfig", () => {
-  const defaults = () => ({ dir: join(repoRoot, ".ocr", "worktrees"), cleanup: "keep" });
+  const defaults = () => ({ dir: join(repoRoot, ".ocr", "worktrees"), dirRaw: null, cleanup: "keep" });
 
   it("returns defaults when config.yaml does not exist", () => {
     expect(getWorktreeConfig(ocrDir)).toEqual(defaults());
@@ -51,6 +51,11 @@ describe("getWorktreeConfig", () => {
   it("expands a leading tilde", () => {
     writeConfig("worktrees:\n  dir: ~/Work/worktrees/ocr\n");
     expect(getWorktreeConfig(ocrDir).dir).toBe(join(homedir(), "Work/worktrees/ocr"));
+  });
+
+  it("returns the dir as written in dirRaw", () => {
+    writeConfig("worktrees:\n  dir: ~/Work/worktrees/ocr  # comment\n");
+    expect(getWorktreeConfig(ocrDir).dirRaw).toBe("~/Work/worktrees/ocr");
   });
 
   it("reads cleanup: on-close", () => {

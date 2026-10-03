@@ -363,5 +363,58 @@ export type PostCheckResult = {
 }
 
 export type PostSubmitResult =
-  | { success: true; commentUrl: string | null; state: GitHubReviewState; downgraded: boolean }
+  | {
+      success: true
+      commentUrl: string | null
+      state: GitHubReviewState
+      downgraded: boolean
+      worktree: PostWorktreeOutcome
+    }
   | { success: false; error: string; code?: 'needs-recheck' | 'invalid-payload' }
+
+export type WorktreeCleanup = 'keep' | 'on-close' | 'after-post'
+
+/** Allow-listed settings of `GET`/`PATCH /api/config` (GET also returns project/IDE/AI CLI fields). */
+export type ConfigSettings = {
+  worktrees: {
+    /** Absolute directory that holds the PR worktrees. */
+    dir: string
+    /** `worktrees.dir` as written in config.yaml; null when unset. */
+    dir_raw: string | null
+    exists: boolean
+    cleanup: WorktreeCleanup
+  }
+  language: string
+}
+
+/** Body of `PATCH /api/config`; omitted keys are left untouched. */
+export type ConfigPatchBody = {
+  worktrees?: { dir?: string; cleanup?: WorktreeCleanup }
+  language?: string
+}
+
+/** `GET /api/sessions/:id/worktree` (404 for non-PR sessions). */
+export type SessionWorktree = {
+  pr_number: number
+  /** Registered path, or the expected `<dir>/pr-<n>` when absent. */
+  path: string
+  exists: boolean
+  dirty: boolean
+  cleanup: WorktreeCleanup
+}
+
+export type WorktreeRemoveStatus = 'removed' | 'dirty' | 'not-found' | 'active-session' | 'error'
+
+/** Response of `POST /api/sessions/:id/worktree/remove` (the CLI's JSON; 409 adds `execution`). */
+export type WorktreeRemoveResult = {
+  pr_number: number
+  status: WorktreeRemoveStatus
+  path?: string
+  error?: string
+}
+
+/** What `after-post` cleanup did, reported on `post:submit-result`. */
+export type PostWorktreeOutcome = 'removed' | 'kept_dirty' | 'kept_config' | 'kept_error' | 'none'
+
+/** Server `chat:notice` payload. */
+export type ChatNotice = { conversationId: string; sessionId: string; code: 'worktree-missing' }

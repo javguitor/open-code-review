@@ -13,6 +13,7 @@ import type { Database } from '@open-code-review/persistence'
 import {
   getConversation,
   getMessages,
+  getSession,
   insertMessage,
   upsertConversation,
   updateConversationClaudeSession,
@@ -20,6 +21,7 @@ import {
   type ChatConversationRow,
 } from '../db.js'
 import { buildChatContext, type ChatTarget } from '../services/chat-context.js'
+import { codeRootForSession } from '../services/worktrees.js'
 import { AiCliService, formatToolDetail } from '../services/ai-cli/index.js'
 import { startTrackedExecution, type TrackedExecution } from './execution-tracker.js'
 
@@ -94,7 +96,7 @@ export function registerChatHandlers(
   ocrDir: string,
   aiCliService: AiCliService
 ): void {
-  socket.on('chat:send', (payload: ChatSendPayload) => {
+  socket.on('chat:send', async (payload: ChatSendPayload) => {
     try {
       const { conversationId, sessionId, targetType, targetId, message } = payload ?? {} as ChatSendPayload
 
@@ -129,6 +131,15 @@ export function registerChatHandlers(
       const conversation = getConversation(db, conversationId)
       const claudeSessionId = conversation?.claude_session_id ?? null
 
+      // Code root: the PR worktree when the session has one, else the checkout.
+      const session = getSession(db, sessionId)
+      const codeRoot = session
+        ? await codeRootForSession(ocrDir, session)
+        : { path: dirname(ocrDir), isWorktree: false }
+      if (session?.pr_number != null && !codeRoot.isWorktree) {
+        socket.emit('chat:notice', { conversationId, sessionId, code: 'worktree-missing' })
+      }
+
       // Build context for first message (no session to resume)
       let prompt: string
       if (claudeSessionId) {
@@ -137,7 +148,7 @@ export function registerChatHandlers(
         const target: ChatTarget = targetType === 'map_run'
           ? { type: 'map_run', sessionId, runNumber: targetId }
           : { type: 'review_round', sessionId, roundNumber: targetId }
-        const context = buildChatContext(ocrDir, target)
+        const context = buildChatContext(ocrDir, target, codeRoot.path)
         prompt = `${context}\n\nUser: ${message}`
       }
 
@@ -160,10 +171,9 @@ export function registerChatHandlers(
         return
       }
 
-      const repoRoot = dirname(ocrDir)
       const spawnResult = adapter.spawn({
         prompt,
-        cwd: repoRoot,
+        cwd: codeRoot.path,
         mode: 'query',
         maxTurns: 1,
         allowedTools: ['Read', 'Grep', 'Glob'],

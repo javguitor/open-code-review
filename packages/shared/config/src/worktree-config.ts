@@ -25,6 +25,8 @@ export type WorktreeCleanup = (typeof WORKTREE_CLEANUP_MODES)[number];
 export type WorktreeConfig = {
   /** Absolute directory that holds the PR worktrees. */
   dir: string;
+  /** `worktrees.dir` as written in the file; null when absent (default in effect). */
+  dirRaw: string | null;
   cleanup: WorktreeCleanup;
 };
 
@@ -46,6 +48,7 @@ export function getWorktreeConfig(ocrDir: string): WorktreeConfig {
   const repoRoot = dirname(ocrDir);
   const defaults: WorktreeConfig = {
     dir: resolveDir(DEFAULT_WORKTREE_DIR, repoRoot),
+    dirRaw: null,
     cleanup: "keep",
   };
 
@@ -57,11 +60,10 @@ export function getWorktreeConfig(ocrDir: string): WorktreeConfig {
     if (!isRecord(parsed) || !isRecord(parsed.worktrees)) return defaults;
 
     const { dir, cleanup } = parsed.worktrees;
+    const dirRaw = typeof dir === "string" && dir.trim() ? dir.trim() : null;
     return {
-      dir:
-        typeof dir === "string" && dir.trim()
-          ? resolveDir(dir.trim(), repoRoot)
-          : defaults.dir,
+      dir: dirRaw ? resolveDir(dirRaw, repoRoot) : defaults.dir,
+      dirRaw,
       cleanup: WORKTREE_CLEANUP_MODES.find((m) => m === cleanup) ?? "keep",
     };
   } catch {
