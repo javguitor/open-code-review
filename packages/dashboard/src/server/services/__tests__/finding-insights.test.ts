@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { classifyFinding, countCurrent, titleSimilarity, verdictAfterDecisions } from '../finding-insights.js'
+import { classifyFinding, countCurrent, PREVIOUS_ROUND_MIN_SIMILARITY, titleSimilarity, verdictAfterDecisions } from '../finding-insights.js'
 
 const f = (category: string | null, decision_status: string | null = null, severity = 'high', is_blocker = 0) => ({
   category, severity, is_blocker, decision_status,
@@ -60,5 +60,11 @@ describe('countCurrent / verdictAfterDecisions', () => {
 
   it('a category revised from blocker to suggestion drops the blocker', () => {
     expect(verdictAfterDecisions([f('suggestion', null, 'high', 1)], 'REQUEST CHANGES')).toBe('APPROVE')
+  })
+  it('matches a title the model rephrased between rounds (same file)', () => {
+    const a = 'Cerrar el PR desechable (o protegerlo mientras siga abierto)'
+    const b = 'Cerrar o proteger el PR desechable fusionable'
+    expect(titleSimilarity(a, b)).toBeGreaterThanOrEqual(PREVIOUS_ROUND_MIN_SIMILARITY)
+    expect(titleSimilarity(a, 'Missing null check in parser')).toBeLessThan(PREVIOUS_ROUND_MIN_SIMILARITY)
   })
 })

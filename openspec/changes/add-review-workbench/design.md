@@ -98,7 +98,7 @@ Verified on `main` (after PR #6):
   finding, c confirm, d dismiss, f fixed.
 - **Decision: decisions survive rounds.** Already true by construction (keyed by finding
   id). The workbench for round N+1 shows, for each finding, the latest decision on a
-  finding of round N with the same `file_path` + title similarity ≥ 0.8 as "previous
+  finding of round N with the same `file_path` + title similarity ≥ 0.5 (token Dice; models rephrase titles between rounds, a real pair scored 0.63) as "previous
   round: dismissed — reason" (read-only hint, no automatic carry-over).
 
 ## Risks / Trade-offs

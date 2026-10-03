@@ -20,7 +20,12 @@ export function titleSimilarity(a: string, b: string): number {
   return (2 * shared) / (ta.size + tb.size)
 }
 
-export const PREVIOUS_ROUND_MIN_SIMILARITY = 0.8
+/**
+ * Same file + this title similarity marks "the same finding" in the previous
+ * round. Models rephrase titles between rounds (0.63 for a real pair), so 0.8
+ * almost never matched; the hint is read-only, so a lower bar is the safer miss.
+ */
+export const PREVIOUS_ROUND_MIN_SIMILARITY = 0.5
 
 export type FindingClassInput = {
   category: string | null
