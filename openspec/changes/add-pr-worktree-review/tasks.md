@@ -7,14 +7,14 @@
 
 ## 2. Skill: PR target and worktree (agents; then `nx run cli:update`)
 
-- [ ] 2.1 New `references/pr-target.md`: parse `pr:<n>` / PR URL; `gh pr view <url> --json number,url,headRefName,headRefOid,baseRefName,headRepository,baseRepository,author`; pick the fetch remote by matching the PR repository to `git remote -v` (fallback `origin`); `git fetch <remote> pull/<n>/head:refs/ocr/pr/<n>` and `git fetch <remote> <base>`; create or update the worktree at `<dir>/pr-<n>` (`git worktree add --detach <path> refs/ocr/pr/<n>` or `git -C <path> checkout --detach refs/ocr/pr/<n>`); abort clearly if the path exists and is not a worktree; echo "Code under review: <path>"; the untrusted-code notice.
+- [ ] 2.1 New `references/pr-target.md`: parse `pr:<n>` / PR URL; `gh pr view <url> --json number,url,headRefName,headRefOid,baseRefName,headRepository,baseRepository,author`; pick the fetch remote by matching the PR repository to `git remote -v` (fallback `origin`); `git fetch <remote> pull/<n>/head:refs/ocr/pr/<n>` and `git fetch <remote> <base>`; create or update the worktree at `<dir>/pr-<n>` (`git worktree add --detach <path> refs/ocr/pr/<n>` or `git -C <path> checkout --detach refs/ocr/pr/<n>`); abort clearly if the path exists and is not a worktree; echo "Code under review: <path>"; the untrusted-code notice; in-place shortcut when the checkout is on the PR head branch at `headRefOid` (no worktree, one-line notice).
 - [ ] 2.2 `workflow.md` Phase 0/1/2: session id `{date}-pr-<n>` for PR targets; `ocr state begin` with the new flags; diff = `git diff <remote>/<base>...refs/ocr/pr/<n>` run in the main checkout; `context.md` records base/head/sha/PR URL and the worktree path; Phase 4 task template gets a "Code root" line so every reviewer reads files from the worktree; Phase 7 passes `head_sha` in the `complete-round` JSON; Phase 8 posts with `gh pr review <url>`.
 - [ ] 2.3 `reviewer-task.md`, `map-agent-task.md`: "## Code root" section (`{code_root}`; omitted when it is the checkout). `commands/review.md`, `map.md`: document `pr:<n>` and URLs. `post.md`: prefer the session's `pr_url`.
 - [ ] 2.4 `nx run cli:update`; commit source + `.ocr/`.
 
 ## 3. CLI: worktree lifecycle
 
-- [ ] 3.1 `packages/cli/src/commands/worktree.ts`: `ocr worktree list` (from `git worktree list --porcelain` filtered to the configured dir, joined with sessions by `pr_number`), `ocr worktree remove <n> [--force]`, `ocr worktree remove --all-stale`. Refuse dirty worktrees without `--force`. Tests with a real temp git repo (classical).
+- [ ] 3.1 `packages/cli/src/commands/worktree.ts`: `ocr worktree list` (from `git worktree list --porcelain` filtered to the configured dir, joined with sessions by `pr_number`), `ocr worktree remove <n> [--force]`, `ocr worktree remove --all-stale`. Refuse dirty worktrees without `--force`. `remove` also deletes `refs/ocr/pr/<n>` and branch `ocr/pr-<n>` (resolved question). Tests with a real temp git repo (classical).
 - [ ] 3.2 `ocr state finish`: when `cleanup: on-close` and no other open session uses the worktree, remove it (reuse 3.1).
 
 ## 4. Dashboard

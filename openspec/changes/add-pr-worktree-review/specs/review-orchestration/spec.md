@@ -31,6 +31,13 @@ The review and map workflows SHALL accept a pull-request target (`pr:<number>` o
 - **WHEN** the target is resolved
 - **THEN** the workflow stops with an error naming the path, and nothing is deleted
 
+#### Scenario: PR head is the current checkout
+
+- **GIVEN** the current checkout is on the PR's head branch and `HEAD` equals the PR's `headRefOid`
+- **WHEN** the PR target is resolved
+- **THEN** no worktree is created, the review runs in place with a one-line notice
+- **AND** the session still uses id `{date}-pr-<number>` and records the PR refs
+
 #### Scenario: Untrusted code notice
 
 - **WHEN** a PR target is resolved

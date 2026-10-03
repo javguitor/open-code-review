@@ -101,12 +101,13 @@ Additive: new nullable columns, new config block with safe defaults, new target 
 Existing sessions have `head_sha = null` → `stale = null` → no badge. Rollback: revert;
 migration 15 can stay (unused nullable columns).
 
-## Open Questions
+## Resolved Questions (2026-10-03)
 
-- Should `pr:<n>` on a PR whose head branch is the current checkout skip the worktree and
-  review in place? (Proposed: yes, with a one-line notice.)
-- Keep `refs/ocr/pr/<n>` after `ocr worktree remove`, to diff old rounds later? (Proposed:
-  delete; `round-meta.json.head_sha` is enough to re-fetch.)
+- `pr:<n>` on a PR whose head branch is the current checkout (and whose `HEAD` equals the
+  PR's `headRefOid`) **skips the worktree and reviews in place**, with a one-line notice;
+  the session still records `pr_number`/`pr_url`/`head_sha` and uses id `{date}-pr-<n>`.
+- `ocr worktree remove` **deletes** `refs/ocr/pr/<n>` and the `ocr/pr-<n>` branch;
+  `round-meta.json.head_sha` is enough to re-fetch an old round.
 
 ## How to execute this change (handoff)
 
