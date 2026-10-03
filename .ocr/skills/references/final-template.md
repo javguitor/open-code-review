@@ -87,6 +87,7 @@ All non-blocking feedback is categorized into **Should Fix** or **Suggestions**,
 
 ### 1. {Title}
 
+**ID**: S2
 **Flagged by**: @principal-1, @quality-1
 **Location**: `path/to/file.ts:42-50`
 
@@ -94,6 +95,7 @@ All non-blocking feedback is categorized into **Should Fix** or **Suggestions**,
 
 ### 2. {Title}
 
+**ID**: S3
 **Flagged by**: @quality-2
 **Location**: `path/to/other-file.ts:15`
 
@@ -104,17 +106,17 @@ All non-blocking feedback is categorized into **Should Fix** or **Suggestions**,
 ## Suggestions
 
 ### Code Quality
-- "Consider extracting this into a separate function for testability" — @principal-1
-- "The variable naming could be more descriptive" — @quality-1
+- [S4] "Consider extracting this into a separate function for testability" — @principal-1
+- [S5] "The variable naming could be more descriptive" — @quality-1
 
 ### Performance
-- "This could be optimized with memoization" — @principal-2
+- [S6] "This could be optimized with memoization" — @principal-2
 
 ### Style
-- "Prefer `const` over `let` here" — @quality-2
+- [S7] "Prefer `const` over `let` here" — @quality-2
 
 ### Testing
-- "Edge case for empty input not covered" — @testing-1
+- [S8] "Edge case for empty input not covered" — @testing-1
 ```
 
 **No feedback is lost.** Even if only one reviewer mentions something, it surfaces.
@@ -236,6 +238,15 @@ Before the verdict, `final.md` opens with `## What This Change Does`: a short se
   ```
 - Keep the whole section under ~25 lines. The two bold labels are prose and follow the configured language; the heading stays in English.
 
+### Step 9: Tag Every Item With Its Id
+
+Every item in `final.md` is one synthesized finding, and its id is the `key` you assigned in `synthesis_findings` when you piped the round data (see `references/workflow.md`, Phase 7 step 7):
+
+- **Blockers** and **Should Fix**: a `**ID**: S<n>` line directly under the item heading (before `**Flagged by**`).
+- **Suggestions**: an `[S<n>]` prefix at the start of each bullet.
+- Keys are unique within the round and each appears exactly once. `synthesis_counts` equals the number of tagged items per section.
+- `ID` and `S<n>` are literal tokens: they stay as written whatever the output language.
+
 ---
 
 ## Final Review Template
@@ -284,6 +295,7 @@ sequenceDiagram
 {If any blockers exist, they appear here. Each blocker must be resolved before merge.}
 
 ### 🚫 {Blocker Title}
+**ID**: S1
 **Flagged by**: @security-1
 **Type**: Security vulnerability
 **Location**: `path/to/file.ts:42-50`
@@ -307,6 +319,7 @@ sequenceDiagram
 
 ### 1. {Title}
 
+**ID**: S2
 **Flagged by**: @principal-1, @quality-1
 **Location**: `path/to/file.ts:42-50`
 **Evidence**: {Optional — omit when there is none}
@@ -315,6 +328,7 @@ sequenceDiagram
 
 ### 2. {Title}
 
+**ID**: S3
 **Flagged by**: @quality-2
 **Location**: `path/to/other-file.ts:15`
 
@@ -324,20 +338,20 @@ sequenceDiagram
 
 ## Suggestions
 
-{Lower-priority improvements and informational feedback, preserved and attributed.}
+{Lower-priority improvements and informational feedback, preserved and attributed. Each bullet starts with its `[S<n>]` id.}
 
 ### Code Quality
-- "Consider extracting the validation logic into a separate function" — @principal-1
-- "The error messages could be more user-friendly" — @quality-1
+- [S4] "Consider extracting the validation logic into a separate function" — @principal-1
+- [S5] "The error messages could be more user-friendly" — @quality-1
 
 ### Performance
-- "This query could benefit from an index on `user_id`" — @principal-2
+- [S6] "This query could benefit from an index on `user_id`" — @principal-2
 
 ### Testing
-- "Edge case for empty array not covered" — @testing-1
+- [S7] "Edge case for empty array not covered" — @testing-1
 
 ### Style
-- "Prefer early returns to reduce nesting" — @quality-1
+- [S8] "Prefer early returns to reduce nesting" — @quality-1
 
 ---
 
@@ -421,5 +435,7 @@ Full reviews available in session directory:
 6. **Tech Lead facilitates** — The Tech Lead synthesizes and recommends, but doesn't override individual blockers or suppress feedback.
 
 7. **`round-meta.json` matches `final.md`** — When piping data to `ocr state complete-round --stdin`:
-   - The `category` on each finding MUST reflect the **post-synthesis** classification (promoted/demoted categories).
-   - The `synthesis_counts` object MUST contain the **deduplicated** counts matching the actual numbered items in `final.md`. Multiple reviewers flag the same issue → one item in `final.md`. Count the `### N.` headings under Blockers, Should Fix, and Suggestions in your final output and set `synthesis_counts.blockers`, `synthesis_counts.should_fix`, and `synthesis_counts.suggestions` accordingly. The dashboard uses these counts when present.
+   - Emit one `synthesis_findings` entry per item in `final.md`, with the **post-synthesis** `category` and `severity` (promoted/demoted classification), the merged reviewer findings as `sources`, and the same `S<n>` key that tags the item in `final.md`.
+   - Entries of `reviewers[].findings[]` KEEP the category and severity their reviewer assigned; do not rewrite them to the synthesized classification.
+   - Every reviewer finding is the source of exactly one synthesized finding (complete partition).
+   - `synthesis_counts`, when present, MUST equal the number of tagged items under Blockers, Should Fix and Suggestions in your final output (`synthesis_counts.blockers`, `synthesis_counts.should_fix`, `synthesis_counts.suggestions`). The dashboard counts from `synthesis_findings` when present.

@@ -2,9 +2,18 @@
  * Finding revisions, human decisions and verification outcomes.
  *
  * Every mutator here updates the finding (or its decision row) AND appends a
- * `finding_revisions` row inside ONE transaction, so the audit log can never
- * drift from the current values. Shared by the CLI (agent-originated writes)
- * and the dashboard (human decisions).
+ * revision row inside ONE transaction, so the audit log can never drift from
+ * the current values. Shared by the CLI (agent-originated writes) and the
+ * dashboard (human decisions).
+ *
+ * The mutators are subject-generic: a {@link FindingSubject} names either a
+ * reviewer finding (`review_findings` + `user_finding_progress` +
+ * `finding_revisions`) or a synthesized finding (`synthesis_findings` +
+ * `synthesis_finding_decisions` + `synthesis_finding_revisions`). The two sets
+ * of tables are parallel on purpose (migration 21 is additive); this file is the
+ * one place that knows it. The historical exports (`reviseFinding`,
+ * `setFindingDecision`, ...) are thin reviewer-kind wrappers, so existing
+ * callers are unchanged.
  */
 
 import type { Database } from "./engine.js";
@@ -80,6 +89,82 @@ export type FindingRevisionRow = {
   created_at: string;
 };
 
+export type SynthesisLocation = {
+  file_path: string;
+  line_start?: number;
+  line_end?: number;
+};
+
+/** A deduplicated finding emitted by the synthesis (`synthesis_findings` row + its decision). */
+export type SynthesisFindingRow = {
+  id: number;
+  round_id: number;
+  session_id: string;
+  round_number: number;
+  key: string;
+  title: string;
+  severity: string;
+  category: string | null;
+  /** Primary location (first entry of `locations`). */
+  file_path: string | null;
+  line_start: number | null;
+  line_end: number | null;
+  /** Full locations array, primary first; null when the row stored none. */
+  locations: SynthesisLocation[] | null;
+  summary: string | null;
+  evidence: string | null;
+  flagged_by: string[] | null;
+  is_blocker: number;
+  verification_status: FindingVerificationStatus | null;
+  verification_note: string | null;
+  verified_at: string | null;
+  verification_file: string | null;
+  /** Set when the finding left the synthesis but kept a decision/revisions; excluded from counts and verdict. */
+  retired_at: string | null;
+  decision: FindingRow["decision"];
+};
+
+/** A reviewer finding merged into a synthesized one, with the reviewer that wrote it. */
+export type SynthesisSourceRow = FindingRow & {
+  reviewer_type: string;
+  instance_number: number;
+};
+
+/** What a mutator targets: a reviewer finding or a synthesized finding (ids collide numerically). */
+export type FindingSubject = { kind: "reviewer" | "synthesis"; id: number };
+
+/** Row type a subject resolves to. */
+export type SubjectRow<S extends FindingSubject> = S extends { kind: "synthesis" }
+  ? SynthesisFindingRow
+  : FindingRow;
+
+type SubjectTables = {
+  finding: string;
+  decisions: string;
+  revisions: string;
+  /** Column of `decisions` and `revisions` that points at `finding`. */
+  fk: string;
+  label: string;
+};
+
+/** Constant table map; the only source of interpolated SQL identifiers in this file. */
+const SUBJECT_TABLES: Record<FindingSubject["kind"], SubjectTables> = {
+  reviewer: {
+    finding: "review_findings",
+    decisions: "user_finding_progress",
+    revisions: "finding_revisions",
+    fk: "finding_id",
+    label: "Finding",
+  },
+  synthesis: {
+    finding: "synthesis_findings",
+    decisions: "synthesis_finding_decisions",
+    revisions: "synthesis_finding_revisions",
+    fk: "synthesis_finding_id",
+    label: "Synthesized finding",
+  },
+};
+
 export class FindingError extends Error {
   constructor(
     readonly code: "not-found" | "invalid-value" | "reason-required" | "reason-too-short" | "retired",
@@ -117,6 +202,17 @@ function parseFlaggedBy(raw: unknown): string[] | null {
   }
 }
 
+function getDecision(db: Database, subject: FindingSubject): FindingRow["decision"] {
+  const t = SUBJECT_TABLES[subject.kind];
+  const progress = resultToRow<Record<string, unknown>>(
+    db.exec(
+      `SELECT status, reason, decided_at, updated_at FROM ${t.decisions} WHERE ${t.fk} = ?`,
+      [subject.id],
+    ),
+  );
+  return progress ? (progress as unknown as NonNullable<FindingRow["decision"]>) : null;
+}
+
 export function getFinding(db: Database, id: number): FindingRow | undefined {
   const row = resultToRow<Record<string, unknown>>(
     db.exec(
@@ -129,44 +225,127 @@ export function getFinding(db: Database, id: number): FindingRow | undefined {
     ),
   );
   if (!row) return undefined;
-  const progress = resultToRow<Record<string, unknown>>(
-    db.exec(
-      "SELECT status, reason, decided_at, updated_at FROM user_finding_progress WHERE finding_id = ?",
-      [id],
-    ),
-  );
   return {
     ...(row as unknown as FindingRow),
     flagged_by: parseFlaggedBy(row.flagged_by),
-    decision: progress ? (progress as unknown as NonNullable<FindingRow["decision"]>) : null,
+    decision: getDecision(db, { kind: "reviewer", id }),
   };
 }
 
-export function getFindingRevisions(db: Database, findingId: number): FindingRevisionRow[] {
+function parseLocations(raw: unknown): SynthesisLocation[] | null {
+  if (typeof raw !== "string") return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as SynthesisLocation[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function toSynthesisRow(db: Database, row: Record<string, unknown>): SynthesisFindingRow {
+  const { locations_json, ...rest } = row;
+  return {
+    ...(rest as unknown as SynthesisFindingRow),
+    flagged_by: parseFlaggedBy(row.flagged_by),
+    locations: parseLocations(locations_json),
+    decision: getDecision(db, { kind: "synthesis", id: Number(row.id) }),
+  };
+}
+
+const SYNTHESIS_SELECT = `SELECT sf.*, rr.session_id AS session_id, rr.round_number AS round_number
+  FROM synthesis_findings sf
+  JOIN review_rounds rr ON rr.id = sf.round_id`;
+
+export function getSynthesisFinding(db: Database, id: number): SynthesisFindingRow | undefined {
+  const row = resultToRow<Record<string, unknown>>(db.exec(`${SYNTHESIS_SELECT} WHERE sf.id = ?`, [id]));
+  return row ? toSynthesisRow(db, row) : undefined;
+}
+
+/**
+ * Synthesized findings of a round, in insertion order. Live rows only unless
+ * `includeRetired` is set (a round "uses synthesis" iff this returns something
+ * without it).
+ */
+export function listSynthesisFindings(
+  db: Database,
+  roundId: number,
+  opts: { includeRetired?: boolean } = {},
+): SynthesisFindingRow[] {
+  const live = opts.includeRetired ? "" : " AND sf.retired_at IS NULL";
+  return resultToRows<Record<string, unknown>>(
+    db.exec(`${SYNTHESIS_SELECT} WHERE sf.round_id = ?${live} ORDER BY sf.id ASC`, [roundId]),
+  ).map((row) => toSynthesisRow(db, row));
+}
+
+/**
+ * The reviewer findings a synthesized finding merges, each with the reviewer
+ * that wrote it and its own decision (provenance: those decisions are never
+ * moved). Ordered by reviewer, then finding.
+ */
+export function getSources(db: Database, synthesisFindingId: number): SynthesisSourceRow[] {
+  const rows = resultToRows<{ id: number; reviewer_type: string; instance_number: number }>(
+    db.exec(
+      `SELECT f.id AS id, ro.reviewer_type AS reviewer_type, ro.instance_number AS instance_number
+       FROM synthesis_finding_sources s
+       JOIN review_findings f ON f.id = s.finding_id
+       JOIN reviewer_outputs ro ON ro.id = f.reviewer_output_id
+       WHERE s.synthesis_finding_id = ?
+       ORDER BY ro.reviewer_type ASC, ro.instance_number ASC, f.id ASC`,
+      [synthesisFindingId],
+    ),
+  );
+  const out: SynthesisSourceRow[] = [];
+  for (const r of rows) {
+    const finding = getFinding(db, r.id);
+    if (finding) out.push({ ...finding, reviewer_type: r.reviewer_type, instance_number: r.instance_number });
+  }
+  return out;
+}
+
+/** Revision log of a subject, oldest first. Synthesized rows are returned with `finding_id` = the synthesized id. */
+export function getSubjectRevisions(db: Database, subject: FindingSubject): FindingRevisionRow[] {
+  const t = SUBJECT_TABLES[subject.kind];
   return resultToRows<FindingRevisionRow>(
-    db.exec("SELECT * FROM finding_revisions WHERE finding_id = ? ORDER BY id ASC", [findingId]),
+    db.exec(
+      `SELECT id, ${t.fk} AS finding_id, field, old_value, new_value, reason, source, conversation_id, created_at
+       FROM ${t.revisions} WHERE ${t.fk} = ? ORDER BY id ASC`,
+      [subject.id],
+    ),
   );
 }
 
-function requireFinding(db: Database, id: number): FindingRow {
-  const finding = getFinding(db, id);
-  if (!finding) throw new FindingError("not-found", `Finding ${id} not found`);
-  return finding;
+export function getFindingRevisions(db: Database, findingId: number): FindingRevisionRow[] {
+  return getSubjectRevisions(db, { kind: "reviewer", id: findingId });
+}
+
+function getSubject<S extends FindingSubject>(db: Database, subject: S): SubjectRow<S> | undefined {
+  return (subject.kind === "synthesis" ? getSynthesisFinding(db, subject.id) : getFinding(db, subject.id)) as
+    | SubjectRow<S>
+    | undefined;
+}
+
+function requireSubject<S extends FindingSubject>(db: Database, subject: S): SubjectRow<S> {
+  const row = getSubject(db, subject);
+  if (!row) throw new FindingError("not-found", `${SUBJECT_TABLES[subject.kind].label} ${subject.id} not found`);
+  return row;
 }
 
 /** A retired finding left the synthesis: it cannot be decided, revised, verified or targeted by a proposal. */
-function requireActionable(db: Database, id: number): FindingRow {
-  const finding = requireFinding(db, id);
+function requireActionable<S extends FindingSubject>(db: Database, subject: S): SubjectRow<S> {
+  const finding = requireSubject(db, subject);
   if (!isActionable(finding)) {
-    throw new FindingError("retired", `Finding ${id} is retired (it left the synthesis) and can no longer be changed`);
+    throw new FindingError(
+      "retired",
+      `${SUBJECT_TABLES[subject.kind].label} ${subject.id} is retired (it left the synthesis) and can no longer be changed`,
+    );
   }
   return finding;
 }
 
 function insertRevision(
   db: Database,
+  subject: FindingSubject,
   r: {
-    findingId: number;
     field: string;
     oldValue: string | null;
     newValue: string | null;
@@ -175,10 +354,11 @@ function insertRevision(
     conversationId?: string | null;
   },
 ): void {
+  const t = SUBJECT_TABLES[subject.kind];
   db.run(
-    `INSERT INTO finding_revisions (finding_id, field, old_value, new_value, reason, source, conversation_id)
+    `INSERT INTO ${t.revisions} (${t.fk}, field, old_value, new_value, reason, source, conversation_id)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [r.findingId, r.field, r.oldValue, r.newValue, r.reason, r.source, r.conversationId ?? null],
+    [subject.id, r.field, r.oldValue, r.newValue, r.reason, r.source, r.conversationId ?? null],
   );
 }
 
@@ -191,18 +371,29 @@ export type ReviseFindingParams = {
   conversationId?: string;
 };
 
+export type ReviseSubjectParams = Omit<ReviseFindingParams, "findingId">;
+
 /** Change a finding's severity or category and log the revision, atomically. */
-export function reviseFinding(db: Database, p: ReviseFindingParams): FindingRow {
+export function reviseSubject<S extends FindingSubject>(
+  db: Database,
+  subject: S,
+  p: ReviseSubjectParams,
+): SubjectRow<S> {
   const field = oneOf(["severity", "category"] as const, p.field, "field");
   const value = validRevisionValue(field, p.value);
   const reason = requireNonEmpty(p.reason, "reason");
   const source = oneOf(FINDING_REVISION_SOURCES, p.source, "source");
 
   return db.transaction(() => {
-    requireActionable(db, p.findingId);
-    reviseField(db, p.findingId, field, value, reason, source, p.conversationId);
-    return requireFinding(db, p.findingId);
+    requireActionable(db, subject);
+    reviseField(db, subject, field, value, reason, source, p.conversationId);
+    return requireSubject(db, subject);
   });
+}
+
+export function reviseFinding(db: Database, p: ReviseFindingParams): FindingRow {
+  const { findingId, ...rest } = p;
+  return reviseSubject(db, { kind: "reviewer", id: findingId }, rest);
 }
 
 function validRevisionValue(field: FindingRevisableField, value: unknown): string {
@@ -214,27 +405,29 @@ function validRevisionValue(field: FindingRevisableField, value: unknown): strin
 /** Write one severity/category change + revision; no-op when the value is unchanged. */
 function reviseField(
   db: Database,
-  findingId: number,
+  subject: FindingSubject,
   field: FindingRevisableField,
   value: string,
   reason: string,
   source: FindingRevisionSource,
   conversationId?: string,
 ): void {
-  const current = requireFinding(db, findingId);
+  const current = requireSubject(db, subject);
   if (current[field] === value) return;
-  // `field` is whitelisted by the callers, so interpolating the column name is safe.
+  const table = SUBJECT_TABLES[subject.kind].finding;
+  // `field` is whitelisted by the callers and `table` comes from SUBJECT_TABLES,
+  // so interpolating the identifiers is safe.
   // `is_blocker` mirrors category so every reader of the flag agrees with the revised category.
   if (field === "category") {
-    db.run("UPDATE review_findings SET category = ?, is_blocker = ? WHERE id = ?", [
+    db.run(`UPDATE ${table} SET category = ?, is_blocker = ? WHERE id = ?`, [
       value,
       value === "blocker" ? 1 : 0,
-      findingId,
+      subject.id,
     ]);
   } else {
-    db.run(`UPDATE review_findings SET ${field} = ? WHERE id = ?`, [value, findingId]);
+    db.run(`UPDATE ${table} SET ${field} = ? WHERE id = ?`, [value, subject.id]);
   }
-  insertRevision(db, { findingId, field, oldValue: current[field], newValue: value, reason, source, conversationId });
+  insertRevision(db, subject, { field, oldValue: current[field], newValue: value, reason, source, conversationId });
 }
 
 export type SetFindingDecisionParams = {
@@ -243,18 +436,29 @@ export type SetFindingDecisionParams = {
   reason?: string;
 };
 
-/** Record a human decision (upsert into user_finding_progress) and log it, atomically. */
-export function setFindingDecision(db: Database, p: SetFindingDecisionParams): FindingRow {
+export type SetSubjectDecisionParams = Omit<SetFindingDecisionParams, "findingId">;
+
+/** Record a human decision (upsert into the subject's decisions table) and log it, atomically. */
+export function setSubjectDecision<S extends FindingSubject>(
+  db: Database,
+  subject: S,
+  p: SetSubjectDecisionParams,
+): SubjectRow<S> {
   const status = oneOf(FINDING_DECISION_STATUSES, p.status, "status");
 
   return db.transaction(() => {
-    const current = requireActionable(db, p.findingId);
+    const current = requireActionable(db, subject);
     // An absent reason means "keep": repeating a status must not erase the stored justification.
     const blank = !p.reason?.trim();
     if (blank && (current.decision?.status ?? "unread") === status) return current;
-    decideField(db, p.findingId, status, validDecisionReason(status, p.reason), "user");
-    return requireFinding(db, p.findingId);
+    decideField(db, subject, status, validDecisionReason(status, p.reason), "user");
+    return requireSubject(db, subject);
   });
+}
+
+export function setFindingDecision(db: Database, p: SetFindingDecisionParams): FindingRow {
+  const { findingId, ...rest } = p;
+  return setSubjectDecision(db, { kind: "reviewer", id: findingId }, rest);
 }
 
 /** Trimmed reason (null when blank); throws when `status` demands a better one. */
@@ -276,26 +480,27 @@ function validDecisionReason(status: FindingDecisionStatus, raw: string | undefi
 /** Upsert a decision + revision; no-op only when both status and reason are unchanged. */
 function decideField(
   db: Database,
-  findingId: number,
+  subject: FindingSubject,
   status: FindingDecisionStatus,
   reason: string | null,
   source: FindingRevisionSource,
   conversationId?: string,
 ): void {
-  const current = requireFinding(db, findingId);
+  const current = requireSubject(db, subject);
   const oldStatus = current.decision?.status ?? "unread";
   if (oldStatus === status && (current.decision?.reason ?? null) === reason) return;
+  const t = SUBJECT_TABLES[subject.kind];
   db.run(
-    `INSERT INTO user_finding_progress (finding_id, status, reason, decided_at, updated_at)
+    `INSERT INTO ${t.decisions} (${t.fk}, status, reason, decided_at, updated_at)
      VALUES (?, ?, ?, ${FINAL_DECISIONS.has(status) ? "datetime('now')" : "NULL"}, datetime('now'))
-     ON CONFLICT(finding_id) DO UPDATE SET
+     ON CONFLICT(${t.fk}) DO UPDATE SET
        status = excluded.status,
        reason = excluded.reason,
        decided_at = excluded.decided_at,
        updated_at = excluded.updated_at`,
-    [findingId, status, reason],
+    [subject.id, status, reason],
   );
-  insertRevision(db, { findingId, field: "status", oldValue: oldStatus, newValue: status, reason, source, conversationId });
+  insertRevision(db, subject, { field: "status", oldValue: oldStatus, newValue: status, reason, source, conversationId });
 }
 
 export type RecordVerificationParams = {
@@ -305,13 +510,19 @@ export type RecordVerificationParams = {
   file?: string;
 };
 
+export type RecordSubjectVerificationParams = Omit<RecordVerificationParams, "findingId">;
+
 /** Store a verifier's outcome on the finding and log it (source `verifier`), atomically. */
-export function recordVerification(db: Database, p: RecordVerificationParams): FindingRow {
+export function recordSubjectVerification<S extends FindingSubject>(
+  db: Database,
+  subject: S,
+  p: RecordSubjectVerificationParams,
+): SubjectRow<S> {
   const status = oneOf(FINDING_VERIFICATION_STATUSES, p.status, "verification status");
   const note = requireNonEmpty(p.note, "note");
 
   return db.transaction(() => {
-    const current = requireActionable(db, p.findingId);
+    const current = requireActionable(db, subject);
     // A re-run with the same verdict still records a new note/file; only an
     // identical (status, note, file) triple is a no-op.
     if (
@@ -320,21 +531,25 @@ export function recordVerification(db: Database, p: RecordVerificationParams): F
       (current.verification_file ?? null) === (p.file ?? null)
     ) return current;
     db.run(
-      `UPDATE review_findings
+      `UPDATE ${SUBJECT_TABLES[subject.kind].finding}
        SET verification_status = ?, verification_note = ?, verification_file = ?, verified_at = datetime('now')
        WHERE id = ?`,
-      [status, note, p.file ?? null, p.findingId],
+      [status, note, p.file ?? null, subject.id],
     );
-    insertRevision(db, {
-      findingId: p.findingId,
+    insertRevision(db, subject, {
       field: "verification_status",
       oldValue: current.verification_status,
       newValue: status,
       reason: note,
       source: "verifier",
     });
-    return requireFinding(db, p.findingId);
+    return requireSubject(db, subject);
   });
+}
+
+export function recordVerification(db: Database, p: RecordVerificationParams): FindingRow {
+  const { findingId, ...rest } = p;
+  return recordSubjectVerification(db, { kind: "reviewer", id: findingId }, rest);
 }
 
 export type ApplyProposalParams = {
@@ -346,12 +561,18 @@ export type ApplyProposalParams = {
   conversationId: string;
 };
 
+export type ApplySubjectProposalParams = Omit<ApplyProposalParams, "findingId">;
+
 /**
  * Apply a chat proposal: every present field in ONE transaction, each with a
  * revision row (`source: chat`, `conversation_id`). Fields already at the
  * proposed value write nothing. All input is validated before any write.
  */
-export function applyProposal(db: Database, p: ApplyProposalParams): FindingRow {
+export function applySubjectProposal<S extends FindingSubject>(
+  db: Database,
+  subject: S,
+  p: ApplySubjectProposalParams,
+): SubjectRow<S> {
   const severity = p.severity === undefined ? undefined : validRevisionValue("severity", p.severity);
   const category = p.category === undefined ? undefined : validRevisionValue("category", p.category);
   const status = p.status === undefined ? undefined : oneOf(PROPOSAL_STATUSES, p.status, "status");
@@ -366,10 +587,15 @@ export function applyProposal(db: Database, p: ApplyProposalParams): FindingRow 
   const decisionReason = status === undefined ? null : validDecisionReason(status, reason);
 
   return db.transaction(() => {
-    requireActionable(db, p.findingId);
-    if (severity !== undefined) reviseField(db, p.findingId, "severity", severity, reason, "chat", conversationId);
-    if (category !== undefined) reviseField(db, p.findingId, "category", category, reason, "chat", conversationId);
-    if (status !== undefined) decideField(db, p.findingId, status, decisionReason, "chat", conversationId);
-    return requireFinding(db, p.findingId);
+    requireActionable(db, subject);
+    if (severity !== undefined) reviseField(db, subject, "severity", severity, reason, "chat", conversationId);
+    if (category !== undefined) reviseField(db, subject, "category", category, reason, "chat", conversationId);
+    if (status !== undefined) decideField(db, subject, status, decisionReason, "chat", conversationId);
+    return requireSubject(db, subject);
   });
+}
+
+export function applyProposal(db: Database, p: ApplyProposalParams): FindingRow {
+  const { findingId, ...rest } = p;
+  return applySubjectProposal(db, { kind: "reviewer", id: findingId }, rest);
 }

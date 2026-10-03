@@ -9,6 +9,14 @@ import {
   applyProposal,
   getFinding,
   getFindingRevisions,
+  getSynthesisFinding,
+  listSynthesisFindings,
+  getSources,
+  getSubjectRevisions,
+  reviseSubject,
+  setSubjectDecision,
+  recordSubjectVerification,
+  applySubjectProposal,
   FindingError,
   type Database,
 } from "../index.js";
@@ -270,5 +278,89 @@ describe("retired findings", () => {
     expect(() => applyProposal(db, { findingId: 1, status: "confirmed", reason: "x".repeat(25), conversationId: "c" })).toThrow(expect.objectContaining(retired));
     expect(getFindingRevisions(db, 1)).toEqual([]);
     expect(getFinding(db, 1)!.decision).toBeNull();
+  });
+});
+
+describe("subject-generic mutators (synthesized findings)", () => {
+  const subject = { kind: "synthesis", id: 1 } as const;
+
+  beforeEach(() => {
+    db.run(
+      `INSERT INTO synthesis_findings (round_id, key, title, severity, category, file_path, locations_json, flagged_by)
+       VALUES (1, 'S1', 'a synthesized finding', 'high', 'blocker', 'src/a.ts', ?, ?)`,
+      [JSON.stringify([{ file_path: "src/a.ts", line_start: 3 }, { file_path: "src/b.ts" }]), JSON.stringify(["@a", "@b"])],
+    );
+    db.run("INSERT INTO synthesis_finding_sources (synthesis_finding_id, finding_id) VALUES (1, 1)");
+  });
+
+  it("readers return the parsed row, its sources and live rows only", () => {
+    const f = getSynthesisFinding(db, 1)!;
+    expect(f.key).toBe("S1");
+    expect(f.flagged_by).toEqual(["@a", "@b"]);
+    expect(f.locations).toEqual([{ file_path: "src/a.ts", line_start: 3 }, { file_path: "src/b.ts" }]);
+    expect(f.session_id).toBe("s1");
+    expect(f.round_number).toBe(1);
+    expect(f.decision).toBeNull();
+    expect(getSynthesisFinding(db, 99)).toBeUndefined();
+
+    const sources = getSources(db, 1);
+    expect(sources).toHaveLength(1);
+    expect(sources[0]).toMatchObject({ id: 1, title: "a finding", reviewer_type: "r", instance_number: 1 });
+
+    db.run("INSERT INTO synthesis_findings (round_id, key, title, severity, retired_at) VALUES (1, 'S2', 'retired finding', 'low', datetime('now'))");
+    expect(listSynthesisFindings(db, 1).map((r) => r.key)).toEqual(["S1"]);
+    expect(listSynthesisFindings(db, 1, { includeRetired: true }).map((r) => r.key)).toEqual(["S1", "S2"]);
+    expect(listSynthesisFindings(db, 42)).toEqual([]);
+  });
+
+  it("revises category (is_blocker follows) and logs it in the synthesis revision table only", () => {
+    const f = reviseSubject(db, subject, { field: "category", value: "should_fix", reason: "demoted", source: "user" });
+    expect(f.category).toBe("should_fix");
+    expect(f.is_blocker).toBe(0);
+    const revs = getSubjectRevisions(db, subject);
+    expect(revs).toHaveLength(1);
+    expect(revs[0]).toMatchObject({ finding_id: 1, field: "category", old_value: "blocker", new_value: "should_fix", source: "user" });
+    expect(getFindingRevisions(db, 1)).toEqual([]);
+  });
+
+  it("decides in synthesis_finding_decisions without touching reviewer progress", () => {
+    const f = setSubjectDecision(db, subject, { status: "dismissed", reason: "not a real problem" });
+    expect(f.decision?.status).toBe("dismissed");
+    expect(f.decision?.decided_at).not.toBeNull();
+    expect(getFinding(db, 1)!.decision).toBeNull();
+    expect(db.exec("SELECT COUNT(*) FROM user_finding_progress")[0]!.values[0]![0]).toBe(0);
+    expect(() => setSubjectDecision(db, subject, { status: "wont_fix" })).toThrow(FindingError);
+  });
+
+  it("records a verification and a verifier revision", () => {
+    const f = recordSubjectVerification(db, subject, { status: "supported", note: "checked", file: "v.md" });
+    expect(f.verification_status).toBe("supported");
+    expect(getSubjectRevisions(db, subject)[0]).toMatchObject({ field: "verification_status", source: "verifier" });
+  });
+
+  it("applies a chat proposal atomically", () => {
+    const f = applySubjectProposal(db, subject, {
+      severity: "low",
+      status: "dismissed",
+      reason: "the chat explained this is fine",
+      conversationId: "c-1",
+    });
+    expect(f.severity).toBe("low");
+    expect(f.decision?.status).toBe("dismissed");
+    expect(getSubjectRevisions(db, subject).map((r) => r.field)).toEqual(["severity", "status"]);
+  });
+
+  it("refuses retired and unknown synthesized findings", () => {
+    db.run("UPDATE synthesis_findings SET retired_at = datetime('now')");
+    expect(() => setSubjectDecision(db, subject, { status: "read" })).toThrowError(expect.objectContaining({ code: "retired" }));
+    expect(() => setSubjectDecision(db, { kind: "synthesis", id: 9 }, { status: "read" })).toThrowError(
+      expect.objectContaining({ code: "not-found" }),
+    );
+  });
+
+  it("reviewer wrappers keep addressing reviewer findings, whatever the synthesized ids are", () => {
+    setFindingDecision(db, { findingId: 1, status: "read" });
+    expect(getFinding(db, 1)!.decision?.status).toBe("read");
+    expect(getSynthesisFinding(db, 1)!.decision).toBeNull();
   });
 });

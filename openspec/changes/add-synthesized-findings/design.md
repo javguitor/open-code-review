@@ -2,7 +2,7 @@
 
 Today the unit of triage is `review_findings`: one row per entry of `reviewers[].findings[]` (`packages/shared/persistence/src/state/round-meta.ts`), ingested per reviewer output by `packages/dashboard/src/server/services/finding-reconcile.ts`. Decisions (`user_finding_progress`), revisions (`finding_revisions`), verification columns, chat proposals and the `verify <finding-id>` command all hang off `review_findings.id`. Round counts and the verdict after decisions are computed per row (`routes/reviews.ts` `summarizeRound`); `alsoReportedBy` (`client/lib/workbench.ts`) is a title/line heuristic that only links the copies.
 
-The Tech Lead already produces the deduplicated view in Phase 7 (`final.md`, `synthesis_counts`) but does not record which reviewer findings each item merges. Latest migration is 18 (`migrations.ts`), so this change is migration 19.
+The Tech Lead already produces the deduplicated view in Phase 7 (`final.md`, `synthesis_counts`) but does not record which reviewer findings each item merges. Latest migration is 20 (`migrations.ts`), so this change is migration 21.
 
 ## Goals / Non-Goals
 
@@ -123,7 +123,7 @@ For a synthesized finding in round N+1: candidates are the decided synthesized f
 
 ## Migration Plan
 
-1. Ship migration 19 and the validator together; payloads without `synthesis_findings` behave exactly as today.
+1. Ship migration 21 and the validator together; payloads without `synthesis_findings` behave exactly as today.
 2. Ship the skill change; new reviews start emitting `synthesis_findings`.
 3. Rollback: stop emitting `synthesis_findings` from the skill. Existing synthesized rows stay readable; rounds without them are unaffected. The tables are additive, so dropping them is safe if ever needed.
 

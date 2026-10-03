@@ -843,9 +843,11 @@ Synthesis prose follows the configured `language`; headings, labels, verdicts an
 
    Construct the JSON from your **post-synthesis conclusions**, then pipe to the CLI.
 
-   > **CRITICAL — Category reflects synthesis, not original reviewer tags**: The `category` field on each finding must match the final synthesized classification — NOT the category the individual reviewer originally used. If discourse or synthesis promoted a `should_fix` to `blocker` (or demoted a `blocker` to `should_fix`), the JSON you pipe here MUST use the **promoted/demoted category**. The dashboard derives all counts from these categories. If they don't match `final.md`, the dashboard will show wrong numbers.
+   > **CRITICAL — Reviewer findings keep the reviewer's own category**: Each entry of `reviewers[].findings[]` keeps the `category` and `severity` its reviewer assigned. They are provenance: do NOT rewrite them to the synthesized classification. Promotions and demotions (a `should_fix` promoted to `blocker`, a `blocker` demoted to `should_fix`) are expressed only in the `category` and `severity` of the matching entry of `synthesis_findings` (below). The dashboard derives all counts from `synthesis_findings`, so if they don't match `final.md` it will show wrong numbers.
 
-   > **CRITICAL — `synthesis_counts` must match `final.md`**: The `synthesis_counts` object contains the **deduplicated** counts of items in each section of `final.md`. Multiple reviewers often flag the same issue independently, so the per-reviewer findings array will have more entries than `final.md` lists. Count the actual numbered items under each section heading in your synthesized review (`## Blockers`, `## Should Fix`, `## Suggestions`) and set those counts here. The dashboard uses `synthesis_counts` when present, falling back to derived counts only for older reviews.
+   > **CRITICAL — Every `final.md` item is one `synthesis_findings` entry**: Multiple reviewers often flag the same issue independently, so `reviewers[].findings[]` has more entries than `final.md` lists. Emit exactly one `synthesis_findings` entry per item you will list in `final.md` (each numbered item under `## Blockers` and `## Should Fix`, each bullet under `## Suggestions`), and list the reviewer findings it merges as `sources`. `synthesis_counts` (optional) is then the number of entries per category; when you include it, it MUST equal that tally.
+
+   **Assign keys**: number the synthesized findings `S1`, `S2`, ... (unique within the round, pattern `^S[0-9]+$`). Pipe the JSON BEFORE writing `final.md` (this step precedes step 8), so the keys already exist when you write the prose; step 8 writes the same keys next to each item.
 
    > **PR sessions**: add `"head_sha": "<headRefOid>"` (the reviewed commit, from `context.md`) at the top level of the JSON. It is optional and persisted in `round-meta.json`; omit it for non-PR targets.
 
@@ -856,9 +858,27 @@ Synthesis prose follows the configured `language`; headings, labels, verdicts an
      "verdict": "REQUEST CHANGES",
      "synthesis_counts": {
        "blockers": 1,
-       "should_fix": 3,
-       "suggestions": 5
+       "should_fix": 0,
+       "suggestions": 0
      },
+     "synthesis_findings": [
+       {
+         "key": "S1",
+         "title": "SQL Injection in query builder",
+         "category": "blocker",
+         "severity": "high",
+         "locations": [
+           { "file_path": "src/db/query.ts", "line_start": 42, "line_end": 45 }
+         ],
+         "summary": "User input passed directly to raw SQL...",
+         "evidence": "Ran the query with `' OR 1=1 --`; all rows returned.",
+         "flagged_by": ["@principal-1", "@security-1"],
+         "sources": [
+           { "reviewer": "principal-1", "index": 0 },
+           { "reviewer": "security-1", "index": 0 }
+         ]
+       }
+     ],
      "reviewers": [
        {
          "type": "principal",
@@ -880,6 +900,26 @@ Synthesis prose follows the configured `language`; headings, labels, verdicts an
              "evidence": "Ran the query with `' OR 1=1 --`; all rows returned."
            }
          ]
+       },
+       {
+         "type": "security",
+         "instance": 1,
+         "severity_high": 1,
+         "severity_medium": 0,
+         "severity_low": 0,
+         "severity_info": 0,
+         "findings": [
+           {
+             "title": "Unsanitized input reaches raw SQL",
+             "category": "blocker",
+             "severity": "high",
+             "file_path": "src/db/query.ts",
+             "line_start": 42,
+             "line_end": 45,
+             "summary": "The filter value is concatenated into the query string...",
+             "flagged_by": ["@security-1"]
+           }
+         ]
        }
      ]
    }
@@ -887,12 +927,19 @@ Synthesis prose follows the configured `language`; headings, labels, verdicts an
    ```
 
    The CLI will:
-   1. Validate the JSON schema (schema_version, verdict, synthesis_counts, reviewers, findings)
+   1. Validate the JSON schema (schema_version, verdict, synthesis_findings, synthesis_counts, reviewers, findings)
    2. Write `round-meta.json` to `{session_dir}/rounds/round-{n}/round-meta.json`
-   3. Use `synthesis_counts` for dashboard display (falls back to derived counts if absent)
+   3. Count from `synthesis_findings` for dashboard display (falls back to `synthesis_counts`, then to derived counts, for older reviews)
    4. Record a `round_completed` orchestration event in SQLite
 
-   **`synthesis_counts`**: Count the actual numbered items (`### 1.`, `### 2.`, etc.) under each section of `final.md`. This is the **deduplicated** count after merging cross-reviewer duplicates.
+   **`synthesis_counts`**: Optional once `synthesis_findings` is present. It is the **deduplicated** count after merging cross-reviewer duplicates, i.e. the number of `synthesis_findings` per category and the number of tagged items under each section of `final.md`.
+
+   **`synthesis_findings`**: one entry per `final.md` item.
+   - `key`: `S<n>`, unique within the round; the same token goes in `final.md`.
+   - `title`, `category`, `severity`, `summary`: the **post-synthesis** values (same vocabularies and 8-character title floor as reviewer findings). `title`, `summary` and `evidence` are prose and follow the output language.
+   - `locations[]`: optional; the first entry is the primary location (diff marker, previous-round matching). `evidence` and `flagged_by` are optional.
+   - `sources[]`: `{ "reviewer": "<type>-<instance>", "index": <n> }`, where `reviewer` matches an entry of `reviewers[]` (a leading `@` is tolerated) and `index` is the **0-based** position in that reviewer's `findings[]`.
+   - **Complete partition**: every reviewer finding MUST be the source of **exactly one** synthesized finding. A finding you do not want to list still needs an entry (as a `suggestion` or `style`); do not leave reviewer findings uncovered.
 
    **`verdict`** — the **merge gate**, exactly one of three values (uppercase, verbatim): `"APPROVE"` | `"REQUEST CHANGES"` | `"NEEDS DISCUSSION"`. The verdict expresses **one** thing — can this land? — and nothing else. Do **not** invent composite verdicts like `accept_with_followups` or `approve_with_suggestions`: residual work is **not** a gate state. Follow-ups and suggestions are carried by finding `category` and surfaced as counts; an APPROVE with open `should_fix` items is normal and correct. The CLI **rejects** any off-vocabulary verdict (exit 7, writes nothing) so you must re-emit a canonical value.
 
@@ -905,7 +952,7 @@ Synthesis prose follows the configured `language`; headings, labels, verdicts an
 
    > **Do NOT write `round-meta.json` directly** — always pipe through the CLI so the schema is validated and the event is recorded atomically.
 
-   > **The CLI fails fast (exit 7, nothing written) — self-correct and re-pipe** if: the `verdict` is not one of the three canonical values; any finding `title` is shorter than 8 characters (a degenerate title like `"s"` carries no information); a `synthesis_counts` value **exceeds** the number of findings of that category present (you cannot dedup to *more* than you started with — a count ≤ the tally is fine, that's the legitimate cross-reviewer dedup case); or the `verdict` contradicts the deduplicated **blocker count** — `APPROVE` requires **0** blockers and `REQUEST CHANGES` requires **≥ 1** (`NEEDS DISCUSSION` is unconstrained). If nothing is a blocker, use `APPROVE` and carry the work as `should_fix`/`suggestion`; if something must block merge, categorize it `blocker` and use `REQUEST CHANGES`.
+   > **The CLI fails fast (exit 7, nothing written) — self-correct and re-pipe** if: the `verdict` is not one of the three canonical values; any finding `title` is shorter than 8 characters (a degenerate title like `"s"` carries no information); a `synthesis_counts` value **exceeds** the number of findings of that category present (you cannot dedup to *more* than you started with — a count ≤ the tally is fine, that's the legitimate cross-reviewer dedup case); or the `verdict` contradicts the deduplicated **blocker count** — `APPROVE` requires **0** blockers and `REQUEST CHANGES` requires **≥ 1** (`NEEDS DISCUSSION` is unconstrained). If nothing is a blocker, use `APPROVE` and carry the work as `should_fix`/`suggestion`; if something must block merge, categorize it `blocker` and use `REQUEST CHANGES`. When `synthesis_findings` is present the blocker count is the number of synthesized blockers. It also fails (exit 7) for these `synthesis_findings` causes, each naming the offending key or source: a reviewer finding that is the source of **no** synthesized finding (orphan source, e.g. `principal-1[3]`); a reviewer finding that is the source of **more than one** (duplicated source); a source whose `reviewer` or `index` does not exist in `reviewers[]` (unknown reviewer or index); a duplicate or malformed `key`; and a `synthesis_counts` that does not **equal** the synthesized tally (count mismatch; with `synthesis_findings` present the check is equality, not an upper bound). Read the message, correct the payload and pipe it again; this is the same self-correct-and-re-pipe loop as for the other causes.
 
 8. **Write the final review file**:
    ```bash
@@ -914,6 +961,8 @@ Synthesis prose follows the configured `language`; headings, labels, verdicts an
    ```
 
    Save synthesized review to `$FINAL_FILE`.
+
+   Write the **same keys** you piped in step 7: `**ID**: S<n>` under each numbered item of `## Blockers` and `## Should Fix`, and an `[S<n>]` prefix on each bullet of `## Suggestions`. Every item in `final.md` carries exactly one key, and every key appears exactly once.
 
    See `references/final-template.md` for the template format.
 

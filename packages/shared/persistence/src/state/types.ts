@@ -109,6 +109,41 @@ export type SynthesisCounts = {
   suggestions: number;
 };
 
+export type SynthesisLocation = {
+  file_path: string;
+  line_start?: number;
+  line_end?: number;
+};
+
+/** A reviewer finding merged into a synthesized one: `<type>-<instance>` (no `@`) + 0-based index into that reviewer's `findings[]`. */
+export type SynthesisSource = {
+  reviewer: string;
+  index: number;
+};
+
+/**
+ * A deduplicated finding emitted by the Phase 7 synthesis. `category` and
+ * `severity` are the post-synthesis values. `sources` makes the grouping
+ * explicit: with `synthesis_findings` present every reviewer finding is the
+ * source of exactly one item (complete partition).
+ */
+export type SynthesisFinding = {
+  /** Unique within the round, `^S[0-9]+$`; the same token is written in final.md. */
+  key: string;
+  title: string;
+  category: FindingCategory;
+  severity: FindingSeverity;
+  /** First entry is the primary location. */
+  locations?: SynthesisLocation[];
+  summary: string;
+  /** Concrete evidence (trimmed, max 4000 chars). */
+  evidence?: string;
+  /** Reviewer ids that independently raised this finding (non-empty strings, max 20). */
+  flagged_by?: string[];
+  /** Non-empty. */
+  sources: SynthesisSource[];
+};
+
 export type RoundMeta = {
   schema_version: number;
   // The write-boundary verdict is always one of the canonical 3 states —
@@ -120,6 +155,12 @@ export type RoundMeta = {
   reviewers: RoundMetaReviewer[];
   /** Post-synthesis counts matching final.md. Preferred over derived counts. */
   synthesis_counts?: SynthesisCounts;
+  /**
+   * Deduplicated findings with the reviewer findings they merge. When present
+   * it is a complete partition of the reviewer findings and takes precedence
+   * over `synthesis_counts` for every count.
+   */
+  synthesis_findings?: SynthesisFinding[];
   /** Commit the round reviewed (PR targets). */
   head_sha?: string;
 };

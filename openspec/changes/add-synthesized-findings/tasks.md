@@ -1,14 +1,14 @@
 ## 1. Schema and persistence
-- [ ] 1.1 Migration 19 in `packages/shared/persistence/src/db/migrations.ts`: `synthesis_findings`, `synthesis_finding_sources`, `synthesis_finding_decisions`, `synthesis_finding_revisions` (additive, idempotent, no rebuild of existing tables); migration test modelled on `migration-v18.test.ts`, including "an old database keeps all its rows"
-- [ ] 1.2 Make the `db/findings.ts` mutators subject-generic (`{ kind: 'reviewer' | 'synthesis', id }`); keep the current exports as wrappers so existing callers do not change
-- [ ] 1.3 Cover the new tables in `maintenance.ts` (retention never prunes decisions or revisions)
-- [ ] 1.4 Readers: `getSynthesisFinding`, `listSynthesisFindings(roundId)`, `getSources`
+- [x] 1.1 Migration 21 in `packages/shared/persistence/src/db/migrations.ts`: `synthesis_findings`, `synthesis_finding_sources`, `synthesis_finding_decisions`, `synthesis_finding_revisions` (additive, idempotent, no rebuild of existing tables); migration test modelled on `migration-v20.test.ts`, including "an old database keeps all its rows"
+- [x] 1.2 Make the `db/findings.ts` mutators subject-generic (`{ kind: 'reviewer' | 'synthesis', id }`); keep the current exports as wrappers so existing callers do not change
+- [x] 1.3 Cover the new tables in `maintenance.ts` (retention never prunes decisions or revisions)
+- [x] 1.4 Readers: `getSynthesisFinding`, `listSynthesisFindings(roundId)`, `getSources`
 
 ## 2. Round-meta contract
-- [ ] 2.1 `SynthesisFinding` type in `state/types.ts`
-- [ ] 2.2 `validateRoundMeta`: shape, vocabularies, title floor, source resolution, complete-partition rule, `synthesis_counts` equality, verdict/blocker check on synthesized blockers
-- [ ] 2.3 `platform/counts.ts` `resolveRoundCounts`: precedence `synthesis_findings` > `synthesis_counts` > reviewer tally, one shared rule for the CLI writer and the dashboard reader
-- [ ] 2.4 Exit-7 messages name the offending key or source; tests for every rejection and for payloads without `synthesis_findings`
+- [x] 2.1 `SynthesisFinding` type in `state/types.ts`
+- [x] 2.2 `validateRoundMeta`: shape, vocabularies, title floor, source resolution, complete-partition rule, `synthesis_counts` equality, verdict/blocker check on synthesized blockers
+- [x] 2.3 `platform/counts.ts` `resolveRoundCounts`: precedence `synthesis_findings` > `synthesis_counts` > reviewer tally, one shared rule for the CLI writer and the dashboard reader
+- [x] 2.4 Exit-7 messages name the offending key or source; tests for every rejection and for payloads without `synthesis_findings`
 
 ## 3. Ingestion
 - [ ] 3.1 `reconcileFindings` returns row ids by incoming index
@@ -32,8 +32,8 @@
 - [ ] 5.5 i18n `en` and `es` keys; client tests for grouping, counts and legacy rounds
 
 ## 6. Skill
-- [ ] 6.1 Edit the sources in `packages/agents/skills/ocr/references/`: `final-template.md` (ids on items), `workflow.md` Phase 7 (emit `synthesis_findings`, validation list), `language-policy.md` (tokens), `verifier-task.md` (synthesized input)
-- [ ] 6.2 Run `nx run cli:update`; never hand-edit `.ocr/`
+- [x] 6.1 Edit the sources in `packages/agents/skills/ocr/references/`: `final-template.md` (ids on items), `workflow.md` Phase 7 (emit `synthesis_findings`, validation list), `language-policy.md` (tokens), `verifier-task.md` (synthesized input)
+- [x] 6.2 Run `nx run cli:update`; never hand-edit `.ocr/`
 
 ## 7. Gate
 - [ ] 7.1 `nx run-many -t lint test build --skip-nx-cache`

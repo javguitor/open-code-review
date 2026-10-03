@@ -79,6 +79,10 @@ const ORPHAN_SWEEPS: ReadonlyArray<{ table: string; sql: string }> = [
     sql: "DELETE FROM reviewer_outputs WHERE round_id NOT IN (SELECT id FROM review_rounds)",
   },
   {
+    table: "synthesis_findings",
+    sql: "DELETE FROM synthesis_findings WHERE round_id NOT IN (SELECT id FROM review_rounds)",
+  },
+  {
     table: "map_sections",
     sql: "DELETE FROM map_sections WHERE map_run_id NOT IN (SELECT id FROM map_runs)",
   },
@@ -103,6 +107,20 @@ const ORPHAN_SWEEPS: ReadonlyArray<{ table: string; sql: string }> = [
   {
     table: "user_finding_progress",
     sql: "DELETE FROM user_finding_progress WHERE finding_id NOT IN (SELECT id FROM review_findings)",
+  },
+  // Synthesized-finding leaves. Decisions and revisions are only ever removed
+  // here when their finding is already gone (anti-join), never by age or count.
+  {
+    table: "synthesis_finding_sources",
+    sql: "DELETE FROM synthesis_finding_sources WHERE synthesis_finding_id NOT IN (SELECT id FROM synthesis_findings) OR finding_id NOT IN (SELECT id FROM review_findings)",
+  },
+  {
+    table: "synthesis_finding_decisions",
+    sql: "DELETE FROM synthesis_finding_decisions WHERE synthesis_finding_id NOT IN (SELECT id FROM synthesis_findings)",
+  },
+  {
+    table: "synthesis_finding_revisions",
+    sql: "DELETE FROM synthesis_finding_revisions WHERE synthesis_finding_id NOT IN (SELECT id FROM synthesis_findings)",
   },
   {
     table: "user_file_progress",
@@ -621,9 +639,10 @@ function countSessionArtifacts(db: Database, sessionId: string): number {
        (SELECT COUNT(*) FROM review_rounds      WHERE session_id = ?) +
        (SELECT COUNT(*) FROM reviewer_outputs ro JOIN review_rounds rr ON ro.round_id = rr.id WHERE rr.session_id = ?) +
        (SELECT COUNT(*) FROM review_findings rf JOIN reviewer_outputs ro ON rf.reviewer_output_id = ro.id JOIN review_rounds rr ON ro.round_id = rr.id WHERE rr.session_id = ?) +
+       (SELECT COUNT(*) FROM synthesis_findings sf JOIN review_rounds rr ON sf.round_id = rr.id WHERE rr.session_id = ?) +
        (SELECT COUNT(*) FROM map_runs           WHERE session_id = ?) +
        (SELECT COUNT(*) FROM chat_conversations WHERE session_id = ?)`,
-    Array(6).fill(sessionId),
+    Array(7).fill(sessionId),
   );
   const v = r[0]?.values[0]?.[0];
   return typeof v === "number" ? v : Number(v ?? 0);
