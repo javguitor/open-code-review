@@ -3,7 +3,8 @@ import { ArrowLeft, FileSearch, ListChecks, MessageSquare, Terminal } from 'luci
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { normalizeVerdict } from '@open-code-review/platform/verdict'
-import { useSocket, useSocketEvent } from '../../providers/socket-provider'
+import { useSocketEvent } from '../../providers/socket-provider'
+import { useSessionRoom } from '../../hooks/use-session-room'
 import { useSession } from '../sessions/hooks/use-sessions'
 import { RequirementsPanel } from '../requirements/components/requirements-panel'
 import { useRound, useRoundFindings, useArtifact, useUpdateRoundStatus } from './hooks/use-reviews'
@@ -79,12 +80,7 @@ export function RoundPage() {
 
   // Decisions and revisions (from here, the workbench or a chat proposal) emit round:updated.
   const queryClient = useQueryClient()
-  const { joinRoom } = useSocket()
-  useEffect(() => {
-    if (!sessionId) return
-    // Not left on unmount: joining twice is harmless, and another page of the same session may rely on it.
-    joinRoom(sessionId)
-  }, [sessionId, joinRoom])
+  useSessionRoom(sessionId)
   useSocketEvent<{ sessionId: string; roundNumber: number }>('round:updated', (data) => {
     if (data.sessionId !== sessionId || data.roundNumber !== roundNumber) return
     queryClient.invalidateQueries({ queryKey: ['sessions', sessionId, 'rounds', roundNumber] })
@@ -93,7 +89,7 @@ export function RoundPage() {
 
   const proposalFindings = useMemo<ProposalFindingInfo[]>(
     () =>
-      (findings ?? []).map((f) => ({
+      (findings ?? []).filter((f) => !f.retired_at).map((f) => ({
         id: f.id,
         title: f.title,
         severity: f.severity,
@@ -321,7 +317,7 @@ export function RoundPage() {
           a deliberate "clean" outcome rather than a missing section. */}
       <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
         <h2 className="mb-4 text-sm font-medium text-zinc-900 dark:text-zinc-100">
-          {findings ? t('reviews.findings_count', { count: findings.length }) : t('reviews.findings')}
+          {findings ? t('reviews.findings_count', { count: findings.filter((f) => !f.retired_at).length }) : t('reviews.findings')}
         </h2>
         <FindingsTable findings={findings ?? []} isLoading={findingsLoading} />
       </div>

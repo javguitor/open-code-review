@@ -1,4 +1,4 @@
-import { SAME_FINDING_MIN_SIMILARITY, titleSimilarity } from '@open-code-review/persistence/finding-rules'
+import { HINT_MIN_SIMILARITY, titleSimilarity } from '@open-code-review/persistence/finding-rules'
 import type {
   DecisionStatus,
   DiffFile,
@@ -59,8 +59,10 @@ export type FileEntry = {
   status: DiffFileStatus | null
   additions: number
   deletions: number
-  /** Findings in this entry, ordered by line. */
+  /** Findings in this entry, ordered by line (retired ones included, shown greyed). */
   findings: FindingView[]
+  /** Findings still in the synthesis; retired ones are not counted. */
+  activeCount: number
   worst: DecisionStatus | null
   /** True when the entry comes from the saved diff. */
   inDiff: boolean
@@ -105,7 +107,8 @@ export function buildFileEntries(
     extra: Pick<FileEntry, 'status' | 'additions' | 'deletions' | 'inDiff'>,
   ): FileEntry => {
     const sorted = [...list].sort(byLine)
-    return { key: path ?? GENERAL_KEY, path, findings: sorted, worst: worstDecisionState(sorted), ...extra }
+    const active = sorted.filter((f) => !f.retired_at)
+    return { key: path ?? GENERAL_KEY, path, findings: sorted, activeCount: active.length, worst: worstDecisionState(active), ...extra }
   }
 
   for (const file of diffFiles) {
@@ -128,9 +131,9 @@ export function buildFileEntries(
   return entries
 }
 
-/** Finding ids in the order the file list shows them (the order j/k walks). */
+/** Finding ids in the order the file list shows them (the order j/k walks); retired findings are skipped. */
 export function orderedFindingIds(entries: ReadonlyArray<FileEntry>): number[] {
-  return entries.flatMap((e) => e.findings.map((f) => f.id))
+  return entries.flatMap((e) => e.findings.filter((f) => !f.retired_at).map((f) => f.id))
 }
 
 export function rowKey(hunkIndex: number, lineIndex: number): string {
@@ -240,26 +243,38 @@ export function chatPrefillKey(sessionId: string, round: number): string {
 }
 
 /** Same file + this similarity: "the same finding" reported by another reviewer. */
-export const ALSO_REPORTED_MIN_SIMILARITY = SAME_FINDING_MIN_SIMILARITY
+export const ALSO_REPORTED_MIN_SIMILARITY = HINT_MIN_SIMILARITY
 export { titleSimilarity }
 
+type AlsoRow = Pick<FindingView, 'id' | 'title' | 'file_path' | 'line_start' | 'line_end' | 'reviewer_output_id'> & {
+  retired_at?: string | null
+}
+
+function linesOverlap(a: Pick<AlsoRow, 'line_start' | 'line_end'>, b: Pick<AlsoRow, 'line_start' | 'line_end'>): boolean {
+  if (a.line_start == null || b.line_start == null) return false
+  return a.line_start <= (b.line_end ?? b.line_start) && b.line_start <= (a.line_end ?? a.line_start)
+}
+
 /**
- * The other rows of the round that look like the same finding: same file and a
- * similar title. Each reviewer's row is decided separately, so the panel points
- * at the copies. Findings without a file never match.
+ * The other rows of the round that look like the same finding: same file and
+ * either a similar title or an overlapping line range (rephrased titles of one
+ * problem still land on the same lines). Retired rows are history and never
+ * match. Each reviewer's row is decided separately, so the panel points at the
+ * copies. Findings without a file never match.
  */
 export function alsoReportedBy(
-  finding: Pick<FindingView, 'id' | 'title' | 'file_path'>,
-  all: ReadonlyArray<Pick<FindingView, 'id' | 'title' | 'file_path' | 'reviewer_output_id'>>,
-): typeof all[number][] {
+  finding: Pick<AlsoRow, 'id' | 'title' | 'file_path' | 'line_start' | 'line_end'>,
+  all: ReadonlyArray<AlsoRow>,
+): AlsoRow[] {
   if (!finding.file_path) return []
   const path = normalizePath(finding.file_path)
   return all.filter(
     (o) =>
       o.id !== finding.id &&
+      !o.retired_at &&
       !!o.file_path &&
       normalizePath(o.file_path) === path &&
-      titleSimilarity(o.title, finding.title) >= ALSO_REPORTED_MIN_SIMILARITY,
+      (titleSimilarity(o.title, finding.title) >= ALSO_REPORTED_MIN_SIMILARITY || linesOverlap(o, finding)),
   )
 }
 

@@ -10,11 +10,10 @@ import {
   FINDING_CATEGORIES,
   FINDING_SEVERITIES,
 } from '@open-code-review/persistence'
-
-/** Statuses a chat may propose (reading-progress states are not decisions). */
-export const PROPOSAL_STATUSES = ['confirmed', 'dismissed', 'fixed', 'wont_fix'] as const
-
-export const PROPOSAL_MIN_REASON_LENGTH = 20
+import {
+  PROPOSAL_MIN_REASON_LENGTH,
+  PROPOSAL_STATUSES,
+} from '@open-code-review/persistence/finding-rules'
 
 export type Proposal = {
   finding_id: number

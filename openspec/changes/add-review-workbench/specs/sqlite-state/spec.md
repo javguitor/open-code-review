@@ -19,3 +19,11 @@ The database SHALL store who flagged each finding, its evidence, its verificatio
 
 - **WHEN** `complete-round` receives findings with `flagged_by` (array of strings) and/or `evidence` (string)
 - **THEN** they are validated, sanitized and stored on the finding rows; findings without them are still accepted
+
+#### Scenario: Finding retired instead of deleted
+
+- **GIVEN** a finding with a final decision (confirmed, dismissed, fixed, wont_fix) or a severity/category/verification revision
+- **WHEN** a re-ingestion of its round no longer contains it
+- **THEN** the row is kept with `retired_at` set, never re-assigned to another finding, and excluded from counts and the verdict after decisions
+- **AND** a finding without such state is deleted, and a retired finding that reappears gets `retired_at` cleared
+

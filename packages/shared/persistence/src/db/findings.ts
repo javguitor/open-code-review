@@ -9,7 +9,14 @@
 
 import type { Database } from "./engine.js";
 import { resultToRow, resultToRows } from "./result-mapper.js";
-import { DECISION_STATUSES, MIN_DECISION_REASON_LENGTH, reasonProblem } from "../finding-rules.js";
+import {
+  DECISION_STATUSES,
+  FINAL_DECISIONS as FINAL_DECISION_LIST,
+  MIN_DECISION_REASON_LENGTH,
+  PROPOSAL_MIN_REASON_LENGTH,
+  PROPOSAL_STATUSES,
+  reasonProblem,
+} from "../finding-rules.js";
 
 export const FINDING_SEVERITIES = ["critical", "high", "medium", "low", "info"] as const;
 /** `review_findings.category` has no DB CHECK; this mirrors the round-meta vocabulary. */
@@ -29,7 +36,7 @@ export type FindingVerificationStatus = (typeof FINDING_VERIFICATION_STATUSES)[n
 export type FindingRevisionSource = (typeof FINDING_REVISION_SOURCES)[number];
 
 /** Decisions that stamp `decided_at` (the rest are reading-progress states). */
-const FINAL_DECISIONS: ReadonlySet<string> = new Set(["confirmed", "dismissed", "fixed", "wont_fix"]);
+const FINAL_DECISIONS: ReadonlySet<string> = new Set(FINAL_DECISION_LIST);
 
 export type FindingRow = {
   id: number;
@@ -50,6 +57,8 @@ export type FindingRow = {
   verification_note: string | null;
   verified_at: string | null;
   verification_file: string | null;
+  /** Set when the finding left the synthesis but kept a decision/revisions; excluded from counts and verdict. */
+  retired_at: string | null;
   decision: {
     status: FindingDecisionStatus;
     reason: string | null;
@@ -252,7 +261,7 @@ function validDecisionReason(status: FindingDecisionStatus, raw: string | undefi
   return reason;
 }
 
-/** Upsert a decision + revision; no-op when the status is unchanged. */
+/** Upsert a decision + revision; no-op only when both status and reason are unchanged. */
 function decideField(
   db: Database,
   findingId: number,
@@ -263,7 +272,7 @@ function decideField(
 ): void {
   const current = requireFinding(db, findingId);
   const oldStatus = current.decision?.status ?? "unread";
-  if (oldStatus === status) return;
+  if (oldStatus === status && (current.decision?.reason ?? null) === reason) return;
   db.run(
     `INSERT INTO user_finding_progress (finding_id, status, reason, decided_at, updated_at)
      VALUES (?, ?, ?, ${FINAL_DECISIONS.has(status) ? "datetime('now')" : "NULL"}, datetime('now'))
@@ -333,11 +342,14 @@ export type ApplyProposalParams = {
 export function applyProposal(db: Database, p: ApplyProposalParams): FindingRow {
   const severity = p.severity === undefined ? undefined : validRevisionValue("severity", p.severity);
   const category = p.category === undefined ? undefined : validRevisionValue("category", p.category);
-  const status = p.status === undefined ? undefined : oneOf(FINDING_DECISION_STATUSES, p.status, "status");
+  const status = p.status === undefined ? undefined : oneOf(PROPOSAL_STATUSES, p.status, "status");
   if (severity === undefined && category === undefined && status === undefined) {
     throw new FindingError("invalid-value", "A proposal must change at least one of severity, category or status");
   }
   const reason = requireNonEmpty(p.reason, "reason");
+  if (reason.length < PROPOSAL_MIN_REASON_LENGTH) {
+    throw new FindingError("invalid-value", `A proposal reason must be at least ${PROPOSAL_MIN_REASON_LENGTH} characters`);
+  }
   const conversationId = requireNonEmpty(p.conversationId, "conversationId");
   const decisionReason = status === undefined ? null : validDecisionReason(status, reason);
 

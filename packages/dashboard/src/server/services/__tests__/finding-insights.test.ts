@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { classifyFinding, countCurrent, PREVIOUS_ROUND_MIN_SIMILARITY, titleSimilarity, verdictAfterDecisions } from '../finding-insights.js'
+import { classifyFinding, countCurrent, HINT_MIN_SIMILARITY, titleSimilarity, verdictAfterDecisions } from '../finding-insights.js'
 
 const f = (category: string | null, decision_status: string | null = null, severity = 'high', is_blocker = 0) => ({
   category, severity, is_blocker, decision_status,
@@ -50,8 +50,13 @@ describe('countCurrent / verdictAfterDecisions', () => {
     expect(verdictAfterDecisions([f('blocker'), f('should_fix', 'fixed')], 'NEEDS DISCUSSION')).toBe('REQUEST CHANGES')
   })
 
-  it('keeps the synthesis verdict while only should-fix remain', () => {
-    expect(verdictAfterDecisions([f('should_fix')], 'NEEDS DISCUSSION')).toBe('NEEDS DISCUSSION')
+  it('keeps NEEDS DISCUSSION while only should-fix remain, normalizing the raw string', () => {
+    expect(verdictAfterDecisions([f('should_fix'), f('suggestion', 'fixed')], 'NEEDS DISCUSSION')).toBe('NEEDS DISCUSSION')
+    expect(verdictAfterDecisions([f('suggestion', 'fixed')], 'needs discussion')).toBe('NEEDS DISCUSSION')
+  })
+
+  it('blocker dismissed + should-fix open + REQUEST CHANGES -> APPROVE', () => {
+    expect(verdictAfterDecisions([f('blocker', 'dismissed'), f('should_fix')], 'REQUEST CHANGES')).toBe('APPROVE')
   })
 
   it('keeps the synthesis verdict when there are no finding rows', () => {
@@ -78,7 +83,7 @@ describe('countCurrent / verdictAfterDecisions', () => {
   it('matches a title the model rephrased between rounds (same file)', () => {
     const a = 'Cerrar el PR desechable (o protegerlo mientras siga abierto)'
     const b = 'Cerrar o proteger el PR desechable fusionable'
-    expect(titleSimilarity(a, b)).toBeGreaterThanOrEqual(PREVIOUS_ROUND_MIN_SIMILARITY)
-    expect(titleSimilarity(a, 'Missing null check in parser')).toBeLessThan(PREVIOUS_ROUND_MIN_SIMILARITY)
+    expect(titleSimilarity(a, b)).toBeGreaterThanOrEqual(HINT_MIN_SIMILARITY)
+    expect(titleSimilarity(a, 'Missing null check in parser')).toBeLessThan(HINT_MIN_SIMILARITY)
   })
 })

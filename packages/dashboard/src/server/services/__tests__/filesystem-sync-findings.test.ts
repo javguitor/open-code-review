@@ -171,18 +171,40 @@ describe('id-preserving finding ingestion', () => {
     expect(getFinding(db, nitId)).toMatchObject({ severity: 'low' })
   })
 
-  it('re-pairs a decided finding whose title was rephrased (same file) instead of dropping it', async () => {
-    writeMeta([F_VAL])
+  it('retires (keeps) a decided row that left the source and inserts the rephrased finding fresh', async () => {
+    writeMeta([F_SQL])
     await scan()
+    const loginId = findingId('SQL injection in login')
+    setFindingDecision(db, { findingId: loginId, status: 'dismissed', reason: 'parameterized upstream' })
+
+    writeMeta([{ ...F_SQL, title: 'SQL injection in logout' }])
+    await scan()
+
+    const logoutId = findingId('SQL injection in logout')
+    expect(logoutId).not.toBe(loginId)
+    expect(getFinding(db, logoutId)?.decision).toBeNull()
+    expect(getFinding(db, loginId)?.decision?.status).toBe('dismissed')
+    expect(rows(`SELECT id, retired_at FROM review_findings ORDER BY id`).map((r) => r['retired_at'] !== null))
+      .toEqual([true, false])
+  })
+
+  it('read/acknowledged alone do not protect a row; a row that matches again is un-retired', async () => {
+    writeMeta([F_SQL, F_VAL])
+    await scan()
+    const sqlId = findingId('SQL injection in login')
     const valId = findingId('Missing validation on input')
-    setFindingDecision(db, { findingId: valId, status: 'confirmed' })
+    setFindingDecision(db, { findingId: sqlId, status: 'dismissed', reason: 'parameterized upstream' })
+    setFindingDecision(db, { findingId: valId, status: 'read' })
 
-    writeMeta([{ ...F_VAL, title: 'Missing validation of the input', line_start: 99 }])
+    writeMeta([])
     await scan()
+    expect(getFinding(db, valId)).toBeUndefined()
+    expect(rows('SELECT retired_at FROM review_findings WHERE id = ?', [sqlId])[0]?.['retired_at']).not.toBeNull()
 
-    expect(findingId('Missing validation of the input')).toBe(valId)
-    expect(getFinding(db, valId)?.decision?.status).toBe('confirmed')
-    expect(rows('SELECT COUNT(*) AS n FROM review_findings')[0]?.['n']).toBe(1)
+    writeMeta([{ ...F_SQL, file_path: './src/auth.ts' }])
+    await scan()
+    expect(findingId('SQL injection in login')).toBe(sqlId)
+    expect(rows('SELECT retired_at FROM review_findings WHERE id = ?', [sqlId])[0]?.['retired_at']).toBeNull()
   })
 
   it('a severity-only revision does not freeze category/is_blocker, a category revision does', async () => {

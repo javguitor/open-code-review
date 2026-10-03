@@ -122,6 +122,8 @@ export type FindingRow = {
   verification_note: string | null
   verified_at: string | null
   verification_file: string | null
+  /** Set when the finding left the source but kept human history; excluded from counts. */
+  retired_at: string | null
 }
 
 export type ArtifactRow = {
@@ -428,7 +430,7 @@ export function getDecidedFindingsForRound(db: Database, roundId: number): Decid
        FROM user_finding_progress ufp
        JOIN review_findings rf ON rf.id = ufp.finding_id
        JOIN reviewer_outputs ro ON ro.id = rf.reviewer_output_id
-       WHERE ro.round_id = ? AND ufp.decided_at IS NOT NULL
+       WHERE ro.round_id = ? AND ufp.decided_at IS NOT NULL AND rf.retired_at IS NULL
        ORDER BY ufp.decided_at DESC, ufp.id DESC`,
       [roundId]
     )
@@ -798,7 +800,7 @@ export function getStats(db: Database): StatsResult {
         (SELECT COUNT(*) FROM map_files) as total_files_tracked,
         (SELECT COUNT(*) FROM review_findings rf
          LEFT JOIN user_finding_progress ufp ON ufp.finding_id = rf.id
-         WHERE rf.is_blocker = 1
+         WHERE rf.is_blocker = 1 AND rf.retired_at IS NULL
            AND (ufp.status IS NULL OR ufp.status NOT IN (${[...RESOLVED_DECISIONS].map(() => '?').join(', ')}))
         ) as unresolved_blockers`,
       [...RESOLVED_DECISIONS]

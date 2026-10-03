@@ -40,6 +40,7 @@ function finding(over: Partial<FindingView> & { id: number }): FindingView {
     decision: null,
     revision_count: 0,
     previous_round_decision: null,
+    retired_at: null,
     ...over,
   }
 }
@@ -176,10 +177,28 @@ describe('buildFileEntries', () => {
     ])
     expect(orderedFindingIds(entries)).toEqual([3, 2, 1])
   })
+
+  it('keeps retired findings listed but out of navigation, counts and the worst state', () => {
+    const entries = buildFileEntries([], [
+      finding({ id: 1, line_start: 1 }),
+      finding({ id: 2, line_start: 2, retired_at: '2026-01-01' }),
+    ])
+    expect(entries[0]!.findings.map((f) => f.id)).toEqual([1, 2])
+    expect(entries[0]!.activeCount).toBe(1)
+    expect(orderedFindingIds(entries)).toEqual([1])
+    const onlyRetired = buildFileEntries([], [finding({ id: 3, retired_at: '2026-01-01' })])
+    expect(onlyRetired[0]!.worst).toBeNull()
+  })
 })
 
 describe('alsoReportedBy', () => {
-  const row = (id: number, title: string, file_path: string | null, reviewer_output_id = id) => ({ id, title, file_path, reviewer_output_id })
+  const row = (
+    id: number,
+    title: string,
+    file_path: string | null,
+    reviewer_output_id = id,
+    over: { line_start?: number | null; line_end?: number | null; retired_at?: string | null } = {},
+  ) => ({ id, title, file_path, reviewer_output_id, line_start: null, line_end: null, ...over })
 
   it('lists other rows in the same file with a similar title', () => {
     const all = [
@@ -195,6 +214,31 @@ describe('alsoReportedBy', () => {
     const all = [row(1, 'same title here', './src/a.ts'), row(2, 'same title here', 'src/a.ts'), row(3, 'same title here', null)]
     expect(alsoReportedBy(all[0]!, all).map((f) => f.id)).toEqual([2])
     expect(alsoReportedBy(all[2]!, all)).toEqual([])
+  })
+
+  // Two blockers of pr-8 round 1: same file, titles score 0.46, lines 14-27 and 20-27.
+  it('links the pr-8 blockers through the overlapping lines', () => {
+    const file = 'packages/agents/skills/ocr/references/pr-target.md'
+    const all = [
+      row(1, 'pr-target.md pide baseRepository inexistente y resuelve pr:<n> con número desnudo', file, 1, { line_start: 14, line_end: 27 }),
+      row(2, 'pr-target.md pide campo gh inexistente y elige remote a partir de él', file, 2, { line_start: 20, line_end: 27 }),
+    ]
+    expect(titleSimilarity(all[0]!.title, all[1]!.title)).toBeLessThan(0.5)
+    expect(alsoReportedBy(all[0]!, all).map((f) => f.id)).toEqual([2])
+  })
+
+  it('does not link different titles on disjoint lines', () => {
+    const all = [
+      row(1, 'Alpha beta gamma', 'src/a.ts', 1, { line_start: 1, line_end: 5 }),
+      row(2, 'Completely different words', 'src/a.ts', 2, { line_start: 6, line_end: 9 }),
+      row(3, 'Completely different words', 'src/a.ts', 3),
+    ]
+    expect(alsoReportedBy(all[0]!, all)).toEqual([])
+  })
+
+  it('skips retired rows', () => {
+    const all = [row(1, 'same title here', 'src/a.ts'), row(2, 'same title here', 'src/a.ts', 2, { retired_at: '2026-01-01' })]
+    expect(alsoReportedBy(all[0]!, all)).toEqual([])
   })
 })
 

@@ -1216,7 +1216,7 @@ export class FilesystemSync {
         `SELECT COUNT(*) FROM review_findings rf
          JOIN reviewer_outputs ro ON rf.reviewer_output_id = ro.id
          WHERE ro.round_id = (SELECT id FROM review_rounds WHERE session_id = ? AND round_number = ?)
-           AND rf.is_blocker = 1`,
+           AND rf.is_blocker = 1 AND rf.retired_at IS NULL`,
         [sessionId, roundNumber],
       ) as number | null
       if (actualBlockers !== null && actualBlockers !== parsed.blockerCount) {

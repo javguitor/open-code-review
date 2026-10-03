@@ -346,12 +346,13 @@ See `references/context-discovery.md` for detailed algorithm.
 ### Steps
 
 1. Identify the review target:
-   - Staged changes: `git -c core.quotePath=false diff --no-color --src-prefix=a/ --dst-prefix=b/ --cached`
-   - Unstaged changes: `git -c core.quotePath=false diff --no-color --src-prefix=a/ --dst-prefix=b/`
-   - Commit range: `git -c core.quotePath=false diff --no-color --src-prefix=a/ --dst-prefix=b/ {range}`
-   - PR (`pr:<n>` or a PR URL): already resolved in Phase 0 (`references/pr-target.md`); `git -c core.quotePath=false diff --no-color --src-prefix=a/ --dst-prefix=b/ origin/<base>...refs/ocr/pr/<n>` — run in the main checkout
+   **The patch command** (defined once, used for every `diff.patch`): `git -c core.quotePath=false diff --no-color --no-ext-diff --no-textconv --src-prefix=a/ --dst-prefix=b/ <target>`. Its flags neutralise the user's git config (`diff.mnemonicPrefix`, `diff.noprefix`, `color.diff`, `core.quotePath`, `diff.external`, textconv drivers), which would otherwise change the format (`c/`/`i/` prefixes, escape codes, octal-quoted paths, no `diff --git` header) so the dashboard could not match file paths with findings. Never drop a flag.
 
-   Always use the full prefix/quote/color flags above for any diff you save as `diff.patch`: the user's git config (`diff.mnemonicPrefix`, `diff.noprefix`, `color.diff`, `core.quotePath`) would otherwise change the format (`c/`/`i/` prefixes, escape codes, octal-quoted paths) and the dashboard could not match file paths with findings.
+   `<target>` per review target:
+   - Staged changes: `--cached`
+   - Unstaged changes: none
+   - Commit range: `{range}`
+   - PR (`pr:<n>` or a PR URL): already resolved in Phase 0 (`references/pr-target.md`); `origin/<base>...refs/ocr/pr/<n>`, run in the main checkout
 
 2. Gather supporting context:
    ```bash
@@ -374,9 +375,8 @@ See `references/context-discovery.md` for detailed algorithm.
 4. Save the diff to `.ocr/sessions/{id}/rounds/round-{n}/diff.patch` — the exact output of the command from step 1, written verbatim (no filtering, no trimming), so the dashboard can render it:
    ```bash
    mkdir -p ".ocr/sessions/$SESSION_ID/rounds/round-$CURRENT_ROUND"
-   git -c core.quotePath=false diff --no-color --src-prefix=a/ --dst-prefix=b/ --cached > ".ocr/sessions/$SESSION_ID/rounds/round-$CURRENT_ROUND/diff.patch"
-   # Other targets: drop `--cached`, or use `{range}`, or for PRs
-   # `origin/<base>...refs/ocr/pr/<n>` (run in the main checkout) with the same flags
+   <the patch command> --cached > ".ocr/sessions/$SESSION_ID/rounds/round-$CURRENT_ROUND/diff.patch"
+   # Other targets: swap `--cached` for the target listed in step 1
    ```
    Re-reviews write a new `diff.patch` in the new round directory; earlier rounds keep theirs. Do not write the diff to `/tmp`.
 

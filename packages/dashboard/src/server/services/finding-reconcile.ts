@@ -5,11 +5,13 @@
  * (`finding_revisions`), verification and chat proposals, all of which cascade
  * on delete. Re-ingesting a reviewer output (server restart, rescan, mtime
  * drift) must therefore UPDATE rows in place and delete only what disappeared
- * from the source — never delete-and-reinsert.
+ * from the source — never delete-and-reinsert. Human state is never moved to
+ * another finding: a row that left the source but carries a final decision or
+ * revisions is retired (`retired_at`), not reassigned.
  */
 
 import type { Database } from '@open-code-review/persistence'
-import { PREVIOUS_ROUND_MIN_SIMILARITY, titleSimilarity } from './finding-insights.js'
+import { FINAL_DECISIONS } from '@open-code-review/persistence/finding-rules'
 
 export type IncomingFinding = {
   title: string
@@ -33,27 +35,35 @@ type ExistingRow = {
   lineStart: number | null
   revisedSeverity: boolean
   revisedCategory: boolean
-  /** A human decision (status other than `unread`) or any revision hangs off this row. */
-  hasHumanState: boolean
+  /**
+   * A final decision (`FINAL_DECISIONS`) or a non-status revision (severity, category,
+   * verification) hangs off this row. Status revisions are skipped: reading a finding
+   * writes one, and read/acknowledged alone must not protect a row.
+   */
+  hasHistory: boolean
 }
 
 function norm(s: string): string {
   return s.toLowerCase().replace(/\s+/g, ' ').trim()
 }
 
+/** `./src/a.ts` and `src/a.ts` are the same file. */
+const normPath = (p: string | null): string => (p ?? '').replace(/^(\.\/)+/, '')
+
 const strongKey = (title: string, file: string | null, line: number | null): string =>
-  `${norm(title)}|${file ?? ''}|${line ?? ''}`
-const weakKey = (title: string, file: string | null): string => `${norm(title)}|${file ?? ''}`
+  `${norm(title)}|${normPath(file)}|${line ?? ''}`
+const weakKey = (title: string, file: string | null): string => `${norm(title)}|${normPath(file)}`
 
 function loadExisting(db: Database, outputId: number): ExistingRow[] {
   const res = db.exec(
     `SELECT rf.id, rf.title, rf.file_path, rf.line_start,
             EXISTS (SELECT 1 FROM finding_revisions fr WHERE fr.finding_id = rf.id AND fr.field = 'severity'),
             EXISTS (SELECT 1 FROM finding_revisions fr WHERE fr.finding_id = rf.id AND fr.field = 'category'),
-            EXISTS (SELECT 1 FROM finding_revisions fr WHERE fr.finding_id = rf.id)
-              OR EXISTS (SELECT 1 FROM user_finding_progress ufp WHERE ufp.finding_id = rf.id AND ufp.status != 'unread')
+            EXISTS (SELECT 1 FROM finding_revisions fr WHERE fr.finding_id = rf.id AND fr.field != 'status')
+              OR EXISTS (SELECT 1 FROM user_finding_progress ufp
+                         WHERE ufp.finding_id = rf.id AND ufp.status IN (${FINAL_DECISIONS.map(() => '?').join(', ')}))
      FROM review_findings rf WHERE rf.reviewer_output_id = ? ORDER BY rf.id`,
-    [outputId],
+    [...FINAL_DECISIONS, outputId],
   )
   return (res[0]?.values ?? []).map((r) => ({
     id: r[0] as number,
@@ -62,11 +72,14 @@ function loadExisting(db: Database, outputId: number): ExistingRow[] {
     lineStart: r[3] as number | null,
     revisedSeverity: r[4] === 1,
     revisedCategory: r[5] === 1,
-    hasHumanState: r[6] === 1,
+    hasHistory: r[6] === 1,
   }))
 }
 
-/** Pair each incoming finding with an existing row: exact key first, then title+file. */
+/**
+ * Pair each incoming finding with an existing row: exact key first, then title+file.
+ * Deliberately no similarity pass: a rephrased finding is a new finding.
+ */
 function matchRows(existing: ExistingRow[], incoming: IncomingFinding[]): Map<number, ExistingRow> {
   const matches = new Map<number, ExistingRow>()
   const used = new Set<number>()
@@ -87,32 +100,14 @@ function matchRows(existing: ExistingRow[], incoming: IncomingFinding[]): Map<nu
   }
   pass((e) => strongKey(e.title, e.filePath, e.lineStart), (f) => strongKey(f.title, f.filePath, f.lineStart))
   pass((e) => weakKey(e.title, e.filePath), (f) => weakKey(f.title, f.filePath))
-  // Third pass, only for rows carrying a decision/revisions: the source may have
-  // rephrased the title (markdown → round-meta). Same file, similar title.
-  incoming.forEach((f, i) => {
-    if (matches.has(i)) return
-    let best: ExistingRow | undefined
-    let bestScore = PREVIOUS_ROUND_MIN_SIMILARITY
-    for (const e of existing) {
-      if (used.has(e.id) || !e.hasHumanState || e.filePath !== f.filePath) continue
-      const score = titleSimilarity(e.title, f.title)
-      if (score >= bestScore) {
-        best = e
-        bestScore = score
-      }
-    }
-    if (!best) return
-    matches.set(i, best)
-    used.add(best.id)
-  })
   return matches
 }
 
 /**
  * Bring the findings of `outputId` in line with `incoming`: update matched
- * rows, insert new ones, delete the ones that vanished (never one that
- * carries a decision or revisions: that history is the user's, so it is kept). `sqlNow` stamps
- * `parsed_at`. A revised severity is kept; a revised category is kept together
+ * rows (clearing `retired_at`), insert new ones, and for the ones that
+ * vanished: retire those with a final decision or revisions (that history is the
+ * user's), delete the rest. `sqlNow` stamps `parsed_at` / `retired_at`. A revised severity is kept; a revised category is kept together
  * with `is_blocker` (the revised value is current); flagged_by/evidence/verification
  * are only touched when the source provides them.
  */
@@ -140,7 +135,7 @@ export function reconcileFindings(
     }
     db.run(
       `UPDATE review_findings SET
-         title = ?, file_path = ?, line_start = ?, line_end = ?, summary = ?, parsed_at = ?,
+         title = ?, file_path = ?, line_start = ?, line_end = ?, summary = ?, parsed_at = ?, retired_at = NULL,
          severity = CASE WHEN ? THEN severity ELSE ? END,
          category = CASE WHEN ? OR ? IS NULL THEN category ELSE ? END,
          is_blocker = CASE WHEN ? THEN is_blocker ELSE ? END,
@@ -157,6 +152,11 @@ export function reconcileFindings(
 
   const kept = new Set([...matches.values()].map((r) => r.id))
   for (const e of existing) {
-    if (!kept.has(e.id) && !e.hasHumanState) db.run('DELETE FROM review_findings WHERE id = ?', [e.id])
+    if (kept.has(e.id)) continue
+    if (e.hasHistory) {
+      db.run('UPDATE review_findings SET retired_at = COALESCE(retired_at, ?) WHERE id = ?', [sqlNow, e.id])
+    } else {
+      db.run('DELETE FROM review_findings WHERE id = ?', [e.id])
+    }
   }
 }

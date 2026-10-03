@@ -173,9 +173,16 @@ describe("no-op writes", () => {
     setFindingDecision(db, { findingId: 1, status: "unread" });
     expect(getFinding(db, 1)!.decision).toBeNull();
     setFindingDecision(db, { findingId: 1, status: "confirmed" });
-    setFindingDecision(db, { findingId: 1, status: "confirmed", reason: "again" });
+    setFindingDecision(db, { findingId: 1, status: "confirmed" });
     expect(getFindingRevisions(db, 1)).toHaveLength(1);
-    expect(getFinding(db, 1)!.decision!.reason).toBeNull();
+  });
+  it("setFindingDecision with the same status and a new reason updates the reason and writes a revision", () => {
+    setFindingDecision(db, { findingId: 1, status: "confirmed" });
+    const f = setFindingDecision(db, { findingId: 1, status: "confirmed", reason: "again, now with a reason" });
+    expect(f.decision!.reason).toBe("again, now with a reason");
+    const revs = getFindingRevisions(db, 1);
+    expect(revs).toHaveLength(2);
+    expect(revs[1]).toMatchObject({ field: "status", old_value: "confirmed", new_value: "confirmed", reason: "again, now with a reason" });
   });
   it("recordVerification with an identical status, note and file writes nothing", () => {
     recordVerification(db, { findingId: 1, status: "supported", note: "first" });
@@ -203,25 +210,35 @@ describe("applyProposal", () => {
   });
 
   it("skips fields already at the proposed value", () => {
-    applyProposal(db, { findingId: 1, severity: "high", category: "should_fix", reason: "downgrade", conversationId: "c" });
+    applyProposal(db, { findingId: 1, severity: "high", category: "should_fix", reason: "downgrade after rereading the code", conversationId: "c" });
     expect(getFindingRevisions(db, 1).map((r) => r.field)).toEqual(["category"]);
-    applyProposal(db, { findingId: 1, severity: "high", category: "should_fix", reason: "again", conversationId: "c" });
+    applyProposal(db, { findingId: 1, severity: "high", category: "should_fix", reason: "again, after rereading the code", conversationId: "c" });
     expect(getFindingRevisions(db, 1)).toHaveLength(1);
   });
 
   it("validates everything first: nothing is written on a bad field", () => {
-    expect(() => applyProposal(db, { findingId: 1, severity: "low", status: "dismissed", reason: "short", conversationId: "c" })).toThrow(/at least 10/);
-    expect(() => applyProposal(db, { findingId: 1, severity: "huge", reason: "a reason", conversationId: "c" })).toThrow(FindingError);
-    expect(() => applyProposal(db, { findingId: 1, reason: "a reason", conversationId: "c" })).toThrow(/at least one/);
-    expect(() => applyProposal(db, { findingId: 1, severity: "low", reason: "a reason", conversationId: " " })).toThrow(FindingError);
-    expect(() => applyProposal(db, { findingId: 9, severity: "low", reason: "a reason", conversationId: "c" })).toThrow(/not found/);
+    expect(() => applyProposal(db, { findingId: 1, severity: "low", status: "dismissed", reason: "short", conversationId: "c" })).toThrow(/at least 20/);
+    expect(() => applyProposal(db, { findingId: 1, severity: "huge", reason: "a reason that is long enough", conversationId: "c" })).toThrow(FindingError);
+    expect(() => applyProposal(db, { findingId: 1, reason: "a reason that is long enough", conversationId: "c" })).toThrow(/at least one/);
+    expect(() => applyProposal(db, { findingId: 1, severity: "low", reason: "a reason that is long enough", conversationId: " " })).toThrow(FindingError);
+    expect(() => applyProposal(db, { findingId: 9, severity: "low", reason: "a reason that is long enough", conversationId: "c" })).toThrow(/not found/);
     expect(getFinding(db, 1)!.severity).toBe("high");
+    expect(getFindingRevisions(db, 1)).toEqual([]);
+  });
+
+  it("rejects non-proposal statuses, short reasons and blank conversation ids as invalid-value", () => {
+    const base = { findingId: 1, reason: "a reason that is long enough", conversationId: "c" };
+    for (const status of ["unread", "read", "acknowledged"]) {
+      expect(() => applyProposal(db, { ...base, status })).toThrow(expect.objectContaining({ code: "invalid-value" }));
+    }
+    expect(() => applyProposal(db, { ...base, severity: "low", reason: "too short" })).toThrow(expect.objectContaining({ code: "invalid-value" }));
+    expect(() => applyProposal(db, { ...base, severity: "low", conversationId: "  " })).toThrow(expect.objectContaining({ code: "invalid-value" }));
     expect(getFindingRevisions(db, 1)).toEqual([]);
   });
 
   it("rolls back every field when a later write fails", () => {
     db.run("DROP TABLE user_finding_progress");
-    expect(() => applyProposal(db, { findingId: 1, severity: "low", status: "confirmed", reason: "r", conversationId: "c" })).toThrow();
+    expect(() => applyProposal(db, { findingId: 1, severity: "low", status: "confirmed", reason: "a reason that is long enough", conversationId: "c" })).toThrow();
     expect(db.exec("SELECT severity FROM review_findings WHERE id = 1")[0]!.values[0]![0]).toBe("high");
     expect(getFindingRevisions(db, 1)).toEqual([]);
   });

@@ -5,6 +5,14 @@ import { ArrowLeft } from 'lucide-react'
 import { useT } from '../../lib/i18n'
 import { cn } from '../../lib/utils'
 import { useSocket, useSocketEvent } from '../../providers/socket-provider'
+import { useSessionRoom } from '../../hooks/use-session-room'
+import {
+  NO_VERIFICATION_REQUESTS,
+  requestVerification as addRequest,
+  verificationFinished,
+  verificationRefused,
+  verificationStarted,
+} from '../../lib/verification-requests'
 import { useRound } from '../reviews/hooks/use-reviews'
 import type { DecisionStatus, DiffFile, FindingView } from '../../lib/api-types'
 import {
@@ -37,6 +45,11 @@ function Chip({ children }: { children: React.ReactNode }) {
   )
 }
 
+/** First finding still in the synthesis, else the first one (a file whose findings all retired). */
+function firstActive(list: FindingView[] | undefined): FindingView | undefined {
+  return list?.find((f) => !f.retired_at) ?? list?.[0]
+}
+
 function locationOf(f: FindingView): string {
   if (!f.file_path) return ''
   return f.line_start != null ? `${f.file_path}:${f.line_start}` : f.file_path
@@ -59,7 +72,8 @@ export function WorkbenchPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [contextOn, setContextOn] = useState(false)
   const [dialog, setDialog] = useState<Extract<DecisionStatus, 'dismissed' | 'wont_fix'> | null>(null)
-  const [requested, setRequested] = useState<ReadonlySet<number>>(new Set())
+  const [verifications, setVerifications] = useState(NO_VERIFICATION_REQUESTS)
+  useSessionRoom(sessionId)
 
   const refresh = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['sessions', sessionId, 'rounds', roundNumber] })
@@ -71,15 +85,17 @@ export function WorkbenchPage() {
     refresh()
   })
 
-  // A verification run ends with these events, which carry no finding id: reload
-  // and clear every pending request (a failed run must not leave the button locked).
-  useSocketEvent('command:finished', () => {
-    setRequested(new Set())
+  // `verify <id>` runs are matched to their finding by execution id: these events
+  // are global, so another command ending must not release a pending request.
+  useSocketEvent<{ execution_id: number; command: string }>('command:started', (evt) => {
+    setVerifications((s) => verificationStarted(s, evt.execution_id, evt.command))
+  })
+  useSocketEvent<{ execution_id: number }>('command:finished', (evt) => {
+    setVerifications((s) => verificationFinished(s, evt.execution_id))
     refresh()
   })
-  useSocketEvent('command:error', () => {
-    setRequested(new Set())
-    refresh()
+  useSocketEvent<{ error?: string; finding_id?: number }>('command:error', (evt) => {
+    setVerifications((s) => verificationRefused(s, evt.error ?? '', evt.finding_id))
   })
 
   const findings = useMemo(() => findingsQuery.data ?? [], [findingsQuery.data])
@@ -89,7 +105,7 @@ export function WorkbenchPage() {
 
   const entry = entries.find((e) => e.key === selectedKey) ?? entries[0] ?? null
   const selected =
-    findings.find((f) => f.id === selectedId) ?? entry?.findings[0] ?? null
+  findings.find((f) => f.id === selectedId) ?? firstActive(entry?.findings) ?? null
 
   const selectFinding = useCallback(
     (id: number) => {
@@ -102,7 +118,7 @@ export function WorkbenchPage() {
 
   const selectFile = (key: string) => {
     setSelectedKey(key)
-    setSelectedId(entries.find((e) => e.key === key)?.findings[0]?.id ?? null)
+    setSelectedId(firstActive(entries.find((e) => e.key === key)?.findings)?.id ?? null)
   }
 
   // Diff of the selected file: inline when the whole diff came back, on demand when truncated.
@@ -169,7 +185,7 @@ export function WorkbenchPage() {
   const requestVerification = () => {
     if (!selected) return
     socket?.emit('command:run', { command: `verify ${selected.id}` })
-    setRequested((prev) => new Set(prev).add(selected.id))
+    setVerifications((s) => addRequest(s, selected.id))
   }
 
   const ask = () => {
@@ -282,6 +298,7 @@ export function WorkbenchPage() {
                         className={cn(
                           'text-left text-sm hover:underline',
                           f.id === selected?.id ? 'font-semibold text-zinc-900 dark:text-zinc-100' : 'text-zinc-600 dark:text-zinc-400',
+                          f.retired_at && 'opacity-50',
                         )}
                       >
                         {f.line_start != null && <span className="font-mono text-xs">L{f.line_start} </span>}
@@ -311,7 +328,8 @@ export function WorkbenchPage() {
                 alsoReportedBy={alsoReported}
                 onSelectFinding={selectFinding}
                 isDeciding={decide.isPending}
-                verificationRequested={requested.has(selected.id)}
+                verificationRequested={verifications.pending.some((p) => p.findingId === selected.id)}
+                verificationError={verifications.errors[selected.id] ?? null}
                 onConfirm={() => changeDecision('confirmed')}
                 onDismiss={() => openDialog('dismissed')}
                 onFixed={() => changeDecision('fixed')}

@@ -586,6 +586,8 @@ export type FindingView = {
   progress?: FindingProgress | null
   revision_count: number
   previous_round_decision: PreviousRoundDecision | null
+  /** Set when the finding left the synthesis; kept for history and excluded from counts. */
+  retired_at: string | null
 }
 
 export type FindingRevision = {

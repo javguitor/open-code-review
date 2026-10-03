@@ -126,10 +126,17 @@ export function registerCommandHandlers(
       const parts = shellSplit(normalized)
       const baseCommand = parts[0] ?? ''
       const subArgs = parts.slice(1)
+      // A refused `verify <id>` names its finding so the workbench can release
+      // exactly that request (refusals happen before an execution id exists).
+      const verifyFindingId =
+        baseCommand === 'verify' && /^[1-9]\d*$/.test(subArgs[0] ?? '') ? Number(subArgs[0]) : undefined
+      const emitError = (body: Record<string, unknown>): void => {
+        socket.emit('command:error', verifyFindingId === undefined ? body : { ...body, finding_id: verifyFindingId })
+      }
 
       // Validate base command against whitelist (utility + AI)
       if (!ALLOWED_COMMANDS.has(baseCommand) && !AI_COMMANDS.has(baseCommand)) {
-        socket.emit('command:error', {
+        emitError({
           error: `Command "${command}" is not allowed`,
           allowed: [...ALLOWED_COMMANDS, ...AI_COMMANDS].map((c) => `ocr ${c}`),
         })
@@ -139,19 +146,19 @@ export function registerCommandHandlers(
       // `verify` takes exactly one finding id (positive integer) and nothing else.
       const verifyError = baseCommand === 'verify' ? validateVerifyArgs(subArgs) : null
       if (verifyError) {
-        socket.emit('command:error', { error: verifyError })
+        emitError({ error: verifyError })
         return
       }
 
       // Unknown finding id: refuse before an execution row exists.
       if (baseCommand === 'verify' && !getFinding(db, Number(subArgs[0]))) {
-        socket.emit('command:error', { error: `Finding ${subArgs[0]} not found` })
+        emitError({ error: `Finding ${subArgs[0]} not found` })
         return
       }
 
       // Guard AI commands — require an available AI CLI
       if (AI_COMMANDS.has(baseCommand) && !aiCliService.isAvailable()) {
-        socket.emit('command:error', {
+        emitError({
           error: 'No AI CLI available. Install Claude Code or OpenCode to run AI commands from the dashboard.',
         })
         return
@@ -159,7 +166,7 @@ export function registerCommandHandlers(
 
       // Concurrent command guard
       if (activeCommands.size >= MAX_CONCURRENT) {
-        socket.emit('command:error', {
+        emitError({
           error: `Maximum ${MAX_CONCURRENT} concurrent commands allowed`,
           running: Array.from(activeCommands.values()).map((e) => ({
             execution_id: e.executionId,

@@ -143,7 +143,7 @@ describe('round findings view', () => {
     r = (await get('/s1/rounds/1')).body
     expect(r.current_counts.blockers).toBe(1)
     expect(r.open_counts).toEqual({ blockers: 0, should_fix: 1, suggestions: 1 })
-    expect(r.verdict_after_decisions).toBe('REQUEST CHANGES') // synthesis verdict while should-fix remain
+    expect(r.verdict_after_decisions).toBe('APPROVE') // no blocker left; open should-fix is a normal approval
 
     setFindingDecision(db, { findingId: should, status: 'fixed' })
     r = (await get('/s1/rounds/1')).body
@@ -153,6 +153,22 @@ describe('round findings view', () => {
 
     reviseFinding(db, { findingId: blocker, field: 'category', value: 'suggestion', reason: 'downgrade', source: 'user' })
     expect((await get('/s1/rounds/1')).body.current_counts).toEqual({ blockers: 0, should_fix: 1, suggestions: 2 })
+  })
+
+  it('retired findings are returned with retired_at but excluded from counts and the verdict', async () => {
+    const add = insertRound('s1', 1, 'REQUEST CHANGES')
+    const old = add({ title: 'Old blocker no longer reported', severity: 'critical', category: 'blocker' })
+    add({ title: 'Live should-fix item', severity: 'medium', category: 'should_fix' })
+    setFindingDecision(db, { findingId: old, status: 'dismissed', reason: 'not exploitable here' })
+    db.run(`UPDATE review_findings SET retired_at = datetime('now') WHERE id = ?`, [old])
+
+    const r = (await get('/s1/rounds/1')).body
+    expect(r.current_counts).toEqual({ blockers: 0, should_fix: 1, suggestions: 0 })
+    expect(r.open_counts).toEqual({ blockers: 0, should_fix: 1, suggestions: 0 })
+    // the only decision is on a retired row, so it does not count: synthesis stands
+    expect(r.verdict_after_decisions).toBe('REQUEST CHANGES')
+    const list = (await get('/s1/rounds/1/findings')).body
+    expect(list.find((x: any) => x.id === old).retired_at).not.toBeNull()
   })
 
   it('reviewer output endpoint returns the same view', async () => {

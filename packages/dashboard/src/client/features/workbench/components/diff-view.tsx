@@ -46,6 +46,7 @@ export function DiffView({ file, findings, selectedId, onSelect }: DiffViewProps
                   className={cn(
                     'text-left hover:underline',
                     f.id === selectedId ? 'font-semibold text-zinc-900 dark:text-zinc-100' : 'text-zinc-600 dark:text-zinc-400',
+                    f.retired_at && 'opacity-50',
                   )}
                 >
                   {f.line_start != null && <span className="font-mono">L{f.line_start} </span>}
@@ -85,7 +86,7 @@ export function DiffView({ file, findings, selectedId, onSelect }: DiffViewProps
                             title={f.title}
                             aria-label={f.title}
                             onClick={() => onSelect(f.id)}
-                            className={cn(SEVERITY_FLAG[f.severity] ?? SEVERITY_FLAG.info, f.id === selectedId && 'scale-125')}
+                            className={cn(SEVERITY_FLAG[f.severity] ?? SEVERITY_FLAG.info, f.id === selectedId && 'scale-125', f.retired_at && 'opacity-40 grayscale')}
                           >
                             <Flag className="h-3.5 w-3.5" fill="currentColor" />
                           </button>

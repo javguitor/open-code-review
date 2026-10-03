@@ -12,6 +12,8 @@ export type RoundFinding = Finding & {
   synthesis_category?: string | null
   decision?: FindingDecision | null
   revision_count?: number
+  /** Set when the finding left the synthesis; kept for history and excluded from counts. */
+  retired_at?: string | null
 }
 
 export type OpenCounts = { blockers: number; should_fix: number; suggestions: number }

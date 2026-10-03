@@ -76,7 +76,10 @@ export function FindingRow({ finding, onTriageChange }: FindingRowProps) {
         tabIndex={0}
         role="row"
         aria-expanded={expanded}
-        className="cursor-pointer transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+        className={cn(
+          'cursor-pointer transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50',
+          finding.retired_at && 'opacity-50',
+        )}
         onClick={toggle}
         onKeyDown={handleKeyDown}
       >
@@ -114,6 +117,11 @@ export function FindingRow({ finding, onTriageChange }: FindingRowProps) {
         </td>
         <td className="border-b border-zinc-200 px-4 py-2 text-zinc-900 dark:border-zinc-800 dark:text-zinc-100">
           {finding.title}
+          {finding.retired_at && (
+            <span className="ml-2 rounded bg-zinc-200 px-1.5 py-0.5 text-[10px] font-medium text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200">
+              {t('reviews.retired')}
+            </span>
+          )}
         </td>
         <td className="border-b border-zinc-200 px-4 py-2 font-mono text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
           {finding.file_path && config ? (

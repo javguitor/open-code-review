@@ -1,4 +1,5 @@
 import { Check, Ban, MessageSquare, ShieldCheck, Wrench } from 'lucide-react'
+import { cn } from '../../../lib/utils'
 import { useT } from '../../../lib/i18n'
 import { formatDateTime } from '../../../lib/date-utils'
 import { StatusBadge } from '../../../components/ui/status-badge'
@@ -18,6 +19,8 @@ type FindingPanelProps = {
   onSelectFinding: (id: number) => void
   isDeciding: boolean
   verificationRequested: boolean
+  /** Message of the last refused verification request, if any. */
+  verificationError: string | null
   onConfirm: () => void
   onDismiss: () => void
   onFixed: () => void
@@ -82,9 +85,14 @@ export function FindingPanel(props: FindingPanelProps) {
   const revisions = detail?.revisions ?? []
 
   return (
-    <div className="space-y-4 p-4">
+    <div className={cn('space-y-4 p-4', finding.retired_at && 'opacity-70')}>
       <div>
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{finding.title}</h2>
+        {finding.retired_at && (
+          <span className="mt-1 inline-block rounded bg-zinc-200 px-1.5 py-0.5 text-[10px] font-medium text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200">
+            {t('workbench.retired')}
+          </span>
+        )}
         {finding.file_path && (
           <p className="mt-0.5 break-all font-mono text-xs text-zinc-500 dark:text-zinc-400">
             {finding.file_path}
@@ -177,6 +185,11 @@ export function FindingPanel(props: FindingPanelProps) {
           <ShieldCheck className="h-3.5 w-3.5" />
           {t('workbench.request_verification')}
         </button>
+        {props.verificationError && (
+          <p role="alert" className="text-xs text-red-600 dark:text-red-400">
+            {t('workbench.verification_failed', { error: props.verificationError })}
+          </p>
+        )}
         {verificationRequested && (
           <p className="text-xs text-zinc-500 dark:text-zinc-400">{t('workbench.verification_requested')}</p>
         )}

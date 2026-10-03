@@ -43,10 +43,13 @@ export function FileList({ entries, selectedKey, onSelect }: FileListProps) {
                   </span>
                 )}
                 <span>
-                  {t(entry.findings.length === 1 ? 'workbench.file_findings_one' : 'workbench.file_findings_other', {
-                    count: entry.findings.length,
+                  {t(entry.activeCount === 1 ? 'workbench.file_findings_one' : 'workbench.file_findings_other', {
+                    count: entry.activeCount,
                   })}
                 </span>
+                {entry.findings.length > entry.activeCount && (
+                  <span>{t('workbench.file_retired', { count: entry.findings.length - entry.activeCount })}</span>
+                )}
                 {entry.worst && (
                   <span title={t('workbench.worst_state', { state: t(decisionLabelKey(entry.worst)) })}>
                     <StatusBadge variant="default" label={t(decisionLabelKey(entry.worst))} />

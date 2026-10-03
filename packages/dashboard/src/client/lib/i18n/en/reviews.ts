@@ -34,6 +34,7 @@ const reviews = {
   'reviews.reviewers': 'Reviewers',
   'reviews.findings': 'Findings',
   'reviews.findings_count': 'Findings ({count})',
+  'reviews.retired': 'retired (no longer in the synthesis)',
   'reviews.hide_discourse': 'Hide Discourse',
   'reviews.view_discourse': 'View Discourse',
   'reviews.final_review': 'Final Review',

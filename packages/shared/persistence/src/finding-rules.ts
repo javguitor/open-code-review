@@ -42,13 +42,22 @@ export function reasonProblem(
   return trimmed.length < MIN_DECISION_REASON_LENGTH ? "too-short" : null;
 }
 
+/** Decisions that close or settle a finding (they stamp `decided_at`). */
+export const FINAL_DECISIONS = ["confirmed", "dismissed", "fixed", "wont_fix"] as const satisfies readonly DecisionStatus[];
+
+/** Statuses a chat proposal may carry (the chat validator and `applyProposal` agree on this). */
+export const PROPOSAL_STATUSES = ["confirmed", "dismissed", "fixed", "wont_fix"] as const satisfies readonly DecisionStatus[];
+
+/** Minimum trimmed length of the reason attached to a chat proposal. */
+export const PROPOSAL_MIN_REASON_LENGTH = 20;
+
 /**
- * Two findings in the same file whose titles reach this token-Dice similarity
- * are treated as the same problem (previous-round hint, "also reported by",
- * re-matching a decided row). Models rephrase titles between rounds (a real
- * pair scored 0.63), so a strict bar like 0.8 almost never matched.
+ * Token-Dice similarity of two titles in the same file at which they are shown
+ * as related in READ-ONLY hints (previous round, "also reported by"). Lax on
+ * purpose: models rephrase titles between rounds (a real pair scored 0.46).
+ * Never use it to decide a write.
  */
-export const SAME_FINDING_MIN_SIMILARITY = 0.5;
+export const HINT_MIN_SIMILARITY = 0.4;
 
 function titleTokens(title: string): Set<string> {
   return new Set(title.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((t) => t.length > 0));

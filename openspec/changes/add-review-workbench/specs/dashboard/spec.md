@@ -109,3 +109,11 @@ The dashboard SHALL let the user request verification of a finding and show the 
 - **WHEN** the user clicks "Request verification"
 - **THEN** the `verify <finding-id>` command runs as a tracked execution visible in Commands
 - **AND** when it completes, the finding shows `reproduced`, `supported`, `pending` or `dismissed` with the verifier's note and a link to the verification file
+
+#### Scenario: Verdict after decisions
+
+- **GIVEN** a round with a synthesis verdict
+- **WHEN** no finding has a final decision
+- **THEN** the verdict after decisions equals the synthesis verdict
+- **AND** once a final decision exists it is REQUEST CHANGES while any non-retired blocker stays open, otherwise APPROVE, except that NEEDS DISCUSSION is never turned into APPROVE
+

@@ -604,6 +604,17 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 18,
+    description: "Add nullable review_findings.retired_at (finding left the synthesis but kept for history)",
+    // Nullable, no default: NULL = live finding. A retired row has a final
+    // decision or revisions, so it is kept but excluded from counts/verdict.
+    run: (db) => {
+      if (!columnExists(db, "review_findings", "retired_at")) {
+        db.run("ALTER TABLE review_findings ADD COLUMN retired_at TEXT;");
+      }
+    },
+  },
 ];
 
 /** Whether `table` currently has a column named `column` (for idempotent DDL). */

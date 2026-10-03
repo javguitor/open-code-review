@@ -3,18 +3,17 @@
  * round hints), current-value counts and the "verdict after your decisions".
  */
 
+import { normalizeVerdict } from '@open-code-review/platform'
 import {
+  FINAL_DECISIONS,
+  HINT_MIN_SIMILARITY,
   RESOLVED_DECISIONS,
-  SAME_FINDING_MIN_SIMILARITY,
   titleSimilarity,
 } from '@open-code-review/persistence/finding-rules'
 
 const isResolved = (status: string): boolean => (RESOLVED_DECISIONS as readonly string[]).includes(status)
 
-export { titleSimilarity }
-
-/** Same file + this similarity marks "the same finding" in the previous round (read-only hint). */
-export const PREVIOUS_ROUND_MIN_SIMILARITY = SAME_FINDING_MIN_SIMILARITY
+export { titleSimilarity, HINT_MIN_SIMILARITY }
 
 export type FindingClassInput = {
   category: string | null
@@ -55,22 +54,22 @@ export function countCurrent(
 }
 
 /**
- * Recomputes the verdict only once the user has taken a final decision
- * (resolved or confirmed) on some finding; with none, the synthesis verdict
- * stands. After that: REQUEST CHANGES while a blocker remains, APPROVE when no
- * blocker/should-fix remains — except that a `NEEDS DISCUSSION` synthesis is
- * never upgraded to APPROVE (it is not derived from counts).
+ * Recomputes the verdict only once the user has taken a final decision on some
+ * finding; with none, the synthesis verdict stands. After that, the project's
+ * rule: REQUEST CHANGES needs at least one open blocker; otherwise APPROVE
+ * (open should-fix is the normal outcome of an approval), except that a
+ * `NEEDS DISCUSSION` synthesis is kept (it is not derived from counts).
+ * Callers pass only live (non-retired) rows.
  */
 export function verdictAfterDecisions(
   findings: Array<FindingClassInput & { decision_status: string | null }>,
   synthesisVerdict: string | null,
 ): string | null {
   const decided = findings.some(
-    (f) => f.decision_status !== null && (isResolved(f.decision_status) || f.decision_status === 'confirmed'),
+    (f) => f.decision_status !== null && (FINAL_DECISIONS as readonly string[]).includes(f.decision_status),
   )
   if (!decided) return synthesisVerdict
-  const open = countCurrent(findings, true)
-  if (open.blockers > 0) return 'REQUEST CHANGES'
-  if (open.should_fix === 0 && synthesisVerdict !== 'NEEDS DISCUSSION') return 'APPROVE'
-  return synthesisVerdict
+  if (countCurrent(findings, true).blockers > 0) return 'REQUEST CHANGES'
+  const synthesis = synthesisVerdict === null ? null : (normalizeVerdict(synthesisVerdict) ?? synthesisVerdict)
+  return synthesis === 'NEEDS DISCUSSION' ? synthesis : 'APPROVE'
 }

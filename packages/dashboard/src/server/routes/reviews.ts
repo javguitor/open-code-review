@@ -22,7 +22,7 @@ import {
   type ReviewRoundRow,
 } from '../db.js'
 import {
-  PREVIOUS_ROUND_MIN_SIMILARITY,
+  HINT_MIN_SIMILARITY,
   countCurrent,
   titleSimilarity,
   verdictAfterDecisions,
@@ -73,7 +73,7 @@ function buildFindingViews(db: Database, round: ReviewRoundRow, findings: Findin
     const progress = getFindingProgress(db, f.id) ?? null
     const rev = stats.get(f.id)
     const match = prev?.decided.find(
-      (d) => d.file_path === f.file_path && titleSimilarity(d.title, f.title) >= PREVIOUS_ROUND_MIN_SIMILARITY,
+      (d) => d.file_path === f.file_path && titleSimilarity(d.title, f.title) >= HINT_MIN_SIMILARITY,
     )
     return {
       ...f,
@@ -99,7 +99,7 @@ export type RoundVerdictSummary = {
 }
 
 function summarizeRound(round: ReviewRoundRow, views: FindingView[]): RoundVerdictSummary {
-  const input = views.map((v) => ({
+  const input = views.filter((v) => v.retired_at === null).map((v) => ({
     category: v.category,
     severity: v.severity,
     is_blocker: v.is_blocker,

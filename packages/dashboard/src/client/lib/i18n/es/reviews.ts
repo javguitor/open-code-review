@@ -34,6 +34,7 @@ const reviews = {
   'reviews.reviewers': 'Revisores',
   'reviews.findings': 'Hallazgos',
   'reviews.findings_count': 'Hallazgos ({count})',
+  'reviews.retired': 'retirado (ya no está en la síntesis)',
   'reviews.hide_discourse': 'Ocultar discusión',
   'reviews.view_discourse': 'Ver discusión',
   'reviews.final_review': 'Revisión final',
