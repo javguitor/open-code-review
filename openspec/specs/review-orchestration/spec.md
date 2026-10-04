@@ -464,7 +464,7 @@ The system SHALL NOT introduce a Phase 4 process orchestrator that spawns review
 
 ### Requirement: Reviewers Run on Hosts Without a Sub-Agent Primitive
 
-Phase 4 SHALL be expressed host-neutrally so that a review runs on any supported AI CLI. When the host CLI can spawn sub-agents (e.g. Claude Code's Task tool, OpenCode's sub-agent primitive), reviewers MAY be spawned in parallel. When the host CLI has no sub-agent primitive (e.g. Gemini CLI, Codex), the orchestrator SHALL run each reviewer sequentially as a fresh analytical pass within its own conversation. Both strategies SHALL journal each instance's **liveness** identically via the `ocr session` command family (`start-instance` / `beat` / `end-instance`). Binding a vendor session id (`bind-vendor-id`) is reserved for spawned sub-agents that each own a distinct host session; sequential reviewers share the one parent conversation and SHALL NOT bind a per-reviewer vendor session id. The skill instructions SHALL NOT assume a Claude-style Task tool exists.
+Phase 4 SHALL be expressed host-neutrally so that a review runs on any supported AI CLI. When the host CLI can spawn sub-agents (e.g. Claude Code's Task tool, OpenCode's sub-agent primitive, Codex's `spawn_agent`), reviewers MAY be spawned in parallel. When the host CLI has no sub-agent primitive (e.g. Gemini CLI), the orchestrator SHALL run each reviewer sequentially as a fresh analytical pass within its own conversation. Both strategies SHALL journal each instance's **liveness** identically via the `ocr session` command family (`start-instance` / `beat` / `end-instance`). Binding a vendor session id (`bind-vendor-id`) is reserved for spawned sub-agents that each own a distinct host session; sequential reviewers share the one parent conversation and SHALL NOT bind a per-reviewer vendor session id. The skill instructions SHALL NOT assume a Claude-style Task tool exists.
 
 #### Scenario: Host with a sub-agent primitive
 
@@ -474,7 +474,7 @@ Phase 4 SHALL be expressed host-neutrally so that a review runs on any supported
 
 #### Scenario: Host without a sub-agent primitive
 
-- **GIVEN** a host CLI with no Task/sub-agent primitive (e.g. Gemini CLI, Codex)
+- **GIVEN** a host CLI with no Task/sub-agent primitive (e.g. Gemini CLI)
 - **WHEN** Phase 4 runs
 - **THEN** the orchestrator SHALL run each resolved reviewer instance sequentially as a fresh pass in the same conversation
 - **AND** each instance SHALL be journaled for liveness via `ocr session start-instance` / `beat` / `end-instance`
