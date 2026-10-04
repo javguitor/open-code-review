@@ -1,5 +1,6 @@
 import type { MessageKey } from './i18n'
 import type {
+  AiCliPreference,
   ConfigPatchBody,
   ConfigSettings,
   PostWorktreeOutcome,
@@ -9,6 +10,7 @@ import type {
 
 export const CLEANUP_MODES: readonly WorktreeCleanup[] = ['keep', 'on-close', 'after-post']
 export const LANGUAGES = ['en', 'es'] as const
+export const AI_CLI_OPTIONS: readonly AiCliPreference[] = ['auto', 'claude', 'codex', 'opencode', 'off']
 
 export type SettingsForm = {
   dir: string
@@ -16,8 +18,9 @@ export type SettingsForm = {
   language: string
   /** '' = same as the interface language. */
   postingLanguage: string
+  aiCli: string
 }
-export type SettingsField = 'worktrees.dir' | 'worktrees.cleanup' | 'language' | 'posting.language'
+export type SettingsField = 'worktrees.dir' | 'worktrees.cleanup' | 'language' | 'posting.language' | 'dashboard.ai_cli'
 export type SettingsErrors = Partial<Record<SettingsField, MessageKey>>
 
 /**
@@ -50,6 +53,10 @@ export function buildSettingsPatch(
 
   const postingLanguage = form.postingLanguage.trim()
   if (postingLanguage !== (current.posting_language ?? '')) patch.posting = { language: postingLanguage }
+
+  if (form.aiCli !== current.ai_cli && (AI_CLI_OPTIONS as readonly string[]).includes(form.aiCli)) {
+    patch.dashboard = { ai_cli: form.aiCli as AiCliPreference }
+  }
 
   if (Object.keys(worktrees).length > 0) patch.worktrees = worktrees
   return { patch, errors }

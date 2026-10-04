@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Check, Loader2, X } from 'lucide-react'
 import { cn, IDE_TYPES, type IdeType } from '../../lib/utils'
 import { useT, type MessageKey } from '../../lib/i18n'
-import { CLEANUP_MODES, LANGUAGES, buildSettingsPatch, type SettingsErrors, type SettingsField, type SettingsForm } from '../../lib/worktree-ui'
+import { AI_CLI_OPTIONS, CLEANUP_MODES, LANGUAGES, buildSettingsPatch, type SettingsErrors, type SettingsField, type SettingsForm } from '../../lib/worktree-ui'
 import { ThemeSection } from './theme-section'
 import { useConfigSettings, usePatchConfig, usePatchIde } from './hooks/use-config-settings'
 
@@ -25,14 +25,14 @@ export function SettingsPage() {
   const { data, isLoading } = useConfigSettings()
   const patchConfig = usePatchConfig()
   const patchIde = usePatchIde()
-  const [form, setForm] = useState<SettingsForm>({ dir: '', cleanup: 'keep', language: 'en', postingLanguage: '' })
+  const [form, setForm] = useState<SettingsForm>({ dir: '', cleanup: 'keep', language: 'en', postingLanguage: '', aiCli: 'auto' })
   const [errors, setErrors] = useState<SettingsErrors>({})
   const [serverError, setServerError] = useState<{ key?: string; message: string } | null>(null)
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     if (data) {
-      setForm({ dir: data.worktrees.dir_raw ?? '', cleanup: data.worktrees.cleanup, language: data.language, postingLanguage: data.posting_language ?? '' })
+      setForm({ dir: data.worktrees.dir_raw ?? '', cleanup: data.worktrees.cleanup, language: data.language, postingLanguage: data.posting_language ?? '', aiCli: data.ai_cli })
     }
   }, [data])
 
@@ -171,6 +171,34 @@ export function SettingsPage() {
         </select>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">{t('settings.posting_language_hint')}</p>
         <FieldError message={errorFor('posting.language')} />
+      </section>
+
+      <section className={SECTION_CLASS}>
+        <label htmlFor="settings-ai-cli" className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
+          {t('settings.ai_cli')}
+        </label>
+        <select
+          id="settings-ai-cli"
+          value={form.aiCli}
+          onChange={(e) => update({ aiCli: e.target.value })}
+          className={cn(INPUT_CLASS, 'w-auto')}
+        >
+          {AI_CLI_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {t(`settings.ai_cli_${option}` as MessageKey)}
+              {option !== 'auto' && option !== 'off' && !data.aiCli.available.includes(option)
+                ? ` (${t('settings.ai_cli_not_installed')})`
+                : ''}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          {data.aiCli.active
+            ? t('settings.ai_cli_active', { name: data.aiCli.active })
+            : t('settings.ai_cli_none')}
+        </p>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">{t('settings.ai_cli_hint')}</p>
+        <FieldError message={errorFor('dashboard.ai_cli')} />
       </section>
 
       <ThemeSection className={SECTION_CLASS} />

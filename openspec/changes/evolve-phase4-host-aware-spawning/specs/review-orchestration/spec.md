@@ -7,7 +7,7 @@
 
 ### Requirement: Phase 4 Spawning Is Host-Capability-Driven
 
-Phase 4 reviewer instantiation SHALL be selected by host capability, not hardcoded to a single mechanism. For a host whose adapter reports `supportsSubagentSpawn = true` (e.g. Claude Code, OpenCode), OCR SHALL NOT fork reviewer processes from its own command-runner — the host AI CLI spawns sub-agents using its own per-task primitive. For a host whose adapter reports `supportsSubagentSpawn = false` (e.g. Gemini CLI, Codex), OCR's command-runner MAY orchestrate Phase 4 by spawning one child CLI per reviewer instance via `adapter.spawnReviewer`, each with its own resolved `--model`. Regardless of strategy, every instance SHALL be journaled identically through the `ocr session` command family, so downstream consumers cannot distinguish the strategies.
+Phase 4 reviewer instantiation SHALL be selected by host capability, not hardcoded to a single mechanism. For a host whose adapter reports `supportsSubagentSpawn = true` (e.g. Claude Code, OpenCode), OCR SHALL NOT fork reviewer processes from its own command-runner — the host AI CLI spawns sub-agents using its own per-task primitive. For a host whose adapter reports `supportsSubagentSpawn = false` (e.g. Gemini CLI), OCR's command-runner MAY orchestrate Phase 4 by spawning one child CLI per reviewer instance via `adapter.spawnReviewer`, each with its own resolved `--model`. Regardless of strategy, every instance SHALL be journaled identically through the `ocr session` command family, so downstream consumers cannot distinguish the strategies.
 
 #### Scenario: Host that can self-spawn is not forked by OCR
 

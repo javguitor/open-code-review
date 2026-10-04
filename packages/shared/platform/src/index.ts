@@ -323,9 +323,13 @@ const HOST_CAPABILITIES: Record<string, HostCapabilities> = {
   claude: { subagentSpawn: true, perTaskModel: true },
   // OpenCode: `--agent` sub-agent primitive, but no per-task model override.
   opencode: { subagentSpawn: true, perTaskModel: false },
-  // Gemini CLI / Codex: no in-agent Task primitive → sequential Phase 4.
+  // Codex (verified on codex-cli 0.159.3): the `multi_agent` feature is
+  // stable and enabled; the model spawns sub-agents via `spawn_agent` (JSONL
+  // `collab_tool_call` items) and its tool description allows setting
+  // `model` per sub-agent.
+  codex: { subagentSpawn: true, perTaskModel: true },
+  // Gemini CLI: no in-agent Task primitive → sequential Phase 4.
   gemini: { subagentSpawn: false, perTaskModel: false },
-  codex: { subagentSpawn: false, perTaskModel: false },
 };
 
 /**

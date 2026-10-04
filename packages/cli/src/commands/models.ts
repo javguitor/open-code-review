@@ -52,7 +52,7 @@ const listSubcommand = new Command("list")
         }
         console.error(
           chalk.yellow(
-            "No supported AI CLI detected on PATH. Install Claude Code or OpenCode, or pass --vendor explicitly.",
+            "No supported AI CLI detected on PATH. Install Claude Code, Codex or OpenCode, or pass --vendor explicitly.",
           ),
         );
         process.exit(1);

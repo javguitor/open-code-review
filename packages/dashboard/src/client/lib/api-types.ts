@@ -492,6 +492,8 @@ export type PostPreviewResult = {
   hasHuman: boolean
 }
 
+export type AiCliPreference = 'auto' | 'claude' | 'codex' | 'opencode' | 'off'
+
 export type WorktreeCleanup = 'keep' | 'on-close' | 'after-post'
 
 /** Allow-listed settings of `GET`/`PATCH /api/config` (GET also returns project/IDE/AI CLI fields). */
@@ -507,6 +509,10 @@ export type ConfigSettings = {
   language: string
   /** `posting.language` as written in config.yaml; null when unset (same as `language`). */
   posting_language: string | null
+  /** `dashboard.ai_cli` as configured (raw preference). */
+  ai_cli: AiCliPreference
+  /** Installed AI CLI binaries, the active one (null = read-only), and the preference. */
+  aiCli: { available: string[]; active: string | null; preferred: string }
   /** Editor that finding links open (`dashboard.ide`, else detected). */
   ide: IdeType
   integrations: { clickup_token: 'configured' | 'missing' }
@@ -517,6 +523,7 @@ export type ConfigPatchBody = {
   worktrees?: { dir?: string; cleanup?: WorktreeCleanup }
   language?: string
   posting?: { language: string }
+  dashboard?: { ai_cli: AiCliPreference }
 }
 
 /** `GET /api/sessions/:id/worktree` (404 for non-PR sessions). */
@@ -552,7 +559,7 @@ export type PostWorktreeOutcome =
   | 'none'
 
 /** Server `chat:notice` payload. */
-export type ChatNotice = { conversationId: string; sessionId: string; code: 'worktree-missing' | 'worktree-unknown' }
+export type ChatNotice = { conversationId: string; sessionId: string; code: 'worktree-missing' | 'worktree-unknown' | 'provider-changed' }
 
 // ── Review workbench ──
 

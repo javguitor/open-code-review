@@ -204,7 +204,7 @@ export function registerCommandHandlers(
       // Guard AI commands — require an available AI CLI
       if (AI_COMMANDS.has(baseCommand) && !aiCliService.isAvailable()) {
         emitError({
-          error: 'No AI CLI available. Install Claude Code or OpenCode to run AI commands from the dashboard.',
+          error: 'No AI CLI available. Install Claude Code, Codex or OpenCode to run AI commands from the dashboard.',
         })
         return
       }
@@ -424,6 +424,18 @@ function spawnCliCommand(
 // ── AI workflow command spawn (adapter strategy) ──
 
 /** Session/round of the finding a `verify` run targets (undefined for other commands / unknown ids). */
+/**
+ * Shown when `--resume` targets a workflow captured on another vendor: a vendor
+ * session id only means something to the CLI that minted it, so the run starts fresh.
+ */
+export function vendorMismatchNotice(workflowId: string, capturedVendor: string, activeVendor: string): string {
+  return (
+    `⚠ Cannot resume workflow ${workflowId}: it ran on ${capturedVendor}, ` +
+    `but the active AI provider is ${activeVendor}.\n` +
+    `  Starting a fresh conversation. Switch the provider back to ${capturedVendor} to resume it.\n`
+  )
+}
+
 export function verifyTargetOf(
   db: Database,
   baseCommand: string,
@@ -543,7 +555,12 @@ function spawnAiCommand(
   if (resumeWorkflowId) {
     try {
       const outcome = sessionCapture.resolveResumeContext(resumeWorkflowId)
-      if (outcome.kind === 'resumable') {
+      if (outcome.kind === 'resumable' && outcome.vendor !== adapter.binary) {
+        io.emit('command:output', {
+          execution_id: executionId,
+          content: vendorMismatchNotice(resumeWorkflowId, outcome.vendor, adapter.binary),
+        })
+      } else if (outcome.kind === 'resumable') {
         resumeSessionId = outcome.vendorSessionId
         io.emit('command:output', {
           execution_id: executionId,
@@ -603,6 +620,7 @@ function spawnAiCommand(
     mode: 'workflow'
     prompt: string
     cwd: string
+    ocrDir: string
     resumeSessionId?: string
     env?: Record<string, string>
     logFile?: string
@@ -610,6 +628,7 @@ function spawnAiCommand(
     mode: 'workflow',
     prompt,
     cwd: repoRoot,
+    ocrDir,
     env: { OCR_DASHBOARD_EXECUTION_UID: entry.uid },
   }
   if (resumeSessionId) {

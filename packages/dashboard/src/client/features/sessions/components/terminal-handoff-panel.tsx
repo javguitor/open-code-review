@@ -16,6 +16,7 @@ type TerminalHandoffPanelProps = {
 
 const VENDOR_LABELS: Record<string, string> = {
   claude: 'Claude Code',
+  codex: 'Codex',
   opencode: 'OpenCode',
   gemini: 'Gemini CLI',
 }

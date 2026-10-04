@@ -113,9 +113,10 @@ do not split the spec yourself.
 depends on whether your host's agent runtime has an **in-agent sub-agent primitive**.
 Choose the strategy your environment supports — if unsure, run `ocr host capabilities
 --tool <your-host-id> --json` and read `subagentSpawn`:
-- **`subagentSpawn: true`** (e.g. Claude Code's Task tool; OpenCode's `--agent` flag):
+- **`subagentSpawn: true`** (e.g. Claude Code's Task tool; OpenCode's `--agent` flag; Codex's
+  `spawn_agent`):
   spawn one isolated sub-agent per instance, in parallel.
-- **`subagentSpawn: false`** (e.g. Gemini CLI, Codex): run each reviewer **sequentially**,
+- **`subagentSpawn: false`** (e.g. Gemini CLI): run each reviewer **sequentially**,
   one at a time, using the reviewer-task template. See `references/workflow.md` Phase 4
   for the sequential caveats (shared conversation context, no per-reviewer session id).
 

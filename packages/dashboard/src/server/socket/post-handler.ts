@@ -382,7 +382,7 @@ export function registerPostHandlers(
       const adapter = aiCliService.getAdapter()
       if (!adapter) {
         socket.emit('post:error', {
-          error: 'No AI CLI available. Install Claude Code or OpenCode to generate human reviews.',
+          error: 'No AI CLI available. Install Claude Code, Codex or OpenCode to generate human reviews.',
         })
         return
       }

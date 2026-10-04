@@ -12,7 +12,7 @@ describe("host capabilities (issue #28)", () => {
     expect(getHostCapabilities("claude")).toEqual({ subagentSpawn: true, perTaskModel: true });
     expect(getHostCapabilities("opencode")).toEqual({ subagentSpawn: true, perTaskModel: false });
     expect(getHostCapabilities("gemini")).toEqual({ subagentSpawn: false, perTaskModel: false });
-    expect(getHostCapabilities("codex")).toEqual({ subagentSpawn: false, perTaskModel: false });
+    expect(getHostCapabilities("codex")).toEqual({ subagentSpawn: true, perTaskModel: true });
   });
 
   it("falls back to the conservative default for editor hosts (no Task tool assumed)", () => {

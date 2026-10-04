@@ -1,6 +1,6 @@
 /**
  * Comment-preserving writer for an allow-listed set of `.ocr/config.yaml`
- * keys (`worktrees.dir`, `worktrees.cleanup`, `language`, `posting.language`).
+ * keys (`worktrees.dir`, `worktrees.cleanup`, `language`, `posting.language`, `dashboard.ai_cli`).
  *
  * The edit is a text splice, not `doc.toString()`: the YAML parser only
  * locates the value (or the end of the parent block) and everything else in
@@ -15,6 +15,7 @@ import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "nod
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { isMap, isScalar, parseDocument, stringify, type Pair } from "yaml";
+import { AI_CLI_PREFERENCES, type AiCliPreference } from "./dashboard-config.js";
 import { LANGUAGE_TAG } from "./language-config.js";
 import { WORKTREE_CLEANUP_MODES, type WorktreeCleanup } from "./worktree-config.js";
 
@@ -23,6 +24,7 @@ export type ConfigPatch = {
   "worktrees.cleanup"?: WorktreeCleanup;
   language?: string;
   "posting.language"?: string;
+  "dashboard.ai_cli"?: AiCliPreference;
 };
 
 /** Thrown for a rejected key/value or an unparseable file; `key` names the offender. */
@@ -41,6 +43,7 @@ const KEY_PATHS: Record<keyof ConfigPatch, string[]> = {
   "worktrees.cleanup": ["worktrees", "cleanup"],
   language: ["language"],
   "posting.language": ["posting", "language"],
+  "dashboard.ai_cli": ["dashboard", "ai_cli"],
 };
 
 function validate(key: keyof ConfigPatch, value: unknown): string {
@@ -59,6 +62,9 @@ function validate(key: keyof ConfigPatch, value: unknown): string {
   }
   if (key === "worktrees.cleanup" && !WORKTREE_CLEANUP_MODES.some((m) => m === v)) {
     throw new ConfigWriteError(key, `must be one of ${WORKTREE_CLEANUP_MODES.join(", ")}`);
+  }
+  if (key === "dashboard.ai_cli" && !AI_CLI_PREFERENCES.some((m) => m === v)) {
+    throw new ConfigWriteError(key, `must be one of ${AI_CLI_PREFERENCES.join(", ")}`);
   }
   return v;
 }

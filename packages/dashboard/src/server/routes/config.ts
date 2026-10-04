@@ -6,11 +6,13 @@ import { Router } from 'express'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { execBinary } from '@open-code-review/platform'
 import { getOutputLanguage, getPostingLanguageRaw } from '@open-code-review/config/language-config'
+import { readDashboardConfig, type AiCliPreference } from '@open-code-review/config/dashboard-config'
 import { getWorktreeConfig } from '@open-code-review/config/worktree-config'
 import { ConfigWriteError, setConfigValues, type ConfigPatch } from '@open-code-review/config/config-writer'
 import { childEnv } from '../child-env.js'
 import { join, dirname, basename } from 'node:path'
 import type { AiCliService } from '../services/ai-cli/index.js'
+import type { AiCliStatus } from '../services/ai-cli/types.js'
 import type { WorktreeCleanup } from '@open-code-review/config/worktree-config'
 
 const VALID_IDES = ['vscode', 'cursor', 'windsurf', 'jetbrains', 'sublime', 'zed'] as const
@@ -84,15 +86,21 @@ type ConfigSettings = {
   worktrees: { dir: string; dir_raw: string | null; exists: boolean; cleanup: WorktreeCleanup }
   language: string
   posting_language: string | null
+  /** `dashboard.ai_cli` as configured (raw preference, not the resolved vendor). */
+  ai_cli: AiCliPreference
+  /** Installed / active / preferred AI CLIs — `active` is what the preference resolved to. */
+  aiCli: AiCliStatus
 }
 
 /** The allow-listed settings, resolved (absolute dir, existence, effective cleanup). */
-function resolvedSettings(ocrDir: string): ConfigSettings {
+function resolvedSettings(ocrDir: string, aiCliService: AiCliService): ConfigSettings {
   const { dir, dirRaw, cleanup } = getWorktreeConfig(ocrDir)
   return {
     worktrees: { dir, dir_raw: dirRaw, exists: existsSync(dir), cleanup },
     language: getOutputLanguage(ocrDir),
     posting_language: getPostingLanguageRaw(ocrDir),
+    ai_cli: readDashboardConfig(ocrDir).aiCli,
+    aiCli: aiCliService.getStatus(),
   }
 }
 
@@ -108,6 +116,8 @@ function toConfigPatch(body: unknown): ConfigPatch {
       for (const [sub, v] of Object.entries(value)) patch[`worktrees.${sub}`] = v
     } else if (key === 'posting' && isObject(value)) {
       for (const [sub, v] of Object.entries(value)) patch[`posting.${sub}`] = v
+    } else if (key === 'dashboard' && isObject(value)) {
+      for (const [sub, v] of Object.entries(value)) patch[`dashboard.${sub}`] = v
     } else throw new ConfigWriteError(key, 'unknown or invalid config key')
   }
   return patch as ConfigPatch
@@ -125,10 +135,9 @@ export function createConfigRouter(ocrDir: string, aiCliService: AiCliService): 
       ide: resolveIde(ocrDir),
       workspaceName,
       gitBranch,
-      aiCli: aiCliService.getStatus(),
       // Presence only; the value never leaves the server.
       integrations: { clickup_token: childEnv().env['CLICKUP_API_TOKEN'] ? 'configured' : 'missing' },
-      ...resolvedSettings(ocrDir),
+      ...resolvedSettings(ocrDir, aiCliService),
     })
   })
 
@@ -137,7 +146,10 @@ export function createConfigRouter(ocrDir: string, aiCliService: AiCliService): 
     try {
       const patch = toConfigPatch(req.body)
       if (Object.keys(patch).length > 0) setConfigValues(ocrDir, patch)
-      res.json(resolvedSettings(ocrDir))
+      // Re-select the active adapter now so the new vendor applies without a restart.
+      // Apply what the writer persisted (it trims), not the raw body value, so file and service agree.
+      if (patch['dashboard.ai_cli']) aiCliService.setPreference(readDashboardConfig(ocrDir).aiCli)
+      res.json(resolvedSettings(ocrDir, aiCliService))
     } catch (err) {
       if (err instanceof ConfigWriteError) {
         res.status(400).json({ error: err.message, key: err.key })

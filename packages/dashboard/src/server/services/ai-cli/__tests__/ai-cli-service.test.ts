@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AiCliService, ClaudeCodeAdapter, OpenCodeAdapter } from '../index.js'
+import { AiCliService, ClaudeCodeAdapter, CodexAdapter, OpenCodeAdapter } from '../index.js'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -13,6 +13,7 @@ describe('AiCliService', () => {
   it('uses a supplied startup preference without rereading project config', () => {
     vi.spyOn(ClaudeCodeAdapter.prototype, 'detect').mockReturnValue({ found: false })
     vi.spyOn(OpenCodeAdapter.prototype, 'detect').mockReturnValue({ found: false })
+    vi.spyOn(CodexAdapter.prototype, 'detect').mockReturnValue({ found: false })
 
     const service = new AiCliService('/nonexistent/.ocr', 'off')
 
@@ -22,6 +23,7 @@ describe('AiCliService', () => {
   it('falls back to reading config when no preference is supplied', () => {
     vi.spyOn(ClaudeCodeAdapter.prototype, 'detect').mockReturnValue({ found: false })
     vi.spyOn(OpenCodeAdapter.prototype, 'detect').mockReturnValue({ found: false })
+    vi.spyOn(CodexAdapter.prototype, 'detect').mockReturnValue({ found: false })
 
     // Nonexistent dir → shared config layer returns the 'auto' default.
     const service = new AiCliService('/nonexistent/.ocr')

@@ -18,6 +18,7 @@ import {
   detectActiveVendor,
   isModelVendor,
   listModelsForVendor,
+  parseCodexModelCatalog,
   parseOpenCodeModelList,
   SUPPORTED_VENDORS,
   VENDOR_MODEL_STRATEGIES,
@@ -204,6 +205,42 @@ describe("listModelsForVendor — claude (declared unsupported)", () => {
   });
 });
 
+describe("parseCodexModelCatalog", () => {
+  it("keeps only visibility=list entries, mapping slug/display_name", () => {
+    const parsed = parseCodexModelCatalog(
+      JSON.stringify({
+        models: [
+          { slug: "gpt-6.1-sol", display_name: "GPT-6.1-Sol", visibility: "list" },
+          { slug: "codex-auto-review", display_name: "Codex Auto Review", visibility: "hide" },
+          { slug: "gpt-5.5", visibility: "list" },
+        ],
+      }),
+    );
+    expect(parsed).toEqual([
+      { id: "gpt-6.1-sol", displayName: "GPT-6.1-Sol" },
+      { id: "gpt-5.5" },
+    ]);
+  });
+
+  it("returns null for non-JSON, a missing models array, or zero listed models", () => {
+    expect(parseCodexModelCatalog("not json")).toBeNull();
+    expect(parseCodexModelCatalog("{}")).toBeNull();
+    expect(parseCodexModelCatalog(JSON.stringify({ models: [{ slug: "x", visibility: "hide" }] }))).toBeNull();
+  });
+});
+
+describe("listModelsForVendor — codex (native probe)", () => {
+  it("shells `codex debug models` with a raised stdout cap (the catalog is ~600 KB)", async () => {
+    resolveWith(JSON.stringify({ models: [{ slug: "gpt-5.5", visibility: "list" }] }));
+    await listModelsForVendor("codex");
+    expect(execMock).toHaveBeenCalledWith(
+      "codex",
+      ["debug", "models"],
+      expect.objectContaining({ maxBuffer: expect.any(Number) }),
+    );
+  });
+});
+
 describe("strategy probe matrix", () => {
   // Every strategy that declares a native probe gets the same three-case
   // treatment. A future vendor added with a probe is enrolled automatically.
@@ -219,7 +256,13 @@ describe("strategy probe matrix", () => {
       const sampleIds = VENDOR_MODEL_STRATEGIES[vendor].bundled.map(
         (m) => m.id,
       );
-      resolveWith(`${sampleIds.join("\n")}\n`);
+      resolveWith(
+        vendor === "codex"
+          ? JSON.stringify({
+              models: sampleIds.map((slug) => ({ slug, visibility: "list" })),
+            })
+          : `${sampleIds.join("\n")}\n`,
+      );
       const success = await listModelsForVendor(vendor);
       expect(success.source).toBe("native");
       expect(success.models.map((m) => m.id)).toEqual(sampleIds);
@@ -267,10 +310,11 @@ describe("detectActiveVendor", () => {
 
 describe("vendor registry", () => {
   it("derives SUPPORTED_VENDORS and isModelVendor from the strategy table", () => {
-    expect(SUPPORTED_VENDORS).toEqual(["claude", "opencode"]);
+    expect(SUPPORTED_VENDORS).toEqual(["claude", "opencode", "codex"]);
     expect(isModelVendor("claude")).toBe(true);
     expect(isModelVendor("opencode")).toBe(true);
-    expect(isModelVendor("codex")).toBe(false);
+    expect(isModelVendor("codex")).toBe(true);
+    expect(isModelVendor("gemini")).toBe(false);
   });
 
   it("rejects prototype-chain keys (own-keys guard, not `in`)", () => {

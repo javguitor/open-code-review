@@ -191,7 +191,7 @@ export const initCommand = new Command("init")
     } else {
       console.log(
         chalk.dim(
-          "     Read-only mode — install Claude Code or OpenCode for full features.",
+          "     Read-only mode — install Claude Code, Codex or OpenCode for full features.",
         ),
       );
     }

@@ -12,10 +12,12 @@ const current: ConfigSettings = {
   worktrees: { dir: '/repo/.wt', dir_raw: '.wt', exists: true, cleanup: 'keep' },
   language: 'en',
   posting_language: null,
+  ai_cli: 'auto',
+  aiCli: { available: ['claude'], active: 'claude', preferred: 'auto' },
   ide: 'vscode',
   integrations: { clickup_token: 'missing' },
 }
-const same = { dir: '.wt', cleanup: 'keep', language: 'en', postingLanguage: '' }
+const same = { dir: '.wt', cleanup: 'keep', language: 'en', postingLanguage: '', aiCli: 'auto' }
 
 describe('buildSettingsPatch', () => {
   it('returns an empty patch when nothing changed', () => {
@@ -23,7 +25,7 @@ describe('buildSettingsPatch', () => {
   })
 
   it('sends only the changed fields, trimming the directory', () => {
-    const { patch, errors } = buildSettingsPatch(current, { dir: '  /tmp/wt  ', cleanup: 'after-post', language: 'en', postingLanguage: '' })
+    const { patch, errors } = buildSettingsPatch(current, { dir: '  /tmp/wt  ', cleanup: 'after-post', language: 'en', postingLanguage: '', aiCli: 'auto' })
     expect(errors).toEqual({})
     expect(patch).toEqual({ worktrees: { dir: '/tmp/wt', cleanup: 'after-post' } })
   })
@@ -48,6 +50,13 @@ describe('buildSettingsPatch', () => {
   it('rejects an empty language and patches a changed one', () => {
     expect(buildSettingsPatch(current, { ...same, language: ' ' }).errors.language).toBe('settings.error_language_required')
     expect(buildSettingsPatch(current, { ...same, language: 'es' }).patch).toEqual({ language: 'es' })
+  })
+})
+
+describe('buildSettingsPatch — AI provider', () => {
+  it('patches dashboard.ai_cli only when the choice changed', () => {
+    expect(buildSettingsPatch(current, { ...same, aiCli: 'codex' }).patch).toEqual({ dashboard: { ai_cli: 'codex' } })
+    expect(buildSettingsPatch(current, { ...same, aiCli: 'auto' }).patch).toEqual({})
   })
 })
 
@@ -108,6 +117,6 @@ describe('removeAction', () => {
     expect(buildSettingsPatch(current, { ...same, postingLanguage: 'en' }).patch).toEqual({ posting: { language: 'en' } })
     const set = { ...current, posting_language: 'en' }
     expect(buildSettingsPatch(set, { ...same, postingLanguage: 'en' }).patch).toEqual({})
-    expect(buildSettingsPatch(set, { ...same, postingLanguage: '' }).patch).toEqual({ posting: { language: '' } })
+    expect(buildSettingsPatch(set, { ...same, postingLanguage: '', aiCli: 'auto' }).patch).toEqual({ posting: { language: '' } })
   })
 })
