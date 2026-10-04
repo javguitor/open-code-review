@@ -41,6 +41,21 @@ import {
 
 type Json = Record<string, unknown>
 
+/** Absolute common git dir of `cwd`, or null outside a repo (the sandbox then just stays as is). */
+export function gitCommonDir(cwd: string): string | null {
+  try {
+    const out = execBinary('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], {
+      cwd,
+      env: childEnv().env,
+      encoding: 'utf-8',
+      timeout: 3000,
+    })
+    return typeof out === 'string' && out.trim() !== '' ? out.trim() : null
+  } catch {
+    return null
+  }
+}
+
 export class CodexAdapter implements AiCliAdapter {
   readonly name = 'Codex'
   readonly binary = 'codex'
@@ -106,7 +121,15 @@ export class CodexAdapter implements AiCliAdapter {
     // Per-instance model override (vendor-native string, no OCR translation)
     if (opts.model) args.push('-m', opts.model)
     args.push(...sandboxFlags)
-    if (isWorkflow) args.push('-c', 'sandbox_workspace_write.network_access=true')
+    if (isWorkflow) {
+      args.push('-c', 'sandbox_workspace_write.network_access=true')
+      // workspace-write keeps `.git` read-only, so `git fetch` / `git worktree add`
+      // (PR targets) fail with "Unable to create .git/index.lock". Make the
+      // repository's common git dir writable — `-c` because `exec resume` has no
+      // `--add-dir`; `--git-common-dir` so a PR worktree also resolves the main `.git`.
+      const gitDir = gitCommonDir(opts.cwd)
+      if (gitDir) args.push('-c', `sandbox_workspace_write.writable_roots=[${JSON.stringify(gitDir)}]`)
+    }
     if (opts.resumeSessionId) args.push(opts.resumeSessionId)
     // `-` = read the prompt from stdin (never an argv element — issue #43).
     args.push('-')

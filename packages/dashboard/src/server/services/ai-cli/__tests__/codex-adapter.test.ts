@@ -10,12 +10,13 @@ vi.mock('@open-code-review/platform', async (importOriginal) => {
   return { ...original, spawnBinary: vi.fn(), execBinary: vi.fn() }
 })
 
-import { spawnBinary } from '@open-code-review/platform'
+import { execBinary, spawnBinary } from '@open-code-review/platform'
 import { CodexAdapter } from '../codex-adapter.js'
 import { initChildEnvBase, resetChildEnvBaseForTests } from '../../../child-env.js'
 import type { NormalizedEvent } from '../types.js'
 
 const spawnMock = vi.mocked(spawnBinary)
+const execMock = vi.mocked(execBinary)
 const here = dirname(fileURLToPath(import.meta.url))
 
 function fakeProc(): ChildProcess {
@@ -57,6 +58,21 @@ describe('CodexAdapter', () => {
         '-c', 'sandbox_workspace_write.network_access=true',
         '-',
       ])
+    })
+
+    it('workflow inside a repo: the common git dir is writable (workspace-write keeps .git read-only)', () => {
+      execMock.mockReturnValueOnce('/repo/.git\n')
+      const args = argsFor({ mode: 'workflow' })
+      expect(args).toContain('sandbox_workspace_write.writable_roots=["/repo/.git"]')
+      expect(execMock).toHaveBeenLastCalledWith(
+        'git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], expect.objectContaining({ cwd: '/tmp' }),
+      )
+    })
+
+    it('query never widens the sandbox, even inside a repo', () => {
+      execMock.mockReturnValue('/repo/.git\n')
+      expect(argsFor({ mode: 'query' }).join(' ')).not.toContain('writable_roots')
+      execMock.mockReset()
     })
 
     it('query: read-only sandbox, no network override', () => {
