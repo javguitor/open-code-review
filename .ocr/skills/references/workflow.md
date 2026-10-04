@@ -584,8 +584,8 @@ instantiation strategy your host CLI supports (parallel sub-agents or sequential
    `ocr host capabilities --tool <your-host-id> --json` and read `subagentSpawn`:
 
    - **`subagentSpawn: true`** (e.g. Claude Code's Task tool; OpenCode's `--agent`
-     flag): spawn one isolated sub-agent per resolved instance, in parallel.
-   - **`subagentSpawn: false`** (e.g. Gemini CLI, Codex): run each reviewer
+     flag; Codex's `spawn_agent`): spawn one isolated sub-agent per resolved instance, in parallel.
+   - **`subagentSpawn: false`** (e.g. Gemini CLI): run each reviewer
      **sequentially**, one instance at a time, using `references/reviewer-task.md`.
 
    Both strategies are first-class. The journaling in step 5 keeps them

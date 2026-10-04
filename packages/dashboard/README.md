@@ -51,7 +51,7 @@ ocr dashboard --no-open        # Don't auto-open browser
   <img src="../../assets/ocr-default-team-composition.png" alt="OCR default team composition editor" width="700" />
 </p>
 
-- **Per-reviewer model configuration** — Assign different models to different reviewers. The dashboard auto-discovers every model your installed vendor (Claude Code or OpenCode) offers.
+- **Per-reviewer model configuration** — Assign different models to different reviewers. The dashboard auto-discovers every model your installed vendor (Claude Code, Codex or OpenCode) offers.
 
 <p align="center">
   <img src="../../assets/ocr-default-reviewer-model-configuration.png" alt="Per-reviewer model configuration on the Team page" width="700" />

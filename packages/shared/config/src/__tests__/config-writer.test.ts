@@ -241,3 +241,31 @@ describe("setConfigValues on the shipped template", () => {
     expect(text).toBe(`${template}worktrees:\n  cleanup: after-post\n`);
   });
 });
+
+describe("setConfigValues — dashboard.ai_cli", () => {
+  it.each(["auto", "claude", "codex", "opencode", "off"] as const)("accepts %s", (value) => {
+    writeFileSync(configPath, SAMPLE);
+    const text = setConfigValues(ocrDir, { "dashboard.ai_cli": value });
+    expect(parseDocument(text).toJS().dashboard.ai_cli).toBe(value);
+  });
+
+  it("replaces an existing value in place, preserving comments", () => {
+    const before = "# keep\ndashboard:\n  ide: vscode   # editor\n  ai_cli: claude # vendor\n";
+    writeFileSync(configPath, before);
+    const text = setConfigValues(ocrDir, { "dashboard.ai_cli": "codex" });
+    expect(text).toBe(before.replace("claude", "codex"));
+  });
+
+  it("appends to an existing dashboard block without touching siblings", () => {
+    writeFileSync(configPath, "dashboard:\n  ide: vscode\n");
+    expect(setConfigValues(ocrDir, { "dashboard.ai_cli": "codex" })).toBe(
+      "dashboard:\n  ide: vscode\n  ai_cli: codex\n",
+    );
+  });
+
+  it("rejects an unknown vendor and leaves the file untouched", () => {
+    writeFileSync(configPath, SAMPLE);
+    expect(() => setConfigValues(ocrDir, { "dashboard.ai_cli": "copilot" as never })).toThrow(ConfigWriteError);
+    expect(read()).toBe(SAMPLE);
+  });
+});

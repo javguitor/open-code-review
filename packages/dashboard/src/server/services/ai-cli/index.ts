@@ -18,6 +18,7 @@ import {
 } from '@open-code-review/config/dashboard-config'
 import type { AiCliAdapter, AiCliStatus, DetectionResult } from './types.js'
 import { ClaudeCodeAdapter } from './claude-adapter.js'
+import { CodexAdapter } from './codex-adapter.js'
 import { OpenCodeAdapter } from './opencode-adapter.js'
 
 // Re-export everything consumers need
@@ -34,6 +35,7 @@ export type {
 export { EventJournalAppender, eventJournalPath, eventsDir, readEventJournal } from '../event-journal.js'
 export { formatToolDetail, extractAssistantText, writeTempPrompt, cleanupTempFile } from './helpers.js'
 export { ClaudeCodeAdapter } from './claude-adapter.js'
+export { CodexAdapter } from './codex-adapter.js'
 export { OpenCodeAdapter } from './opencode-adapter.js'
 
 type AdapterEntry = {
@@ -48,14 +50,14 @@ type AdapterEntry = {
  * itself drift, the exact failure class issue #39 was about.
  */
 export function createRegisteredAdapters(): AiCliAdapter[] {
-  return [new ClaudeCodeAdapter(), new OpenCodeAdapter()]
+  return [new ClaudeCodeAdapter(), new CodexAdapter(), new OpenCodeAdapter()]
 }
 
 export class AiCliService {
   private readonly entries: AdapterEntry[]
-  private readonly activeAdapter: AiCliAdapter | null
-  private readonly preference: AiCliPreference
-  private readonly status: AiCliStatus
+  private activeAdapter: AiCliAdapter | null
+  private preference: AiCliPreference
+  private status: AiCliStatus
 
   constructor(ocrDir: string, preference?: AiCliPreference) {
     // The server passes the startup-parsed preference; the fallback read
@@ -154,6 +156,21 @@ export class AiCliService {
     }))
   }
 
+  /**
+   * Re-select the active adapter for a new `dashboard.ai_cli` preference
+   * without a restart (Settings → AI provider). Detection results are the
+   * ones captured at startup; only the selection and status are rebuilt.
+   */
+  setPreference(preference: AiCliPreference): void {
+    this.preference = preference
+    this.activeAdapter = this.selectAdapter()
+    this.status = {
+      available: this.status.available,
+      active: this.activeAdapter?.binary ?? null,
+      preferred: preference,
+    }
+  }
+
   // ── Private ──
 
   private selectAdapter(): AiCliAdapter | null {
@@ -177,7 +194,7 @@ export class AiCliService {
     const claude = available.find((e) => e.adapter.binary === 'claude')
     if (claude) return claude.adapter
 
-    // Otherwise use first available
+    // Otherwise use first available — registry order is claude, codex, opencode
     return available[0]?.adapter ?? null
   }
 }

@@ -8,7 +8,7 @@
  * full input JSON.
  *
  * The `name` matched is the tool name as the adapter emits it — Claude
- * uses PascalCase, OpenCode is normalized to PascalCase by the adapter.
+ * uses PascalCase, OpenCode and Codex are normalized to PascalCase by the adapter (Codex: Bash, Edit, Task, WebSearch, TodoWrite, mcp__server__tool).
  *
  * Always returns a string. Never throws — if the input shape is unexpected
  * we fall back to a truncated stringification so the caller can still

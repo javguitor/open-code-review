@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import type { AddressInfo } from 'node:net'
 import type { Server } from 'node:http'
@@ -21,6 +21,7 @@ worktrees:
 let workspace: string
 let ocrDir: string
 let server: Server
+let setPreference: ReturnType<typeof vi.fn>
 
 async function api(method: string, body?: unknown): Promise<{ status: number; body: any }> {
   const { port } = server.address() as AddressInfo
@@ -41,7 +42,8 @@ beforeEach(async () => {
   initChildEnvBase(captureChildEnvBase('dev-direct-run'))
   const app = express()
   app.use(express.json())
-  const ai = { getStatus: () => ({ available: [], active: null, preferred: 'auto' }) } as unknown as AiCliService
+  setPreference = vi.fn()
+  const ai = { getStatus: () => ({ available: [], active: null, preferred: 'auto' }), setPreference } as unknown as AiCliService
   app.use('/api/config', createConfigRouter(ocrDir, ai))
   server = await new Promise<Server>((resolve) => {
     const s = app.listen(0, '127.0.0.1', () => resolve(s))
@@ -66,6 +68,7 @@ describe('GET /api/config', () => {
       cleanup: 'keep',
     })
     expect(typeof body.language).toBe('string')
+    expect(body.ai_cli).toBe('auto')
   })
 
   it('reports dir_raw null and exists true for the default dir once it exists', async () => {
@@ -108,7 +111,23 @@ describe('PATCH /api/config', () => {
       worktrees: { dir: abs, dir_raw: abs, exists: true, cleanup: 'after-post' },
       language: 'es',
       posting_language: null,
+      ai_cli: 'auto',
+      aiCli: { available: [], active: null, preferred: 'auto' },
     })
+  })
+
+  it('writes dashboard.ai_cli, re-selects the adapter without restart, and rejects unknown vendors', async () => {
+    const ok = await api('PATCH', { dashboard: { ai_cli: 'codex' } })
+    expect(ok.status).toBe(200)
+    expect(ok.body.ai_cli).toBe('codex')
+    expect(setPreference).toHaveBeenCalledWith('codex')
+    expect(readFileSync(join(ocrDir, 'config.yaml'), 'utf-8')).toContain('dashboard:\n  ai_cli: codex')
+
+    setPreference.mockClear()
+    const bad = await api('PATCH', { dashboard: { ai_cli: 'copilot' } })
+    expect(bad.status).toBe(400)
+    expect(bad.body.key).toBe('dashboard.ai_cli')
+    expect(setPreference).not.toHaveBeenCalled()
   })
 
   it('writes and reports posting.language, and rejects an invalid one', async () => {

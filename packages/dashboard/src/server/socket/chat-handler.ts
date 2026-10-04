@@ -150,7 +150,7 @@ export function registerChatHandlers(
       if (!aiCliService.isAvailable()) {
         socket.emit('chat:error', {
           conversationId,
-          error: 'No AI CLI available. Install Claude Code or OpenCode to use the chat feature.',
+          error: 'No AI CLI available. Install Claude Code, Codex or OpenCode to use the chat feature.',
         })
         return
       }

@@ -18,7 +18,7 @@ export type Capabilities = {
   ideCommands: boolean;
   /** Always true when OCR is installed */
   dashboardViewer: boolean;
-  /** True if Claude Code OR OpenCode is found */
+  /** True if Claude Code, Codex OR OpenCode is found */
   dashboardAi: boolean;
   /** True if gh CLI is found */
   githubPost: boolean;
@@ -72,6 +72,13 @@ const DEPS: DepSpec[] = [
     required: false,
     installHint:
       "https://docs.anthropic.com/en/docs/claude-code/getting-started",
+    category: "ai-cli",
+  },
+  {
+    name: "Codex",
+    binary: "codex",
+    required: false,
+    installHint: "https://github.com/openai/codex",
     category: "ai-cli",
   },
   {
@@ -254,7 +261,7 @@ export function printCapabilities(result: DepCheckResult): void {
       label: "Dashboard commands",
       detail: caps.dashboardAi
         ? "Command Center, Ask the Team chat"
-        : "Install Claude Code or OpenCode to enable",
+        : "Install Claude Code, Codex or OpenCode to enable",
     },
     {
       ok: caps.githubPost,

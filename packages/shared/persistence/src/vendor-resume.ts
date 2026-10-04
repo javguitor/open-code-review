@@ -12,10 +12,11 @@
  * panel's display text and the spawn call cannot drift.
  */
 
-export type SupportedVendor = 'claude' | 'opencode'
+export type SupportedVendor = 'claude' | 'codex' | 'opencode'
 
 export const VENDOR_BINARIES: Record<SupportedVendor, string> = {
   claude: 'claude',
+  codex: 'codex',
   opencode: 'opencode',
 }
 
@@ -26,6 +27,9 @@ export const VENDOR_BINARIES: Record<SupportedVendor, string> = {
  *
  * Vendor shapes (verified against vendor docs):
  * - `claude --resume <id>`           — Claude Code's documented resume flag
+ * - `codex resume <id>`             — Codex's interactive resume (the
+ *                                       non-interactive `codex exec resume`
+ *                                       is what the adapter spawns)
  * - `opencode --session <id>`        — OpenCode's interactive resume of a
  *                                       specific session. The previously
  *                                       used `run "" --session <id> --continue`
@@ -40,11 +44,14 @@ export function buildResumeArgs(
   if (vendor === 'claude') {
     return ['--resume', vendorSessionId]
   }
+  if (vendor === 'codex') {
+    return ['resume', vendorSessionId]
+  }
   if (vendor === 'opencode') {
     return ['--session', vendorSessionId]
   }
   throw new Error(
-    `Unknown vendor "${vendor}". OCR knows how to resume Claude Code and OpenCode.`,
+    `Unknown vendor "${vendor}". OCR knows how to resume Claude Code, Codex and OpenCode.`,
   )
 }
 

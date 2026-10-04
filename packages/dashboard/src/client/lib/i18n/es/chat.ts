@@ -12,7 +12,7 @@ const chat = {
   'chat.thinking_preparing': 'Preparando una respuesta meditada...',
   'chat.title': 'Preguntar al equipo',
   'chat.ai_disabled_body': 'Los comandos de IA están desactivados en la configuración del proyecto. Define `ai_cli` como `auto`, `claude` u `opencode` en `.ocr/config.yaml` para activar «Preguntar al equipo».',
-  'chat.install_cli': 'Instala Claude Code u OpenCode para usar «Preguntar al equipo».',
+  'chat.install_cli': 'Instala Claude Code, Codex u OpenCode para usar «Preguntar al equipo».',
   'chat.empty_map': 'Haz una pregunta sobre este map para empezar.',
   'chat.empty_review': 'Haz una pregunta sobre esta revisión para empezar.',
   'chat.worktree_missing': 'Worktree eliminado: se responde desde el checkout',

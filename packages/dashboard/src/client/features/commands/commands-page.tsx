@@ -13,6 +13,7 @@ import { RichText } from '../../components/ui/rich-text'
 
 const CLI_DISPLAY_NAMES: Record<string, string> = {
   claude: 'Claude Code',
+  codex: 'Codex',
   opencode: 'OpenCode',
 }
 

@@ -4,7 +4,8 @@ Phase 4 instantiates N reviewer personas. Today the dashboard's `command-runner.
 
 ## Goals / Non-Goals
 
-- **Goals:** True parallelism and genuine per-reviewer `--model` on hosts with no sub-agent primitive (Gemini, Codex); preserve Claude/OpenCode behavior exactly; keep the dashboard's liveness/resume contract unchanged.
+- **Scope note:** Codex self-spawns (`spawn_agent`, per-sub-agent `model`; capabilities `true/true`) and is handled by `add-codex-provider`, not here.
+- **Goals:** True parallelism and genuine per-reviewer `--model` on hosts with no sub-agent primitive (Gemini); preserve Claude/OpenCode behavior exactly; keep the dashboard's liveness/resume contract unchanged.
 - **Non-Goals:** Changing the Claude/OpenCode path; OCR-coined model aliases (vendor-native strings only); replacing the host AI as the orchestrator for the other 7 phases.
 
 ## Decisions
@@ -15,7 +16,7 @@ Phase 4 instantiates N reviewer personas. Today the dashboard's `command-runner.
   |---|---|---|---|---|
   | Claude Code | true | true | host self-spawns via Task tool (**unchanged**) | per-subagent `model:` frontmatter |
   | OpenCode | true | false | host self-spawns sub-agents | uniform model + warning |
-  | Gemini / Codex | false | false | **command-runner spawns one child CLI per reviewer** | per-reviewer `--model` (**solves #27**) |
+  | Gemini | false | false | **command-runner spawns one child CLI per reviewer** | per-reviewer `--model` (**solves #27**) |
 
 - **`adapter.spawnReviewer()` is separate from `adapter.spawn()`** so a reviewer child can carry its own prompt (assembled from `references/reviewer-task.md`), its own `--model`, a read-leaning tool set, and its own cwd/env — without disturbing orchestrator semantics. It returns the same `SpawnResult` contract so the existing stream-parse pipeline and `ocr session` journaling are reused verbatim. Both strategies therefore produce identical `agent_sessions` rows, keeping the dashboard blind to which one ran.
 
@@ -33,7 +34,7 @@ Phase 4 instantiates N reviewer personas. Today the dashboard's `command-runner.
 
 ## Migration Plan
 
-Additive and capability-gated. Claude/OpenCode are unaffected (`supportsSubagentSpawn = true`). The child-spawn path only activates for hosts with a registered adapter reporting `supportsSubagentSpawn = false`; until a Gemini/Codex adapter ships, those hosts continue using the sequential fallback from `add-host-capability-model`. No data migration.
+Additive and capability-gated. Claude/OpenCode are unaffected (`supportsSubagentSpawn = true`). The child-spawn path only activates for hosts with a registered adapter reporting `supportsSubagentSpawn = false`; until a Gemini adapter ships, those hosts continue using the sequential fallback from `add-host-capability-model`. No data migration.
 
 ## Open Questions
 

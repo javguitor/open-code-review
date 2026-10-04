@@ -204,7 +204,7 @@ export function registerCommandHandlers(
       // Guard AI commands — require an available AI CLI
       if (AI_COMMANDS.has(baseCommand) && !aiCliService.isAvailable()) {
         emitError({
-          error: 'No AI CLI available. Install Claude Code or OpenCode to run AI commands from the dashboard.',
+          error: 'No AI CLI available. Install Claude Code, Codex or OpenCode to run AI commands from the dashboard.',
         })
         return
       }

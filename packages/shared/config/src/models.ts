@@ -35,6 +35,11 @@ type NativeProbe = {
    * an empty success, so a drifted output format falls back loudly.
    */
   parse: (stdout: string) => ModelDescriptor[] | null;
+  /**
+   * Override of the 1 MiB default stdout cap, for catalogs that are large
+   * by nature (the Codex catalog embeds per-model prompt text, ~600 KB).
+   */
+  maxBuffer?: number;
 };
 
 type VendorModelStrategy = {
@@ -74,6 +79,38 @@ export function parseOpenCodeModelList(
   return models.length > 0 ? models : null;
 }
 
+/**
+ * Parses `codex debug models`: a single JSON object `{ models: [...] }`
+ * (verified against codex-cli 0.159.3). Each entry has `slug` (the id that
+ * `codex exec -m` accepts), `display_name`, and `visibility` — only
+ * `"list"` entries are offered; `"hide"` ones (internal review models) are
+ * not meant to be picked. Returns `null` on non-JSON or an empty result.
+ */
+export function parseCodexModelCatalog(
+  stdout: string,
+): ModelDescriptor[] | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return null;
+  }
+  const entries = (parsed as { models?: unknown } | null)?.models;
+  if (!Array.isArray(entries)) return null;
+  const models: ModelDescriptor[] = [];
+  for (const entry of entries) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const { slug, display_name, visibility } = entry as Record<string, unknown>;
+    if (typeof slug !== "string" || !slug || visibility !== "list") continue;
+    models.push(
+      typeof display_name === "string" && display_name
+        ? { id: slug, displayName: display_name }
+        : { id: slug },
+    );
+  }
+  return models.length > 0 ? models : null;
+}
+
 export const VENDOR_MODEL_STRATEGIES = {
   claude: {
     displayName: "Claude Code",
@@ -107,6 +144,22 @@ export const VENDOR_MODEL_STRATEGIES = {
       { id: "anthropic/claude-opus-4-8", provider: "anthropic" },
       { id: "anthropic/claude-sonnet-4-6", provider: "anthropic" },
       { id: "anthropic/claude-haiku-4-5", provider: "anthropic" },
+    ],
+  },
+  codex: {
+    displayName: "Codex",
+    native: {
+      // `codex debug models` renders the model catalog as JSON (there is no
+      // `codex models` subcommand). Local and fast (~40 ms), but ~600 KB
+      // because it embeds prompt text, hence the raised buffer.
+      args: ["debug", "models"],
+      parse: parseCodexModelCatalog,
+      maxBuffer: 16 * 1024 * 1024,
+    },
+    // Fallback only (catalog unreadable); ids taken from codex-cli 0.159.3.
+    bundled: [
+      { id: "gpt-6.1-sol", displayName: "GPT-6.1-Sol" },
+      { id: "gpt-5.5", displayName: "GPT-5.5" },
     ],
   },
 } satisfies Record<string, VendorModelStrategy>;
@@ -200,6 +253,7 @@ async function tryNativeEnumeration(
     const result = await execBinaryAsync(vendor, probe.args, {
       encoding: "utf-8",
       timeout: 5000,
+      ...(probe.maxBuffer ? { maxBuffer: probe.maxBuffer } : {}),
     });
     stdout = result.stdout;
   } catch (err) {

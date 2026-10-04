@@ -15,7 +15,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 
-export type AiCliPreference = "auto" | "claude" | "opencode" | "off";
+export const AI_CLI_PREFERENCES = ["auto", "claude", "codex", "opencode", "off"] as const;
+
+export type AiCliPreference = (typeof AI_CLI_PREFERENCES)[number];
 
 export type DashboardConfig = {
   aiCli: AiCliPreference;
@@ -37,15 +39,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function parseAiCliPreference(value: unknown): AiCliPreference {
-  if (
-    value === "claude" ||
-    value === "opencode" ||
-    value === "off" ||
-    value === "auto"
-  ) {
-    return value;
-  }
-  return "auto";
+  return AI_CLI_PREFERENCES.find((p) => p === value) ?? "auto";
 }
 
 /**

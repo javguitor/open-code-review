@@ -40,6 +40,11 @@ describe("readDashboardConfig", () => {
     expect(readDashboardConfig(ocrDir).aiCli).toBe("opencode");
   });
 
+  it("accepts codex", () => {
+    writeFileSync(join(ocrDir, "config.yaml"), ["dashboard:", "  ai_cli: codex", ""].join("\n"));
+    expect(readDashboardConfig(ocrDir).aiCli).toBe("codex");
+  });
+
   it("falls back to auto for an invalid ai_cli value", () => {
     writeFileSync(
       join(ocrDir, "config.yaml"),

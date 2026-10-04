@@ -194,7 +194,7 @@ export const doctorCommand = new Command("doctor")
       console.log(chalk.green("  ✓ Ready for code review"));
       console.log(
         chalk.dim(
-          "    Install Claude Code or OpenCode for dashboard commands",
+          "    Install Claude Code, Codex or OpenCode for dashboard commands",
         ),
       );
     }

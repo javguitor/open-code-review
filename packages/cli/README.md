@@ -66,7 +66,7 @@ default_team:
   quality: 2                            # default model
 ```
 
-Override per-review from the dashboard's Command Center, or via `--team` on the CLI. The dashboard auto-discovers every model your installed vendor (Claude Code or OpenCode) offers.
+Override per-review from the dashboard's Command Center, or via `--team` on the CLI. The dashboard auto-discovers every model your installed vendor (Claude Code, Codex or OpenCode) offers.
 
 ## Commands
 

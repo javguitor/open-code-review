@@ -29,6 +29,7 @@ vi.mock('@open-code-review/platform', async (importOriginal) => {
 
 import { spawnBinary } from '@open-code-review/platform'
 import { ClaudeCodeAdapter } from '../claude-adapter.js'
+import { CodexAdapter } from '../codex-adapter.js'
 import { OpenCodeAdapter } from '../opencode-adapter.js'
 import {
   initChildEnvBase,
@@ -78,15 +79,24 @@ describe.each([
     name: 'claude',
     make: () => new ClaudeCodeAdapter(),
     binary: 'claude',
+    modelFlag: '--model',
     resumeArgs: (id: string) => ['--resume', id],
+  },
+  {
+    name: 'codex',
+    make: () => new CodexAdapter(),
+    binary: 'codex',
+    modelFlag: '-m',
+    resumeArgs: (id: string) => ['resume', id],
   },
   {
     name: 'opencode',
     make: () => new OpenCodeAdapter(),
     binary: 'opencode',
+    modelFlag: '--model',
     resumeArgs: (id: string) => ['--session', id, '--continue'],
   },
-])('$name adapter spawn shape', ({ make, binary, resumeArgs }) => {
+])('$name adapter spawn shape', ({ make, binary, resumeArgs, modelFlag }) => {
   it('never puts the prompt (or any part of it) in argv; delivers it on stdin and ends the stream', () => {
     const child = fakeChild()
     spawnMock.mockReturnValue(child.proc)
@@ -108,13 +118,13 @@ describe.each([
     const child = fakeChild()
     spawnMock.mockReturnValue(child.proc)
     make().spawn({ prompt: PROMPT, cwd: '/tmp', mode: 'query' })
-    expect(spawnMock.mock.calls[0]![1]).not.toContain('--model')
+    expect(spawnMock.mock.calls[0]![1]).not.toContain(modelFlag)
 
     const child2 = fakeChild()
     spawnMock.mockReturnValue(child2.proc)
     make().spawn({ prompt: PROMPT, cwd: '/tmp', mode: 'query', model: 'sonnet' })
     const args = spawnMock.mock.calls[1]![1]
-    const i = args.indexOf('--model')
+    const i = args.indexOf(modelFlag)
     expect(i).toBeGreaterThanOrEqual(0)
     expect(args[i + 1]).toBe('sonnet')
   })
