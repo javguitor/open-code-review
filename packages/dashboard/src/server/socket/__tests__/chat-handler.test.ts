@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
+import { PassThrough } from 'node:stream'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Server as SocketIOServer, Socket } from 'socket.io'
@@ -8,6 +9,8 @@ import { makeTempWorkspace, removeTempWorkspace } from '@open-code-review/persis
 import { openDb, updateConversationClaudeSession } from '../../db.js'
 import { captureChildEnvBase, initChildEnvBase, resetChildEnvBaseForTests } from '../../child-env.js'
 import type { AiCliService } from '../../services/ai-cli/index.js'
+import type { LineParser } from '../../services/ai-cli/types.js'
+import { CodexAdapter } from '../../services/ai-cli/codex-adapter.js'
 import type { RunCli } from '../../services/worktrees.js'
 import { cleanupAllChats, registerChatHandlers } from '../chat-handler.js'
 
@@ -32,7 +35,16 @@ function listCli(rows: unknown[] | null): { runCli: RunCli; calls: string[][] } 
   return { runCli, calls }
 }
 
-function setup(runCli: RunCli) {
+type SetupOpts = {
+  /** Adapter `binary` the handler sees as the active provider (default `claude`). */
+  binary?: string
+  /** Parser for the fake child's stdout; default parses nothing. */
+  createParser?: () => LineParser
+  /** Lines the fake child writes to stdout before exiting 0. */
+  stdoutLines?: string[]
+}
+
+function setup(runCli: RunCli, opts: SetupOpts = {}) {
   const handlers = new Map<string, (payload: unknown) => unknown>()
   const socket = {
     on: (event: string, handler: (payload: unknown) => unknown) => void handlers.set(event, handler),
@@ -43,12 +55,22 @@ function setup(runCli: RunCli) {
   } as unknown as Socket
   const io = { emit: () => true } as unknown as SocketIOServer
   const adapter = {
-    spawn: (opts: SpawnOpts) => {
-      spawns.push(opts)
-      const proc = Object.assign(new EventEmitter(), { stdout: null, stderr: null, pid: 4242, killed: false, kill: () => true })
+    binary: opts.binary ?? 'claude',
+    spawn: (spawnOpts: SpawnOpts) => {
+      spawns.push(spawnOpts)
+      const stdout = opts.stdoutLines ? new PassThrough() : null
+      const proc = Object.assign(new EventEmitter(), {
+        stdout, stderr: stdout ? new PassThrough() : null, pid: 4242, killed: false, kill: () => true,
+      })
+      if (stdout) {
+        setImmediate(() => {
+          stdout.write(opts.stdoutLines!.join('\n') + '\n')
+          setImmediate(() => proc.emit('close', 0))
+        })
+      }
       return { process: proc }
     },
-    createParser: () => ({ parseLine: () => [] }),
+    createParser: opts.createParser ?? (() => ({ parseLine: () => [] })),
   }
   const ai = { isAvailable: () => true, getAdapter: () => adapter } as unknown as AiCliService
   registerChatHandlers(io, socket, db, ocrDir, ai, { runCli })
@@ -152,7 +174,7 @@ describe('chat:send code root', () => {
     writeContext('s-pr', wt)
     setup(listCli([]).runCli)
     await sendChat(msg('s-pr'))
-    updateConversationClaudeSession(db, 'c1', 'claude-abc')
+    updateConversationClaudeSession(db, 'c1', 'claude-abc', 'claude')
     await sendChat(msg('s-pr'))
     expect(spawns[1]!.resumeSessionId).toBe('claude-abc')
     expect(spawns[1]!.prompt).toBe(`Note: the code root is now ${workspace}.\n\nhello`)
@@ -162,7 +184,7 @@ describe('chat:send code root', () => {
     insertSession('s-plain', null)
     setup(listCli([]).runCli)
     await sendChat(msg('s-plain'))
-    updateConversationClaudeSession(db, 'c1', 'claude-abc')
+    updateConversationClaudeSession(db, 'c1', 'claude-abc', 'claude')
     await sendChat(msg('s-plain'))
     expect(spawns[1]!.prompt).toBe('hello')
   })
@@ -173,5 +195,98 @@ describe('chat:send code root', () => {
     await sendChat(msg('s-plain'))
     const res = db.exec(`SELECT pid FROM command_executions WHERE command LIKE 'ocr chat%' ORDER BY id DESC LIMIT 1`)
     expect(res[0]?.values[0]?.[0]).toBe(4242)
+  })
+})
+
+const done = () => new Promise<void>((resolve) => {
+  const poll = () => (socketEvents.some((e) => e.event === 'chat:done' || e.event === 'chat:error') ? resolve() : setTimeout(poll, 5))
+  poll()
+})
+const tokens = () => socketEvents.filter((e) => e.event === 'chat:token').map((e) => (e.payload as { token: string }).token)
+const lastAssistant = () =>
+  db.exec(`SELECT content FROM chat_messages WHERE role = 'assistant' ORDER BY id DESC LIMIT 1`)[0]?.values[0]?.[0]
+
+describe('chat:send assistant text delivery', () => {
+  it('Codex: a complete agent_message reaches the client as chat:token and is persisted once', async () => {
+    insertSession('s-plain', null)
+    const codex = new CodexAdapter()
+    setup(listCli([]).runCli, {
+      binary: 'codex',
+      createParser: () => codex.createParser(),
+      stdoutLines: [
+        JSON.stringify({ type: 'thread.started', thread_id: 'th-1' }),
+        JSON.stringify({ type: 'item.completed', item: { id: 'i1', type: 'agent_message', text: 'First part.' } }),
+        JSON.stringify({ type: 'item.completed', item: { id: 'i2', type: 'agent_message', text: 'Second part.' } }),
+        JSON.stringify({ type: 'turn.completed' }),
+      ],
+    })
+    await sendChat(msg('s-plain'))
+    await done()
+    expect(tokens().join('')).toBe('First part.\n\nSecond part.')
+    expect(lastAssistant()).toBe('First part.\n\nSecond part.')
+  })
+
+  it('a vendor that streams deltas AND sends a final message is not duplicated', async () => {
+    insertSession('s-plain', null)
+    const events = [
+      { type: 'text_delta', text: 'Hel' },
+      { type: 'text_delta', text: 'lo' },
+      { type: 'message', text: 'Hello' },
+    ]
+    let i = 0
+    setup(listCli([]).runCli, {
+      createParser: () => ({ parseLine: () => [events[i++]!] as never }),
+      stdoutLines: ['a', 'b', 'c'],
+    })
+    await sendChat(msg('s-plain'))
+    await done()
+    expect(tokens().join('')).toBe('Hello')
+    expect(lastAssistant()).toBe('Hello')
+  })
+})
+
+describe('chat:send provider switch', () => {
+  const captureSession = (binary: string) =>
+    ({ binary, stdoutLines: [JSON.stringify({ type: 'thread.started', thread_id: 'sess_1' })] })
+
+  it('does not hand another vendor\'s session id to the active adapter: fresh run, context rebuilt, notice', async () => {
+    insertSession('s-plain', null)
+    setup(listCli([]).runCli)
+    await sendChat(msg('s-plain'))
+    updateConversationClaudeSession(db, 'c1', 'claude-abc', 'claude')
+
+    cleanupAllChats()
+    socketEvents = []
+    setup(listCli([]).runCli, { binary: 'codex' })
+    await sendChat(msg('s-plain'))
+
+    expect(spawns[1]!.resumeSessionId).toBeUndefined()
+    expect(spawns[1]!.prompt).toContain('User: hello')
+    expect(spawns[1]!.prompt.length).toBeGreaterThan('User: hello'.length)
+    expect(notices()).toEqual(['provider-changed'])
+  })
+
+  it('stores the vendor with the captured id so the same vendor resumes it', async () => {
+    insertSession('s-plain', null)
+    const codex = new CodexAdapter()
+    setup(listCli([]).runCli, { ...captureSession('codex'), createParser: () => codex.createParser() })
+    await sendChat(msg('s-plain'))
+    await done()
+    expect(db.exec(`SELECT claude_session_id, vendor FROM chat_conversations WHERE id = 'c1'`)[0]?.values[0]).toEqual(['sess_1', 'codex'])
+
+    cleanupAllChats()
+    setup(listCli([]).runCli, { binary: 'codex' })
+    await sendChat(msg('s-plain'))
+    expect(spawns[1]!.resumeSessionId).toBe('sess_1')
+    expect(spawns[1]!.prompt).toBe('hello')
+  })
+
+  it('a legacy row with no vendor is never resumed', async () => {
+    insertSession('s-plain', null)
+    setup(listCli([]).runCli)
+    await sendChat(msg('s-plain'))
+    updateConversationClaudeSession(db, 'c1', 'old-id')
+    await sendChat(msg('s-plain'))
+    expect(spawns[1]!.resumeSessionId).toBeUndefined()
   })
 })

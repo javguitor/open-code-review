@@ -559,7 +559,7 @@ export type PostWorktreeOutcome =
   | 'none'
 
 /** Server `chat:notice` payload. */
-export type ChatNotice = { conversationId: string; sessionId: string; code: 'worktree-missing' | 'worktree-unknown' }
+export type ChatNotice = { conversationId: string; sessionId: string; code: 'worktree-missing' | 'worktree-unknown' | 'provider-changed' }
 
 // ── Review workbench ──
 

@@ -708,6 +708,18 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    version: 22,
+    description:
+      "Add chat_conversations.vendor: which AI CLI minted claude_session_id, so a provider switch never resumes a foreign id",
+    // Nullable on purpose: rows from before this migration have an unknown vendor
+    // and are never resumed (the chat rebuilds its context instead).
+    run: (db) => {
+      if (!columnExists(db, "chat_conversations", "vendor")) {
+        db.run("ALTER TABLE chat_conversations ADD COLUMN vendor TEXT;");
+      }
+    },
+  },
 ];
 
 /** Whether `table` currently has a column named `column` (for idempotent DDL). */

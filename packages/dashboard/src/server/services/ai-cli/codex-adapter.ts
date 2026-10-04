@@ -33,6 +33,8 @@ import type {
   SpawnResult,
 } from './types.js'
 import { writeSync } from 'node:fs'
+import { isAbsolute, join, relative } from 'node:path'
+import { getWorktreeConfig } from '@open-code-review/config/worktree-config'
 import { childEnv, formatChildEnvHeader } from '../../child-env.js'
 import {
   buildResumeArgs as buildResumeArgsShared,
@@ -54,6 +56,21 @@ export function gitCommonDir(cwd: string): string | null {
   } catch {
     return null
   }
+}
+
+/**
+ * Extra writable roots a workflow needs: the repo's common git dir, plus the
+ * configured worktrees dir when it lies outside the checkout (the sandbox only
+ * covers `cwd` — a PR worktree created elsewhere would be unwritable).
+ */
+export function workflowWritableRoots(cwd: string, ocrDir: string): string[] {
+  const roots: string[] = []
+  const gitDir = gitCommonDir(cwd)
+  if (gitDir) roots.push(gitDir)
+  const { dir } = getWorktreeConfig(ocrDir)
+  const rel = relative(cwd, dir)
+  if (rel === '..' || rel.startsWith('..') || isAbsolute(rel)) roots.push(dir)
+  return roots
 }
 
 export class CodexAdapter implements AiCliAdapter {
@@ -127,8 +144,11 @@ export class CodexAdapter implements AiCliAdapter {
       // (PR targets) fail with "Unable to create .git/index.lock". Make the
       // repository's common git dir writable — `-c` because `exec resume` has no
       // `--add-dir`; `--git-common-dir` so a PR worktree also resolves the main `.git`.
-      const gitDir = gitCommonDir(opts.cwd)
-      if (gitDir) args.push('-c', `sandbox_workspace_write.writable_roots=[${JSON.stringify(gitDir)}]`)
+      // The configured worktrees dir is added when it lives outside the checkout.
+      const roots = workflowWritableRoots(opts.cwd, opts.ocrDir ?? join(opts.cwd, '.ocr'))
+      if (roots.length > 0) {
+        args.push('-c', `sandbox_workspace_write.writable_roots=[${roots.map((r) => JSON.stringify(r)).join(',')}]`)
+      }
     }
     if (opts.resumeSessionId) args.push(opts.resumeSessionId)
     // `-` = read the prompt from stdin (never an argv element — issue #43).
@@ -197,6 +217,12 @@ function stringify(v: unknown): string {
   }
 }
 
+/** "2/3 completed" summary of a Codex `todo_list` (`items: [{ text, completed }]`). */
+function todoProgress(items: unknown[]): string {
+  const done = items.filter((i) => asJson(i)['completed'] === true).length
+  return `${done}/${items.length} completed`
+}
+
 /** MCP results are `{ content: [{ type: 'text', text }] , ... }` — prefer the text blocks. */
 function mcpOutput(item: Json): string {
   const err = asJson(item['error'])
@@ -220,6 +246,9 @@ function mcpOutput(item: Json): string {
 class CodexLineParser implements LineParser {
   private readonly called = new Set<string>()
   private readonly resolved = new Set<string>()
+  /** Last `todo_list` snapshot (JSON) per item id, to emit only real changes. */
+  private readonly todoSnapshots = new Map<string, string>()
+  private todoVersions = 0
 
   parseLine(line: string): NormalizedEvent[] {
     if (!line.trim()) return []
@@ -344,13 +373,42 @@ class CodexLineParser implements LineParser {
           isError: false,
         }))
       case 'todo_list':
-        return this.toolEvents(id, completed, 'TodoWrite', { todos: item['items'] ?? [] }, () => ({
-          output: '',
-          isError: false,
-        }))
+        return this.todoEvents(id, completed, item['items'])
       default:
         return []
     }
+  }
+
+  /**
+   * `todo_list` is ONE item whose plan is re-sent on every `item.updated`.
+   * Claude's TodoWrite is one tool call per plan version, so mirror that: each
+   * changed snapshot becomes its own (already resolved) `TodoWrite` call, and
+   * the original item's result carries the final progress.
+   */
+  private todoEvents(id: string, completed: boolean, rawItems: unknown): NormalizedEvent[] {
+    const items = Array.isArray(rawItems) ? rawItems : []
+    const toolId = id || `codex-tool-${this.called.size}`
+    const snapshot = JSON.stringify(items)
+    const events: NormalizedEvent[] = []
+    const previous = this.todoSnapshots.get(toolId)
+    this.todoSnapshots.set(toolId, snapshot)
+
+    if (!this.called.has(toolId)) {
+      this.called.add(toolId)
+      events.push({ type: 'tool_call', toolId, name: 'TodoWrite', input: { todos: items } })
+    } else if (previous !== snapshot) {
+      const versionId = `${toolId}:v${++this.todoVersions}`
+      this.called.add(versionId)
+      events.push(
+        { type: 'tool_call', toolId: versionId, name: 'TodoWrite', input: { todos: items } },
+        { type: 'tool_result', toolId: versionId, output: todoProgress(items), isError: false },
+      )
+    }
+    if (completed && !this.resolved.has(toolId)) {
+      this.resolved.add(toolId)
+      events.push({ type: 'tool_result', toolId, output: todoProgress(items), isError: false })
+    }
+    return events
   }
 
   /** `tool_call` on first sight of an item id; `tool_result` once, on completion. */

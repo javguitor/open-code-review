@@ -130,6 +130,13 @@ describe('PATCH /api/config', () => {
     expect(setPreference).not.toHaveBeenCalled()
   })
 
+  it('applies the trimmed, persisted ai_cli to the service, not the raw body value', async () => {
+    const res = await api('PATCH', { dashboard: { ai_cli: ' off ' } })
+    expect(res.status).toBe(200)
+    expect(readFileSync(join(ocrDir, 'config.yaml'), 'utf-8')).toContain('ai_cli: off')
+    expect(setPreference).toHaveBeenCalledWith('off')
+  })
+
   it('writes and reports posting.language, and rejects an invalid one', async () => {
     const ok = await api('PATCH', { posting: { language: 'en' } })
     expect(ok.status).toBe(200)

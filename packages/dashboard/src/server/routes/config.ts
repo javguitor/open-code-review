@@ -147,7 +147,8 @@ export function createConfigRouter(ocrDir: string, aiCliService: AiCliService): 
       const patch = toConfigPatch(req.body)
       if (Object.keys(patch).length > 0) setConfigValues(ocrDir, patch)
       // Re-select the active adapter now so the new vendor applies without a restart.
-      if (patch['dashboard.ai_cli']) aiCliService.setPreference(patch['dashboard.ai_cli'])
+      // Apply what the writer persisted (it trims), not the raw body value, so file and service agree.
+      if (patch['dashboard.ai_cli']) aiCliService.setPreference(readDashboardConfig(ocrDir).aiCli)
       res.json(resolvedSettings(ocrDir, aiCliService))
     } catch (err) {
       if (err instanceof ConfigWriteError) {

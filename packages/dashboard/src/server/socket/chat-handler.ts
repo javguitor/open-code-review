@@ -161,9 +161,23 @@ export function registerChatHandlers(
       // Store user message
       insertMessage(db, conversationId, 'user', message)
 
-      // Check if conversation has a Claude session to resume
+      const adapter = aiCliService.getAdapter()
+      if (!adapter) {
+        socket.emit('chat:error', {
+          conversationId,
+          error: 'No AI CLI adapter available',
+        })
+        return
+      }
+
+      // A vendor session id only means something to the CLI that minted it: after a
+      // provider switch (or for a legacy row with no vendor) start fresh and rebuild the context.
       const conversation = getConversation(db, conversationId)
-      const claudeSessionId = conversation?.claude_session_id ?? null
+      const storedSessionId = conversation?.claude_session_id ?? null
+      const claudeSessionId = storedSessionId && conversation?.vendor === adapter.binary ? storedSessionId : null
+      if (storedSessionId && !claudeSessionId) {
+        socket.emit('chat:notice', { conversationId, sessionId, code: 'provider-changed' })
+      }
 
       // Code root: the PR worktree when the session has one, else the checkout.
       const session = getSession(db, sessionId)
@@ -195,15 +209,6 @@ export function registerChatHandlers(
           : { type: 'review_round', sessionId, roundNumber: targetId }
         const context = buildChatContext(ocrDir, target, codeRoot.path, findings)
         prompt = `${context}\n\nUser: ${message}`
-      }
-
-      const adapter = aiCliService.getAdapter()
-      if (!adapter) {
-        socket.emit('chat:error', {
-          conversationId,
-          error: 'No AI CLI adapter available',
-        })
-        return
       }
 
       // Validate resumeSessionId format before passing to adapter
@@ -255,6 +260,19 @@ export function registerChatHandlers(
       let lineBuffer = ''
       let capturedClaudeSessionId: string | null = null
       let thinkingStatusEmitted = false
+      // Claude streams `text_delta`s (and never sends a `message`); Codex/OpenCode send
+      // only whole `message`s. The client builds the reply from `chat:token`, so a
+      // `message` is forwarded as a token unless deltas already streamed this turn.
+      let sawTextDelta = false
+      const onMessage = (text: string): void => {
+        if (sawTextDelta) {
+          assistantText = text
+          return
+        }
+        const chunk = assistantText ? `\n\n${text}` : text
+        assistantText += chunk
+        socket.emit('chat:token', { conversationId, token: chunk })
+      }
 
       // UTF-8 boundary safety — round-2 Blocker 1 (sweep completion).
       // Without setEncoding, multi-byte codepoints split across pipe
@@ -276,6 +294,7 @@ export function registerChatHandlers(
           for (const evt of parser.parseLine(line)) {
             switch (evt.type) {
               case 'text_delta':
+                sawTextDelta = true
                 assistantText += evt.text
                 socket.emit('chat:token', { conversationId, token: evt.text })
                 break
@@ -301,7 +320,7 @@ export function registerChatHandlers(
                 break
               }
               case 'message':
-                assistantText = evt.text
+                onMessage(evt.text)
                 break
               case 'session_id':
                 capturedClaudeSessionId = evt.id
@@ -326,10 +345,12 @@ export function registerChatHandlers(
           for (const evt of parser.parseLine(lineBuffer)) {
             switch (evt.type) {
               case 'text_delta':
+                sawTextDelta = true
                 assistantText += evt.text
+                socket.emit('chat:token', { conversationId, token: evt.text })
                 break
               case 'message':
-                assistantText = evt.text
+                onMessage(evt.text)
                 break
               case 'session_id':
                 capturedClaudeSessionId = evt.id
@@ -340,7 +361,7 @@ export function registerChatHandlers(
 
         // Store Claude session ID for future resume
         if (capturedClaudeSessionId) {
-          updateConversationClaudeSession(db, conversationId, capturedClaudeSessionId)
+          updateConversationClaudeSession(db, conversationId, capturedClaudeSessionId, adapter.binary)
         }
 
         // Store assistant response

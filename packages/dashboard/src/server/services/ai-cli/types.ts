@@ -101,6 +101,11 @@ export type SpawnOptions = {
   maxTurns?: number
   /** Tool allowlist (default: full set for workflow, read-only for query) */
   allowedTools?: string[]
+  /**
+   * The project's `.ocr/` directory. Adapters that sandbox writes (Codex) use it
+   * to resolve the configured worktrees dir; defaults to `<cwd>/.ocr`.
+   */
+  ocrDir?: string
   /** Session ID for conversation resume (Claude Code: --resume, OpenCode: TBD) */
   resumeSessionId?: string
   /**

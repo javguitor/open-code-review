@@ -17,6 +17,7 @@ const chat = {
   'chat.empty_review': 'Ask a question about this review to get started.',
   'chat.worktree_missing': 'Worktree removed — answering from the checkout',
   'chat.worktree_unknown': 'Could not check the worktree — answering from the checkout',
+  'chat.provider_changed': 'AI provider changed — starting a fresh conversation with the review context',
   'chat.proposal_title': 'Proposed change to finding #{id}',
   'chat.proposal_retired': 'Finding retired — not applicable',
   'chat.proposal_unknown_finding': 'Finding not loaded',

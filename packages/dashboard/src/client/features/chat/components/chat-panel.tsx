@@ -24,6 +24,12 @@ type ChatPanelProps = {
   findingsKind?: FindingKind
 }
 
+const NOTICE_KEYS = {
+  'worktree-missing': 'chat.worktree_missing',
+  'worktree-unknown': 'chat.worktree_unknown',
+  'provider-changed': 'chat.provider_changed',
+} as const
+
 export function ChatPanel({ sessionId, targetType, targetId, onClose, initialInput, findings, findingsKind }: ChatPanelProps) {
   const { t } = useT()
   const { isAvailable, isDisabledByConfig } = useAiCli()
@@ -122,7 +128,7 @@ export function ChatPanel({ sessionId, targetType, targetId, onClose, initialInp
 
         {worktreeNotice && (
           <p className="text-center text-xs text-zinc-500 dark:text-zinc-400">
-            {t(worktreeNotice === 'worktree-unknown' ? 'chat.worktree_unknown' : 'chat.worktree_missing')}
+            {t(NOTICE_KEYS[worktreeNotice])}
           </p>
         )}
 

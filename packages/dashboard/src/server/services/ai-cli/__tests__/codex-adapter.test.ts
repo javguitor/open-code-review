@@ -1,4 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { PassThrough } from 'node:stream'
 import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
@@ -67,6 +69,46 @@ describe('CodexAdapter', () => {
       expect(execMock).toHaveBeenLastCalledWith(
         'git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], expect.objectContaining({ cwd: '/tmp' }),
       )
+    })
+
+    describe('worktrees dir outside the checkout', () => {
+      let repo: string
+      let outside: string
+      const withConfig = (dir: string) => {
+        repo = mkdtempSync(join(tmpdir(), 'codex-wt-'))
+        mkdirSync(join(repo, '.ocr'))
+        writeFileSync(join(repo, '.ocr', 'config.yaml'), `worktrees:\n  dir: ${dir}\n`)
+      }
+      afterEach(() => rmSync(repo, { recursive: true, force: true }))
+
+      it('workflow: the configured dir is writable next to the git dir', () => {
+        outside = join(tmpdir(), 'ocr-external-worktrees')
+        withConfig(outside)
+        execMock.mockReturnValueOnce('/repo/.git\n')
+        const args = argsFor({ mode: 'workflow', cwd: repo })
+        expect(args).toContain(`sandbox_workspace_write.writable_roots=["/repo/.git",${JSON.stringify(outside)}]`)
+        execMock.mockReset()
+      })
+
+      it('workflow: a dir inside the checkout adds nothing; query stays read-only', () => {
+        withConfig('.ocr/worktrees')
+        execMock.mockReturnValue('/repo/.git\n')
+        expect(argsFor({ mode: 'workflow', cwd: repo })).toContain('sandbox_workspace_write.writable_roots=["/repo/.git"]')
+        withConfig(join(tmpdir(), 'elsewhere'))
+        expect(argsFor({ mode: 'query', cwd: repo }).join(' ')).not.toContain('writable_roots')
+        execMock.mockReset()
+      })
+
+      it('an explicit ocrDir wins over <cwd>/.ocr', () => {
+        withConfig('/nope')
+        const other = mkdtempSync(join(tmpdir(), 'codex-ocr-'))
+        writeFileSync(join(other, 'config.yaml'), 'worktrees:\n  dir: /somewhere/else\n')
+        execMock.mockReturnValueOnce('')
+        const args = argsFor({ mode: 'workflow', cwd: repo, ocrDir: other })
+        expect(args).toContain('sandbox_workspace_write.writable_roots=["/somewhere/else"]')
+        rmSync(other, { recursive: true, force: true })
+        execMock.mockReset()
+      })
     })
 
     it('query never widens the sandbox, even inside a repo', () => {
@@ -197,8 +239,26 @@ describe('CodexAdapter', () => {
         { type: 'item.updated', item: { id: 't', type: 'todo_list', items: [{ text: 'a', completed: false }] } },
         { type: 'item.completed', item: { id: 't', type: 'todo_list', items: [{ text: 'a', completed: true }] } },
       ])
-      expect(ev.filter((e) => e.type === 'tool_call').map((e) => (e as { name: string }).name)).toEqual(['WebSearch', 'TodoWrite'])
-      expect(ev.filter((e) => e.type === 'tool_result')).toHaveLength(2)
+      expect(ev.filter((e) => e.type === 'tool_call').map((e) => (e as { name: string }).name)).toEqual(['WebSearch', 'TodoWrite', 'TodoWrite'])
+      // web_search result + (todo: one result per plan version, plus the item's own)
+      expect(ev.filter((e) => e.type === 'tool_result')).toHaveLength(3)
+    })
+
+    it('todo_list started -> updated -> completed: every changed plan reaches the consumer, the result carries the final progress', () => {
+      const todo = (phase: string, items: unknown[]) => ({ type: phase, item: { id: 't', type: 'todo_list', items } })
+      const ev = parseAll([
+        todo('item.started', [{ text: 'Inspect', completed: false }]),
+        todo('item.updated', [{ text: 'Inspect', completed: false }]), // unchanged: dropped
+        todo('item.updated', [{ text: 'Inspect', completed: false }, { text: 'Verify', completed: false }]),
+        todo('item.completed', [{ text: 'Inspect', completed: true }, { text: 'Verify', completed: true }]),
+      ])
+      const calls = ev.filter((e) => e.type === 'tool_call') as Extract<NormalizedEvent, { type: 'tool_call' }>[]
+      expect(calls.map((c) => (c.input['todos'] as unknown[]).length)).toEqual([1, 2, 2])
+      expect((calls[2]!.input['todos'] as { completed: boolean }[]).every((t) => t.completed)).toBe(true)
+      const results = ev.filter((e) => e.type === 'tool_result') as Extract<NormalizedEvent, { type: 'tool_result' }>[]
+      expect(results.at(-1)).toMatchObject({ toolId: 't', output: '2/2 completed', isError: false })
+      // every extra snapshot is resolved too, so none stays pending in the timeline
+      expect(new Set(results.map((r) => r.toolId))).toEqual(new Set(calls.map((c) => c.toolId)))
     })
 
     it('turn.failed -> error + error result; a top-level error is non-terminal (no result)', () => {

@@ -235,6 +235,8 @@ export type ChatConversationRow = {
   target_type: 'map_run' | 'review_round'
   target_id: number
   claude_session_id: string | null
+  /** Adapter `binary` that minted `claude_session_id` (null: legacy row, vendor unknown). */
+  vendor: string | null
   status: 'active' | 'expired'
   created_at: string
   last_active_at: string
@@ -779,11 +781,12 @@ export function upsertConversation(
 export function updateConversationClaudeSession(
   db: Database,
   conversationId: string,
-  claudeSessionId: string
+  claudeSessionId: string,
+  vendor: string | null = null
 ): void {
   db.run(
-    `UPDATE chat_conversations SET claude_session_id = ?, last_active_at = datetime('now') WHERE id = ?`,
-    [claudeSessionId, conversationId]
+    `UPDATE chat_conversations SET claude_session_id = ?, vendor = ?, last_active_at = datetime('now') WHERE id = ?`,
+    [claudeSessionId, vendor, conversationId]
   )
 }
 
