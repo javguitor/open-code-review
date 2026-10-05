@@ -92,6 +92,26 @@ describe('DbSyncWatcher change notification', () => {
     expect(emits.filter((e) => e.event === 'session:created')).toHaveLength(0)
   })
 
+  it('emits session:deleted once when a seen row disappears (e.g. deleted by the CLI)', async () => {
+    insertSession(db, {
+      id: 'gone',
+      branch: 'feat/g',
+      workflow_type: 'review',
+      session_dir: '.ocr/sessions/gone',
+    })
+    const watcher = new DbSyncWatcher(db, dbPath, makeIo(emits))
+    await watcher.init()
+    watcher.syncFromDisk()
+    expect(emits.filter((e) => e.event === 'session:deleted')).toHaveLength(0)
+
+    db.run('DELETE FROM sessions WHERE id = ?', ['gone'])
+    watcher.syncFromDisk()
+    watcher.syncFromDisk()
+    expect(emits.filter((e) => e.event === 'session:deleted')).toEqual([
+      { event: 'session:deleted', payload: { id: 'gone' } },
+    ])
+  })
+
   it('emits session:updated when a session changes', async () => {
     insertSession(db, {
       id: 'sess-2',

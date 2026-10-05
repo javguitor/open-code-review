@@ -8,7 +8,7 @@
 import { join } from 'node:path'
 import { Router } from 'express'
 import type { Server as SocketIOServer } from 'socket.io'
-import type { Database } from '@open-code-review/persistence'
+import { runningExecutionForPr, type Database } from '@open-code-review/persistence'
 import { getWorktreeConfig } from '@open-code-review/config/worktree-config'
 import { getSession } from '../db.js'
 import { startTrackedExecution } from '../socket/execution-tracker.js'
@@ -16,7 +16,6 @@ import {
   listWorktrees,
   presentWorktree,
   removeWorktree,
-  runningExecutionForPr,
   type RunCli,
 } from '../services/worktrees.js'
 

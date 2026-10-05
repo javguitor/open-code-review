@@ -152,7 +152,8 @@ export class DbSyncWatcher {
   }
 
   private detectSessionChanges(): void {
-    for (const row of this.readSessions()) {
+    const rows = this.readSessions()
+    for (const row of rows) {
       const id = col(row, 'id') as string
       if (!id) continue
       const fp = sessionFingerprint(row)
@@ -184,6 +185,13 @@ export class DbSyncWatcher {
           phase_number: col(row, 'phase_number'),
         })
       }
+    }
+    // A row that vanished (`ocr state delete`, from the CLI or the dashboard) is gone for good.
+    const present = new Set(rows.map((r) => col(r, 'id') as string))
+    for (const id of [...this.seenSessions.keys()]) {
+      if (present.has(id)) continue
+      this.seenSessions.delete(id)
+      this.io.emit('session:deleted', { id })
     }
   }
 

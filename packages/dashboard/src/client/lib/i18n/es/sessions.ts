@@ -123,6 +123,23 @@ const sessions = {
   'sessions.worktree_not_found': 'No se ha encontrado ningún worktree para esta pull request.',
   'sessions.worktree_active_session': 'Sigue abierta una revisión de esta PR; termínala primero.',
   'sessions.worktree_remove_error': 'No se ha podido eliminar el worktree.',
+  'sessions.delete': 'Eliminar',
+  'sessions.delete_title': 'Eliminar sesión',
+  'sessions.delete_disabled': 'Solo se pueden eliminar sesiones cerradas. Cierra esta sesión primero.',
+  'sessions.delete_body': 'Esto elimina de forma permanente los ficheros, rondas, hallazgos, chats, eventos e historial de comandos de la sesión. No se puede deshacer.',
+  'sessions.delete_worktree': 'Eliminar también el worktree de la PR',
+  'sessions.deleting': 'Eliminando...',
+  'sessions.delete_not_closed': 'La sesión no está cerrada. Ciérrala antes de eliminarla.',
+  'sessions.delete_in_flight': 'Todavía hay un comando en ejecución para esta sesión. Espera a que termine.',
+  'sessions.delete_outside_root': 'El directorio de la sesión está fuera de la carpeta de sesiones de OCR, así que no se ha eliminado.',
+  'sessions.delete_failed': 'No se ha podido eliminar la sesión: {error}',
+  'sessions.delete_notice': 'Sesión eliminada.',
+  'sessions.delete_wt_dirty': 'El worktree tiene cambios sin confirmar y se ha conservado.',
+  'sessions.delete_wt_not_found': 'No se ha encontrado ningún worktree para esta pull request.',
+  'sessions.delete_wt_error': 'No se ha podido eliminar el worktree.',
+  'sessions.delete_wt_skipped_shared': 'Se ha conservado el worktree: otra sesión usa la misma pull request.',
+  'sessions.delete_wt_skipped_no_pr': 'La sesión no tiene pull request, así que no había worktree que eliminar.',
+  'sessions.delete_dismiss': 'Descartar',
 }
 
 export { sessions }

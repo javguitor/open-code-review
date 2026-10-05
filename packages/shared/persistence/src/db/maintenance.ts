@@ -11,10 +11,12 @@
  *
  * Invariants honored EVERYWHERE here:
  *  - `orchestration_events` and `sessions` are the immutable system of record.
- *    No operation deletes a row from them — the FK-orphan sweep PROTECTS them
- *    (a violation against a protected table is reported, never auto-deleted),
- *    and prune removes only the cascade *artifact* subtree, never events or the
- *    session row.
+ *    The single exception is the explicit, user-confirmed session deletion
+ *    ({@link deleteSessionRows}, driven by `ocr state delete`). Nothing else
+ *    deletes a row from them — the FK-orphan sweep PROTECTS them (a violation
+ *    against a protected table is reported, never auto-deleted), and prune
+ *    removes only the cascade *artifact* subtree, never events or the session
+ *    row.
  *  - Every mutating entry point snapshots the DB file first (best-effort) so a
  *    bad sweep is always reversible.
  *  - `PRAGMA foreign_keys` is toggled only in autocommit (never inside a
@@ -732,4 +734,71 @@ export function pruneDb(
     prunedSessions,
     totalArtifactRows: prunedSessions.reduce((n, p) => n + p.artifactRows, 0),
   };
+}
+
+// ── Session deletion ──
+
+export type DeleteSessionRowsResult = {
+  /** Rows deleted per table (cascade roots are counted before the delete). */
+  rows: Record<string, number>;
+  /** `uid` of each deleted `command_executions` row — names its `exec-logs/<uid>.log`. */
+  executionUids: string[];
+  /** `id` of each deleted `command_executions` row — names its `events/<id>.jsonl`. */
+  executionIds: number[];
+};
+
+/** Cascade roots whose rows are counted (not deleted explicitly) with the session. */
+const SESSION_CASCADE_ROOTS = [
+  "review_rounds",
+  "map_runs",
+  "markdown_artifacts",
+  "chat_conversations",
+] as const;
+
+/** Tables deleted explicitly, in FK order: RESTRICT children before the session row. */
+const SESSION_DELETE_STEPS: ReadonlyArray<[table: string, where: string]> = [
+  ["user_notes", "target_type = 'session' AND target_id = ?"],
+  ["orchestration_events", "session_id = ?"],
+  ["command_executions", "workflow_id = ?"],
+  ["sessions", "id = ?"],
+];
+
+/** Rows {@link deleteSessionRows} would delete, per table (cascade roots included). */
+export function countSessionRows(db: Database, sessionId: string): Record<string, number> {
+  const count = (table: string, where: string): number =>
+    Number(db.exec(`SELECT COUNT(*) FROM ${table} WHERE ${where}`, [sessionId])[0]?.values[0]?.[0] ?? 0);
+  const rows: Record<string, number> = {};
+  for (const table of SESSION_CASCADE_ROOTS) rows[table] = count(table, "session_id = ?");
+  for (const [table, where] of SESSION_DELETE_STEPS) rows[table] = count(table, where);
+  return rows;
+}
+
+/**
+ * Delete one session's rows — the ONLY place a `sessions` / `orchestration_events`
+ * row is deleted (see the invariants above). Runs in one transaction in FK
+ * order with foreign keys ON: `orchestration_events` and
+ * `command_executions.workflow_id` are `ON DELETE RESTRICT`, so they go first;
+ * the rest of the subtree (rounds, findings, maps, chats, ...) follows the
+ * `sessions` row by `ON DELETE CASCADE`. A missing session is a no-op with zero
+ * counts. The caller owns the snapshot and the directory removal.
+ */
+export function deleteSessionRows(
+  db: Database,
+  sessionId: string,
+): DeleteSessionRowsResult {
+  return db.transaction(() => {
+    const rows = countSessionRows(db, sessionId);
+    const executions = db.exec(
+      "SELECT id, uid FROM command_executions WHERE workflow_id = ?",
+      [sessionId],
+    )[0]?.values ?? [];
+    for (const [table, where] of SESSION_DELETE_STEPS) {
+      db.run(`DELETE FROM ${table} WHERE ${where}`, [sessionId]);
+    }
+    return {
+      rows,
+      executionUids: executions.flatMap((v) => (v[1] == null ? [] : [String(v[1])])),
+      executionIds: executions.map((v) => Number(v[0])),
+    };
+  });
 }

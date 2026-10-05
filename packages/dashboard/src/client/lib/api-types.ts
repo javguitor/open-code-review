@@ -42,6 +42,8 @@ export type SessionSummary = {
   worktree_path?: string | null
   /** GitHub login of the PR author; null for non-PR sessions or when unknown (older sessions). */
   pr_author?: string | null
+  /** Detail endpoint only: the PR worktree exists and no other session uses that PR, so deleting may also remove it. */
+  worktree_removable?: boolean
   /** Detail endpoint only: absolute root finding links are built against (PR worktree when it exists, else the repo root). */
   code_root?: string
   /** Detail endpoint only: `code_root` is the PR worktree (false = the worktree is gone or the session is not a PR). */
@@ -547,6 +549,24 @@ export type WorktreeRemoveResult = {
   path?: string
   error?: string
 }
+
+export type SessionDeleteWorktreeStatus =
+  | 'removed'
+  | 'dirty'
+  | 'not-found'
+  | 'error'
+  | 'skipped-shared'
+  | 'skipped-no-pr'
+
+/** Response of `DELETE /api/sessions/:id` (HTTP 200). */
+export type SessionDeleteResult = {
+  deleted: true
+  status: 'deleted' | 'already-absent'
+  worktree: { status: SessionDeleteWorktreeStatus; error?: string } | null
+}
+
+/** `code` of a 409 from `DELETE /api/sessions/:id`. */
+export type SessionDeleteRefusal = 'not-closed' | 'in-flight' | 'outside-root'
 
 /** What `after-post` cleanup did, reported on `post:submit-result`. */
 export type PostWorktreeOutcome =

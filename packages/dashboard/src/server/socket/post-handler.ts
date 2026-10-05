@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { join, dirname, isAbsolute } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { Server as SocketIOServer, Socket } from 'socket.io'
-import { markRoundPosted, type Database } from '@open-code-review/persistence'
+import { markRoundPosted, runningExecutionForPr, type Database } from '@open-code-review/persistence'
 import { execBinaryAsync, isGitHubReviewState, type GitHubReviewState } from '@open-code-review/platform'
 import { getWorktreeConfig } from '@open-code-review/config/worktree-config'
 import { getPostingLanguage } from '@open-code-review/config/language-config'
@@ -24,7 +24,6 @@ import {
   listWorktrees,
   presentWorktree,
   removeWorktree,
-  runningExecutionForPr,
   type RunCli,
 } from '../services/worktrees.js'
 import { getPrHead } from '../services/pr-head.js'
