@@ -1033,7 +1033,7 @@ fi
    ...
    ```
 
-2. If `--post` flag or PR target:
+2. Only if the user passed `--post` (a PR target alone is NOT a request to post — publishing otherwise belongs to `/ocr:post` or the dashboard, and posting here too duplicates the review on the PR):
    - Check for `gh` CLI: `which gh`
    - Post as a PR review: `gh pr review {pr_url} --{state} --body-file final.md` — for PR sessions use the session's `pr_url` (`ocr state show --json`); otherwise find the PR number for the branch
    - `{state}` comes from the round verdict: `APPROVE` -> `approve`, `REQUEST CHANGES` -> `request-changes`, `NEEDS DISCUSSION` or no verdict -> `comment` (see `commands/post.md`)
