@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useId } from 'react'
 import mermaid from 'mermaid'
 import { useT } from '../../lib/i18n'
 import { useTheme } from '../../providers/theme-provider'
+import { removeMermaidTempNodes } from './mermaid-cleanup'
 
 type MermaidRendererProps = {
   definition: string
@@ -64,8 +65,19 @@ export default function MermaidRenderer({
       try {
         if (cancelled) return
 
+        // Validate first: parse() throws the real syntax message without touching
+        // the DOM, unlike render(), which leaves its error SVG in <body>.
+        await mermaid.parse(definition)
+        if (cancelled) return
+
         const elementId = `mermaid${uniqueId}`
-        const { svg } = await mermaid.render(elementId, definition)
+        let svg: string
+        try {
+          ;({ svg } = await mermaid.render(elementId, definition))
+        } catch (renderErr) {
+          removeMermaidTempNodes(document, elementId)
+          throw renderErr
+        }
 
         if (cancelled || !containerRef.current) return
 
