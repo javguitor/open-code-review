@@ -221,6 +221,7 @@ export { resultToRows, resultToRow } from "./result-mapper.js";
 export type { Database, ExecResult, ExecResultRow, SqlValue, BindParams } from "./engine.js";
 export { probeEngine, isBusyError } from "./engine.js";
 export { reconcileLegacyState, hasInFlightDependents } from "./reconcile.js";
+export { runningExecutionForPr } from "./running-executions.js";
 export type {
   ReconcileResult,
   ReconcileAction,
@@ -235,6 +236,8 @@ export {
   fixDb,
   vacuumDb,
   pruneDb,
+  deleteSessionRows,
+  countSessionRows,
   pruneBackups,
   withForeignKeysDisabled,
 } from "./maintenance.js";
@@ -250,6 +253,7 @@ export type {
   DbPruneResult,
   DbPruneSessionPlan,
   DbPruneBackupsResult,
+  DeleteSessionRowsResult,
 } from "./maintenance.js";
 export { getSchemaVersion } from "./migrations.js";
 export { dbPathFor, resolveMainCheckout } from "./main-checkout.js";

@@ -1,4 +1,4 @@
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, GitBranch, Clock, FileSearch, Map } from 'lucide-react'
 import { useSession } from './hooks/use-sessions'
@@ -13,6 +13,7 @@ import { PostedBadge } from './components/posted-badge'
 import { StaleBadge } from './components/stale-badge'
 import { PrAuthor } from './components/pr-author'
 import { WorktreePanel } from './components/worktree-panel'
+import { DeleteSessionDialog } from './components/delete-session-dialog'
 import { RequirementsBlock } from '../requirements/components/requirements-block'
 import { fetchApi, parseUtcDate } from '../../lib/utils'
 import { formatDate } from '../../lib/date-utils'
@@ -81,6 +82,7 @@ export function SessionDetailPage() {
   const { t } = useT()
   const { id } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const { data: session, isLoading } = useSession(id ?? '')
 
   const eventsQuery = useQuery<OrchestrationEvent[]>({
@@ -184,6 +186,7 @@ export function SessionDetailPage() {
           <div className="flex items-center gap-2">
             <PostedBadge postedAt={session.latest_posted_at} postedUrl={session.latest_posted_url} />
             <StatusBadge variant={session.status} />
+            <DeleteSessionDialog session={session} onDeleted={() => navigate('/sessions')} />
           </div>
         </div>
 

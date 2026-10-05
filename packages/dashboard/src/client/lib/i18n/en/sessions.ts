@@ -123,6 +123,23 @@ const sessions = {
   'sessions.worktree_not_found': 'No worktree found for this pull request.',
   'sessions.worktree_active_session': 'A review of this PR is still open; finish it first.',
   'sessions.worktree_remove_error': 'The worktree could not be removed.',
+  'sessions.delete': 'Delete',
+  'sessions.delete_title': 'Delete session',
+  'sessions.delete_disabled': 'Only closed sessions can be deleted. Close this session first.',
+  'sessions.delete_body': "This permanently deletes the session's files, rounds, findings, chats, events and command history. This cannot be undone.",
+  'sessions.delete_worktree': 'Also remove the PR worktree',
+  'sessions.deleting': 'Deleting...',
+  'sessions.delete_not_closed': 'The session is not closed. Close it before deleting it.',
+  'sessions.delete_in_flight': 'A command is still running for this session. Wait for it to finish.',
+  'sessions.delete_outside_root': 'The session directory is outside the OCR sessions folder, so it was not deleted.',
+  'sessions.delete_failed': 'The session could not be deleted: {error}',
+  'sessions.delete_notice': 'Session deleted.',
+  'sessions.delete_wt_dirty': 'The worktree has uncommitted changes and was kept.',
+  'sessions.delete_wt_not_found': 'No worktree found for this pull request.',
+  'sessions.delete_wt_error': 'The worktree could not be removed.',
+  'sessions.delete_wt_skipped_shared': 'The worktree was kept: another session uses the same pull request.',
+  'sessions.delete_wt_skipped_no_pr': 'The session has no pull request, so there was no worktree to remove.',
+  'sessions.delete_dismiss': 'Dismiss',
 }
 
 export { sessions }

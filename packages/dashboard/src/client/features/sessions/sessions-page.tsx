@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useSessions } from './hooks/use-sessions'
 import { SessionFilters, type StatusFilter } from './components/session-filters'
 import { SessionList } from './components/session-list'
+import { DeleteSessionNotice } from './components/delete-session-notice'
 import { useT } from '../../lib/i18n'
 import { isUnposted } from './lib/posted'
 import type { WorkflowType } from '../../lib/api-types'
@@ -31,6 +32,8 @@ export function SessionsPage() {
           {t('sessions.subtitle')}
         </p>
       </div>
+
+      <DeleteSessionNotice />
 
       <SessionFilters
         statusFilter={statusFilter}

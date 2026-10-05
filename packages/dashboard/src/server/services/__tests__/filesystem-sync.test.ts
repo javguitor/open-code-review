@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import {
   openDatabase,
   runMigrations,
+  deleteSessionRows,
   type Database,
 } from '@open-code-review/persistence'
 import { removeTempWorkspace } from '@open-code-review/persistence/test-support'
@@ -65,6 +66,22 @@ describe('FilesystemSync', () => {
       expect(session).toBeDefined()
       expect(session?.['branch']).toBe('main')
       expect(session?.['workflow_type']).toBe('review')
+    })
+
+    it('does not re-create a session whose directory and rows were deleted', async () => {
+      const sessionId = '2026-01-01-deleted'
+      const sessionDir = join(sessionsDir, sessionId)
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(join(sessionDir, 'context.md'), '# Context\n')
+
+      const sync = new FilesystemSync(db, sessionsDir)
+      await sync.fullScan()
+      expect(queryOne(db, 'SELECT id FROM sessions WHERE id = ?', [sessionId])).toBeDefined()
+
+      rmSync(sessionDir, { recursive: true })
+      deleteSessionRows(db, sessionId)
+      await sync.fullScan()
+      expect(queryOne(db, 'SELECT id FROM sessions WHERE id = ?', [sessionId])).toBeUndefined()
     })
 
     it('skips empty session directories with no artifacts', async () => {

@@ -8,6 +8,7 @@ import { phaseLabel } from '../lib/phase-label'
 import { StaleBadge } from './stale-badge'
 import { PrAuthor } from './pr-author'
 import { PostedBadge } from './posted-badge'
+import { DeleteSessionDialog } from './delete-session-dialog'
 import type { SessionSummary } from '../../../lib/api-types'
 
 type SessionCardProps = {
@@ -77,9 +78,12 @@ export function SessionCard({ session }: SessionCardProps) {
   const resolvedStatus = isResolvedStatus(roundStatus) ? roundStatus : null
 
   return (
+    // The delete action is a sibling of the Link, not a child: a button inside an anchor is invalid
+    // HTML and would need click-swallowing to avoid navigating.
+    <div className="group relative">
     <Link
       to={`/sessions/${session.id}`}
-      className="group block rounded-lg border border-zinc-200 bg-white p-4 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 dark:hover:bg-zinc-800/50"
+      className="block rounded-lg border border-zinc-200 bg-white p-4 transition-colors hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 dark:hover:bg-zinc-800/50"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
@@ -141,5 +145,7 @@ export function SessionCard({ session }: SessionCardProps) {
         </span>
       </div>
     </Link>
+    <DeleteSessionDialog session={session} triggerClassName="absolute bottom-3 right-3 px-2 py-1" />
+    </div>
   )
 }

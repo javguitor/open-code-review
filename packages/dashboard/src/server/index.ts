@@ -550,7 +550,7 @@ export async function startServer(options: StartServerOptions): Promise<void> {
     }
   })
 
-  app.use('/api/sessions', createSessionsRouter(db, { ocrDir }))
+  app.use('/api/sessions', createSessionsRouter(db, { ocrDir, io }))
   app.use('/api/sessions', createReviewsRouter(db))
   app.use('/api/sessions', createRoundDiffRouter(db, ocrDir))
   app.use('/api/sessions', createMapsRouter(db))

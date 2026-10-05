@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net'
 import type { Server } from 'node:http'
 import { join } from 'node:path'
 import express from 'express'
+import type { Server as SocketIOServer } from 'socket.io'
 import type { Database } from '@open-code-review/persistence'
 import { makeTempWorkspace, removeTempWorkspace } from '@open-code-review/persistence/test-support'
 import { openDb } from '../../db.js'
@@ -25,6 +26,8 @@ let reqFail: boolean
 let authors: Map<string, string | null>
 let authorCalls: Array<{ url: string; cacheOnly: boolean }>
 let worktreeRows: unknown[]
+let deleteCalls: string[][]
+let deleteReply: { stdout: string; fail?: boolean }
 let reqCalls: Array<{ url: string; force: boolean; cacheOnly: boolean }>
 const CARD = 'https://app.clickup.com/t/abc'
 /** When set, the route uses the real `getPrHead` (cache + failure semantics) over this runner. */
@@ -55,9 +58,13 @@ function insert(id: string, extra: { requirements_source_url?: string; requireme
   if (extra.updated_at) db.run('UPDATE sessions SET updated_at = ? WHERE id = ?', [extra.updated_at, id])
 }
 
-async function api(method: string, path: string): Promise<{ status: number; body: any }> {
+async function api(method: string, path: string, body?: unknown): Promise<{ status: number; body: any }> {
   const { port } = server.address() as AddressInfo
-  const res = await fetch(`http://127.0.0.1:${port}/api/sessions${path}`, { method })
+  const res = await fetch(`http://127.0.0.1:${port}/api/sessions${path}`, {
+    method,
+    headers: { 'content-type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
   return { status: res.status, body: await res.json() }
 }
 
@@ -73,16 +80,25 @@ beforeEach(async () => {
   authors = new Map()
   authorCalls = []
   worktreeRows = []
+  deleteCalls = []
+  deleteReply = { stdout: JSON.stringify({ status: 'deleted', session_id: 's', worktree: null }) }
   reqCalls = []
   realGh = undefined as never
   clearPrHeadCacheForTests()
   resetChildEnvBaseForTests()
   initChildEnvBase(captureChildEnvBase('dev-direct-run'))
   const app = express()
+  app.use(express.json())
   app.use(
     '/api/sessions',
     createSessionsRouter(db, {
       ocrDir,
+      io: { emit: () => true } as unknown as SocketIOServer,
+      runDeleteCli: async (_bin, args) => {
+        deleteCalls.push(args)
+        if (deleteReply.fail) throw Object.assign(new Error('exit 6'), { code: 6, stdout: deleteReply.stdout })
+        return { stdout: deleteReply.stdout, stderr: '' }
+      },
       getRequirementsHead: async (url, opts) => {
         reqCalls.push({ url, force: opts.force ?? false, cacheOnly: opts.cacheOnly ?? false })
         if (reqFail && opts.force) throw new RequirementsHeadLookupError(url, 'no token')
@@ -352,5 +368,82 @@ describe('GET /api/sessions/:id — code_root', () => {
   it('falls back to the repo root when the PR worktree is gone', async () => {
     insert('pr', { pr_url: PR_URL, pr_number: 7 })
     expect((await api('GET', '/pr')).body).toMatchObject({ code_root: workspace, code_root_is_worktree: false })
+  })
+})
+
+describe('GET /api/sessions/:id — worktree_removable', () => {
+  const wt = (pr: number) => mkdirSync(join(ocrDir, 'worktrees', `pr-${pr}`), { recursive: true })
+
+  it('is true when the PR worktree exists and no other session shares the PR', async () => {
+    insert('a', { pr_number: 7 })
+    wt(7)
+    expect((await api('GET', '/a')).body.worktree_removable).toBe(true)
+  })
+
+  it('is false when another session targets the same PR', async () => {
+    insert('a', { pr_number: 7 })
+    insert('b', { pr_number: 7 })
+    wt(7)
+    expect((await api('GET', '/a')).body.worktree_removable).toBe(false)
+  })
+
+  it('is false without a PR or without the worktree on disk', async () => {
+    insert('plain')
+    insert('nowt', { pr_number: 8 })
+    expect((await api('GET', '/plain')).body.worktree_removable).toBe(false)
+    expect((await api('GET', '/nowt')).body.worktree_removable).toBe(false)
+  })
+})
+
+describe('DELETE /api/sessions/:id', () => {
+  const executions = () => db.exec('SELECT command, args, exit_code FROM command_executions')[0]?.values ?? []
+
+  it('200 on deleted, without --remove-worktree by default, and records the execution', async () => {
+    const { status, body } = await api('DELETE', '/s1', {})
+    expect(status).toBe(200)
+    expect(body).toEqual({ deleted: true, status: 'deleted', worktree: null })
+    expect(deleteCalls[0]).toEqual(expect.arrayContaining(['state', 'delete', '--json', '--', 's1']))
+    expect(deleteCalls[0]).not.toContain('--remove-worktree')
+    expect(executions()).toEqual([['ocr state delete', '["s1"]', 0]])
+  })
+
+  it('passes --remove-worktree only when the body asks, and relays the worktree result', async () => {
+    deleteReply = { stdout: JSON.stringify({ status: 'deleted', session_id: 's1', worktree: { status: 'removed' } }) }
+    const { status, body } = await api('DELETE', '/s1', { removeWorktree: true })
+    expect(status).toBe(200)
+    expect(body.worktree).toEqual({ status: 'removed' })
+    expect(deleteCalls[0]).toContain('--remove-worktree')
+    expect(executions()).toEqual([['ocr state delete', '["s1","--remove-worktree"]', 0]])
+  })
+
+  it('200 on already-absent', async () => {
+    deleteReply = { stdout: JSON.stringify({ status: 'already-absent', session_id: 's1', worktree: null }) }
+    const { status, body } = await api('DELETE', '/s1')
+    expect(status).toBe(200)
+    expect(body).toMatchObject({ deleted: true, status: 'already-absent' })
+  })
+
+  it('409 with the code when refused (exit 6 still carries the JSON)', async () => {
+    deleteReply = {
+      stdout: JSON.stringify({ status: 'refused', session_id: 's1', code: 'not-closed', error: 'still active' }),
+      fail: true,
+    }
+    const { status, body } = await api('DELETE', '/s1')
+    expect(status).toBe(409)
+    expect(body).toEqual({ code: 'not-closed', error: 'still active' })
+    expect(executions()).toEqual([['ocr state delete', '["s1"]', 6]])
+  })
+
+  it('500 when stdout is not the CLI JSON', async () => {
+    deleteReply = { stdout: 'boom', fail: true }
+    const { status, body } = await api('DELETE', '/s1')
+    expect(status).toBe(500)
+    expect(typeof body.error).toBe('string')
+  })
+
+  it('400 when removeWorktree is not a boolean, without running the CLI', async () => {
+    const { status } = await api('DELETE', '/s1', { removeWorktree: 'yes' })
+    expect(status).toBe(400)
+    expect(deleteCalls).toEqual([])
   })
 })

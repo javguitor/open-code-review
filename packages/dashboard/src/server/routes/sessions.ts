@@ -10,6 +10,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { Router } from 'express'
+import type { Server as SocketIOServer } from 'socket.io'
 import type { Database } from '@open-code-review/persistence'
 import { getWorktreeConfig } from '@open-code-review/config/worktree-config'
 import {
@@ -26,6 +27,8 @@ import {
 import { getPrHead, PrHeadLookupError } from '../services/pr-head.js'
 import { getPrAuthor } from '../services/pr-author.js'
 import { codeRootForSession, type RunCli } from '../services/worktrees.js'
+import { deleteSessionViaCli } from '../services/session-delete-cli.js'
+import { startTrackedExecution } from '../socket/execution-tracker.js'
 import {
   getRequirementsHead,
   isLookupable,
@@ -276,6 +279,10 @@ export type SessionsRouterDeps = {
   getPrAuthor?: typeof getPrAuthor
   /** Injectable so tests need no `ocr worktree list`. */
   runCli?: RunCli
+  /** Records `DELETE /:id` as a tracked execution; omitted → not tracked. */
+  io?: SocketIOServer
+  /** Injectable so tests need no `ocr state delete`. */
+  runDeleteCli?: RunCli
 }
 
 // ── Router ──
@@ -299,6 +306,11 @@ export function createSessionsRouter(db: Database, deps: SessionsRouterDeps = {}
     const path = join(getWorktreeConfig(deps.ocrDir).dir, `pr-${s.pr_number}`)
     return existsSync(path) ? path : null
   }
+
+  /** The PR worktree exists and no other session targets the same PR (deleting would not strand them). */
+  const worktreeRemovable = (s: SessionRow): boolean =>
+    worktreePath(s) !== null &&
+    !getAllSessions(db).some((o) => o.id !== s.id && o.pr_number === s.pr_number)
 
   /** Absolute dir finding paths resolve against: the PR worktree when present, else the repo root. */
   const codeRootFields = async (s: SessionRow): Promise<{ code_root: string; code_root_is_worktree: boolean }> => {
@@ -346,12 +358,47 @@ export function createSessionsRouter(db: Database, deps: SessionsRouterDeps = {}
         // Never spawn the CLI on a page load: only POST /check-updates forces a lookup.
         ...(await computeRequirements(session, deps.ocrDir, getReqHead, { cacheOnly: true })),
         worktree_path: worktreePath(session),
+        worktree_removable: worktreeRemovable(session),
         pr_author: await prAuthor(session, false),
         ...(await codeRootFields(session)),
       })
     } catch (err) {
       console.error('Failed to fetch session:', err)
       res.status(500).json({ error: 'Failed to fetch session' })
+    }
+  })
+
+  // DELETE /api/sessions/:id { removeWorktree? } — `ocr state delete`; 200 deleted | 409 refused { code } | 500
+  router.delete('/:id', async (req, res) => {
+    try {
+      const removeWorktree = (req.body as { removeWorktree?: unknown } | undefined)?.removeWorktree
+      if (removeWorktree !== undefined && typeof removeWorktree !== 'boolean') {
+        res.status(400).json({ error: '`removeWorktree` must be a boolean' })
+        return
+      }
+      const id = req.params['id'] as string
+      const tracker = deps.io && deps.ocrDir
+        ? startTrackedExecution(deps.io, db, deps.ocrDir, 'ocr state delete', [id, ...(removeWorktree ? ['--remove-worktree'] : [])])
+        : null
+      tracker?.appendOutput(`▸ Deleting session ${id}...\n`)
+      const result = await deleteSessionViaCli(deps.ocrDir ?? '.ocr', id, { removeWorktree }, deps.runDeleteCli)
+      const ok = result.status === 'deleted' || result.status === 'already-absent'
+      tracker?.appendOutput(
+        ok
+          ? `✓ ${result.status}\n`
+          : `✗ ${result.status}: ${result.error ?? ('code' in result ? result.code : '')}\n`,
+      )
+      tracker?.finish(ok ? 0 : result.status === 'refused' ? 6 : 1)
+      if (ok) {
+        res.json({ deleted: true, status: result.status, worktree: 'worktree' in result ? result.worktree : null })
+      } else if (result.status === 'refused') {
+        res.status(409).json({ code: result.code, error: result.error })
+      } else {
+        res.status(500).json({ error: result.error })
+      }
+    } catch (err) {
+      console.error('Failed to delete session:', err)
+      res.status(500).json({ error: 'Failed to delete session' })
     }
   })
 

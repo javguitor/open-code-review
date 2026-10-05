@@ -16,12 +16,13 @@
  *   show           — Display current session state
  *   sync           — Rebuild session state from filesystem artifacts
  *   reconcile      — Heal legacy/drifted session state
+ *   delete         — Permanently delete a closed session (directory + rows)
  */
 
 import { Command, InvalidArgumentError } from "commander";
 import chalk from "chalk";
-import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, unlinkSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { requireOcrSetup } from "../lib/guards.js";
 import { isValidPrNumber } from "../lib/pr-number.js";
 import { getWorktreeConfig } from "@open-code-review/config/worktree-config";
@@ -52,6 +53,12 @@ import {
   getAllSessions,
   isBusyError,
   linkDashboardInvocationToWorkflow,
+  dbPathFor,
+  snapshotDb,
+  deleteSessionRows,
+  countSessionRows,
+  hasInFlightDependents,
+  runningExecutionForPr,
 } from "@open-code-review/persistence";
 
 // ── Helpers ──
@@ -394,6 +401,202 @@ const reconcileSubcommand = new Command("reconcile")
     }
   });
 
+// ── delete ──
+
+export type DeleteSessionOutcome = {
+  status: "deleted" | "already-absent" | "refused" | "error";
+  session_id: string;
+  code?: "not-closed" | "in-flight" | "outside-root";
+  error?: string;
+  dry_run?: boolean;
+  /** Dry run: what would be removed. Otherwise: what was. */
+  removed?: { directory: boolean; rows: Record<string, number>; files: number };
+  worktree: null | { status: string; error?: string };
+};
+
+/** True iff `dir` is strictly inside `root` (never `root` itself). */
+function isStrictlyInside(root: string, dir: string): boolean {
+  const rel = relative(root, dir);
+  return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
+}
+
+/** Unlink each file that exists; returns how many were removed. Best-effort. */
+function unlinkExisting(paths: string[]): number {
+  let removed = 0;
+  for (const path of paths) {
+    try {
+      if (!existsSync(path)) continue;
+      unlinkSync(path);
+      removed++;
+    } catch {
+      // best-effort: a leftover log file is harmless
+    }
+  }
+  return removed;
+}
+
+/**
+ * Delete a closed session: directory FIRST, then rows. With the directory gone
+ * nothing can backfill the row (FilesystemSync only backfills directories that
+ * exist); the reverse order resurrects the session on the next sync. Every step
+ * is a no-op when its target is already gone, so a re-run converges.
+ */
+export async function deleteSession(
+  ocrDir: string,
+  sessionId: string,
+  options: { removeWorktree?: boolean; dryRun?: boolean },
+): Promise<DeleteSessionOutcome> {
+  const db = await ensureDatabase(ocrDir);
+  const row = getSession(db, sessionId);
+  const sessionsRoot = resolve(ocrDir, "sessions");
+  const dir = resolve(
+    row?.session_dir
+      ? isAbsolute(row.session_dir) ? row.session_dir : join(dirname(ocrDir), row.session_dir)
+      : join(sessionsRoot, sessionId),
+  );
+  const refuse = (code: NonNullable<DeleteSessionOutcome["code"]>): DeleteSessionOutcome => ({
+    status: "refused",
+    session_id: sessionId,
+    code,
+    worktree: null,
+  });
+
+  // `SESSION_ID_PATTERN` allows `/` and `..`, so the id alone is no guard for a recursive delete.
+  if (!isStrictlyInside(sessionsRoot, dir)) return refuse("outside-root");
+  const dirExists = existsSync(dir);
+  if (!row && !dirExists) return { status: "already-absent", session_id: sessionId, worktree: null };
+
+  // Guards protect a session's lifecycle; a directory without a row has none.
+  if (row) {
+    if (row.status !== "closed") return refuse("not-closed");
+    if (
+      hasInFlightDependents(db, sessionId) ||
+      (row.pr_number != null && runningExecutionForPr(db, row.pr_number) !== null)
+    ) {
+      return refuse("in-flight");
+    }
+  }
+
+  const prNumber = row?.pr_number ?? null;
+  const sharedPr =
+    prNumber != null &&
+    db.exec("SELECT 1 FROM sessions WHERE pr_number = ? AND id != ? LIMIT 1", [prNumber, sessionId])[0]
+      ?.values.length === 1;
+  const worktreeSkip = !options.removeWorktree
+    ? null
+    : prNumber == null
+      ? { status: "skipped-no-pr" }
+      : sharedPr
+        ? { status: "skipped-shared" }
+        : undefined;
+
+  if (options.dryRun) {
+    return {
+      status: "deleted",
+      session_id: sessionId,
+      dry_run: true,
+      removed: { directory: dirExists, rows: row ? countSessionRows(db, sessionId) : {}, files: 0 },
+      worktree: worktreeSkip === undefined ? { status: "would-remove" } : worktreeSkip,
+    };
+  }
+
+  if (row) snapshotDb(db, dbPathFor(ocrDir), "delete-session");
+  if (dirExists) {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch (error) {
+      return {
+        status: "error",
+        session_id: sessionId,
+        error: error instanceof Error ? error.message : String(error),
+        worktree: null,
+      };
+    }
+  }
+
+  let rows: Record<string, number> = {};
+  let files = 0;
+  if (row) {
+    const deleted = deleteSessionRows(db, sessionId);
+    rows = deleted.rows;
+    files = unlinkExisting([
+      ...deleted.executionUids.map((uid) => join(ocrDir, "data", "exec-logs", `${uid}.log`)),
+      ...deleted.executionIds.map((id) => join(ocrDir, "data", "events", `${id}.jsonl`)),
+    ]);
+  }
+
+  let worktree: DeleteSessionOutcome["worktree"] = worktreeSkip ?? null;
+  if (worktreeSkip === undefined && prNumber != null) {
+    // Never undoes the delete: any failure is reported, not thrown.
+    try {
+      worktree = { status: removePrWorktree({ ocrDir, prNumber }).status };
+    } catch (error) {
+      worktree = { status: "error", error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+  return {
+    status: "deleted",
+    session_id: sessionId,
+    removed: { directory: dirExists, rows, files },
+    worktree,
+  };
+}
+
+const deleteSubcommand = new Command("delete")
+  .description("Permanently delete a closed session: its directory and all of its database rows")
+  .argument("<session-id>", "Session ID to delete")
+  .option("--remove-worktree", "Also remove the session's PR worktree (never forced; kept if shared, dirty or in use)")
+  .option("--dry-run", "Print what would be deleted without writing anything")
+  .option("--json", "Output the result as JSON")
+  .action(
+    async (
+      sessionId: string,
+      options: { removeWorktree?: boolean; dryRun?: boolean; json?: boolean },
+    ) => {
+      const targetDir = process.cwd();
+      requireOcrSetup(targetDir);
+      const ocrDir = join(targetDir, ".ocr");
+
+      let outcome: DeleteSessionOutcome;
+      try {
+        outcome = await deleteSession(ocrDir, sessionId, options);
+      } catch (error) {
+        exitFromStateError(error, "Failed to delete session");
+      }
+
+      if (options.json) {
+        console.log(JSON.stringify(outcome, null, 2));
+      } else {
+        printDeleteOutcome(outcome);
+      }
+      if (outcome.status === "refused") process.exit(STATE_EXIT.INVARIANT_UNMET);
+      if (outcome.status === "error") process.exit(1);
+    },
+  );
+
+function printDeleteOutcome(o: DeleteSessionOutcome): void {
+  if (o.status === "already-absent") {
+    console.log(chalk.dim(`${o.session_id}: already absent`));
+  } else if (o.status === "refused") {
+    console.error(chalk.red(`${o.session_id}: refused (${o.code}) — nothing deleted`));
+  } else if (o.status === "error") {
+    console.error(chalk.red(`${o.session_id}: could not remove the session directory: ${o.error}`));
+  } else {
+    const verb = o.dry_run ? "would delete" : "deleted";
+    const rows = Object.values(o.removed?.rows ?? {}).reduce((a, b) => a + b, 0);
+    console.log(`${o.session_id}: ${verb}${o.removed?.directory ? " directory" : ""}, ${rows} row(s)`);
+    if (o.dry_run) {
+      for (const [table, n] of Object.entries(o.removed?.rows ?? {})) {
+        if (n > 0) console.log(chalk.dim(`  ${table}: ${n}`));
+      }
+    }
+  }
+  if (o.worktree) {
+    const detail = o.worktree.error ? `: ${o.worktree.error}` : "";
+    console.log(chalk.dim(`  worktree: ${o.worktree.status}${detail}`));
+  }
+}
+
 // ── Atomic porcelain (the misuse-proof agent API) ──
 
 /** Map a thrown error to its exit code + message, then exit. */
@@ -725,6 +928,7 @@ export const stateCommand = new Command("state")
   .addCommand(showSubcommand)
   .addCommand(syncSubcommand)
   .addCommand(reconcileSubcommand)
+  .addCommand(deleteSubcommand)
   // Commander's default unknown-subcommand path exits 1 with a misleading
   // "Did you mean finish?" guess. For a CLI whose consumer is an LLM, give a
   // deterministic typed signal instead: exit 2 (USAGE) routing a v1-pinned

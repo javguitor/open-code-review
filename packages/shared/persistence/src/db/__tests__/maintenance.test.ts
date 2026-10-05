@@ -10,6 +10,7 @@ import {
   fixDb,
   vacuumDb,
   pruneDb,
+  deleteSessionRows,
   pruneBackups,
   reapOrphanDbFiles,
   reapStaleExecLogs,
@@ -447,6 +448,75 @@ describe("synthesized findings tables", () => {
     pruneDb(db, dbPath, { keepSessions: 0 });
     expect(count("SELECT COUNT(*) FROM synthesis_findings")).toBe(0);
     expect(count("SELECT COUNT(*) FROM synthesis_finding_decisions")).toBe(0);
+    expect(count("SELECT COUNT(*) FROM sessions")).toBe(1);
+  });
+});
+
+describe("deleteSessionRows", () => {
+  function seedWithSubtree(id: string): void {
+    seedSession(id);
+    db.run("INSERT INTO review_rounds (session_id, round_number) VALUES (?, 1)", [id]);
+    db.run(
+      `INSERT INTO markdown_artifacts (session_id, artifact_type, round_number, file_path, content)
+       VALUES (?, 'final', 1, ?, 'body')`,
+      [id, `${id}/final.md`],
+    );
+    db.run(
+      "INSERT INTO chat_conversations (id, session_id, target_type, target_id) VALUES (?, ?, 'review_round', 1)",
+      [`chat-${id}`, id],
+    );
+    db.run("INSERT INTO user_notes (target_type, target_id, content) VALUES ('session', ?, 'n')", [id]);
+    db.run("INSERT INTO user_notes (target_type, target_id, content) VALUES ('round', ?, 'keep')", [id]);
+    db.run("INSERT INTO command_executions (uid, command, workflow_id) VALUES (?, 'ocr review', ?)", [`uid-${id}`, id]);
+  }
+
+  it("deletes the session, its events, executions, notes and cascade subtree", () => {
+    seedWithSubtree("a");
+    const res = deleteSessionRows(db, "a");
+    expect(res.executionUids).toEqual(["uid-a"]);
+    expect(res.executionIds).toHaveLength(1);
+    expect(res.rows).toMatchObject({
+      sessions: 1,
+      orchestration_events: 1,
+      command_executions: 1,
+      user_notes: 1,
+      review_rounds: 1,
+      markdown_artifacts: 1,
+      chat_conversations: 1,
+      map_runs: 0,
+    });
+    for (const t of ["sessions", "orchestration_events", "command_executions", "review_rounds", "markdown_artifacts", "chat_conversations"]) {
+      expect(count(`SELECT COUNT(*) FROM ${t}`)).toBe(0);
+    }
+    // only the session-targeted note goes; a non-session note is not ours to delete
+    expect(count("SELECT COUNT(*) FROM user_notes")).toBe(1);
+  });
+
+  it("leaves other sessions untouched", () => {
+    seedWithSubtree("a");
+    seedWithSubtree("b");
+    deleteSessionRows(db, "a");
+    expect(count("SELECT COUNT(*) FROM sessions WHERE id = 'b'")).toBe(1);
+    expect(count("SELECT COUNT(*) FROM orchestration_events WHERE session_id = 'b'")).toBe(1);
+    expect(count("SELECT COUNT(*) FROM command_executions WHERE workflow_id = 'b'")).toBe(1);
+    expect(count("SELECT COUNT(*) FROM review_rounds WHERE session_id = 'b'")).toBe(1);
+    expect(count("SELECT COUNT(*) FROM markdown_artifacts WHERE session_id = 'b'")).toBe(1);
+    expect(count("SELECT COUNT(*) FROM chat_conversations WHERE session_id = 'b'")).toBe(1);
+    expect(count("SELECT COUNT(*) FROM user_notes WHERE target_id = 'b' AND target_type = 'session'")).toBe(1);
+  });
+
+  it("keeps foreign keys enforced", () => {
+    seedWithSubtree("a");
+    deleteSessionRows(db, "a");
+    expect(count("PRAGMA foreign_keys")).toBe(1);
+    expect(() => db.run("INSERT INTO review_rounds (session_id, round_number) VALUES ('a', 1)")).toThrow();
+  });
+
+  it("is a no-op for a missing session", () => {
+    seedWithSubtree("b");
+    const res = deleteSessionRows(db, "nope");
+    expect(res.executionUids).toEqual([]);
+    expect(Object.values(res.rows).every((n) => n === 0)).toBe(true);
     expect(count("SELECT COUNT(*) FROM sessions")).toBe(1);
   });
 });
