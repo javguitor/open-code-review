@@ -118,7 +118,7 @@ describe("fetchClickUp", () => {
     const f = vi.fn();
     await expect(
       fetchClickUp("https://app.clickup.com/t/abc123", { withComments: false, token: undefined, fetchImpl: f }),
-    ).rejects.toMatchObject({ code: "missing-token", message: expect.stringContaining("CLICKUP_API_TOKEN") });
+    ).rejects.toMatchObject({ code: "missing-token", message: expect.stringContaining("CLICKUP_API_KEY") });
     expect(f).not.toHaveBeenCalled();
   });
 

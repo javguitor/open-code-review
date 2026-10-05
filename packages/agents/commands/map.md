@@ -13,7 +13,7 @@ tags: [ocr, map, navigation, review-map]
 **Arguments**
 - `target` (optional): Branch, commit, file, `pr:<number>` or a GitHub PR URL to map. A PR target is fetched into a dedicated worktree (see `references/pr-target.md`). Defaults to staged changes.
 - `--fresh` (optional): Clear any existing map for today's session and start from scratch.
-- `--requirements <url|path|text>` (optional): Requirements for the map: a ClickUp task URL, a GitHub issue/PR URL, a file path (spec, proposal, ticket), or literal text. Fetched by the CLI (`ocr requirements fetch`) and normalized into `requirements.md` with numbered `AC-n` criteria. ClickUp needs `CLICKUP_API_TOKEN` exported in the environment; if it is missing, the map asks whether to continue without requirements. The model never fetches these URLs itself.
+- `--requirements <url|path|text>` (optional): Requirements for the map: a ClickUp task URL, a GitHub issue/PR URL, a file path (spec, proposal, ticket), or literal text. Fetched by the CLI (`ocr requirements fetch`) and normalized into `requirements.md` with numbered `AC-n` criteria. ClickUp needs `CLICKUP_API_KEY` exported in the environment; if it is missing, the map asks whether to continue without requirements. The model never fetches these URLs itself.
 - `--with-comments` (optional): Also include the source's comments (last 50). Only meaningful with `--requirements`.
 
 **Examples**
@@ -24,7 +24,7 @@ tags: [ocr, map, navigation, review-map]
 /ocr-map feature/big-refactor      # Map branch vs main
 /ocr-map pr:123                    # Map PR #123 from a dedicated worktree
 /ocr-map --requirements spec.md    # Map with requirements context (file)
-/ocr-map --requirements https://app.clickup.com/t/abc123   # ClickUp task (needs CLICKUP_API_TOKEN)
+/ocr-map --requirements https://app.clickup.com/t/abc123   # ClickUp task (needs CLICKUP_API_KEY)
 /ocr-map --requirements https://github.com/o/r/issues/45 --with-comments   # GitHub issue with comments
 /ocr-map --requirements "Users must be rate-limited"        # Literal text
 ```

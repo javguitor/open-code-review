@@ -13,7 +13,7 @@ const requirements = {
   'requirements.type_github_pr': 'Pull request de GitHub',
   'requirements.type_file': 'Archivo',
   'requirements.type_text': 'Texto',
-  'requirements.error_missing_token': 'Define CLICKUP_API_TOKEN en el entorno donde corre el dashboard y reinícialo.',
+  'requirements.error_missing_token': 'Define CLICKUP_API_KEY en el entorno donde corre el dashboard y reinícialo.',
   'requirements.error_invalid_source': 'Esto no es una fuente de requisitos reconocida.',
   'requirements.error_not_found': 'No se encontró la fuente o no es accesible.',
   'requirements.error_fetch_failed': 'Falló la obtención de los requisitos.',
@@ -33,7 +33,7 @@ const requirements = {
   'requirements.clickup_token': 'Token de ClickUp',
   'requirements.token_configured': 'configurado',
   'requirements.token_missing': 'falta',
-  'requirements.clickup_token_hint': 'Define CLICKUP_API_TOKEN en el entorno donde corre el dashboard y reinícialo. El valor nunca se muestra aquí.',
+  'requirements.clickup_token_hint': 'Define CLICKUP_API_KEY en el entorno donde corre el dashboard y reinícialo. El valor nunca se muestra aquí.',
 }
 
 export { requirements }

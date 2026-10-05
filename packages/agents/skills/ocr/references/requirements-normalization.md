@@ -20,9 +20,9 @@ Each URL has exactly one `source[-n]` pair: fetching a URL again replaces its fi
 
 ClickUp tasks and GitHub issues/PRs are fetched **only** by `ocr requirements fetch`. Do NOT use WebFetch, `curl`, an MCP server or any other tool to read a requirement URL: private cards need an API token that must not pass through prompts, and a fetch by the model cannot be reproduced.
 
-If the CLI reports `missing-token` (ClickUp without `CLICKUP_API_TOKEN` in the environment):
+If the CLI reports `missing-token` (ClickUp without `CLICKUP_API_KEY` in the environment):
 1. Stop requirements handling. Write nothing into `requirements/` or `requirements.md`.
-2. Tell the user which variable to export (`CLICKUP_API_TOKEN`) and ask whether to continue the review without requirements.
+2. Tell the user which variable to export (`CLICKUP_API_KEY`) and ask whether to continue the review without requirements.
 3. Continue without requirements only if the user agrees. In a non-interactive run (dashboard), continue without requirements and state in `context.md` that the requirements source could not be fetched and why.
 
 Other failure codes (`invalid-source`, `not-found`, `fetch-failed`, `session-not-found`) are handled the same way: report the CLI's `error` text, do not work around it.

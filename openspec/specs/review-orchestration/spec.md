@@ -655,7 +655,7 @@ The system SHALL fetch requirements from a ClickUp task, a GitHub issue or PR, a
 
 #### Scenario: ClickUp card by URL
 
-- **GIVEN** `--requirements https://app.clickup.com/t/abc123` and `CLICKUP_API_TOKEN` in the environment
+- **GIVEN** `--requirements https://app.clickup.com/t/abc123` and `CLICKUP_API_KEY` in the environment
 - **WHEN** Phase 1 runs
 - **THEN** `ocr requirements fetch` writes `requirements/source.md` (title, description, checklists, custom fields) and `requirements/source.json` (type, id, url, fetched_at, updated_at, author)
 
@@ -666,7 +666,7 @@ The system SHALL fetch requirements from a ClickUp task, a GitHub issue or PR, a
 
 #### Scenario: Missing credential
 
-- **GIVEN** a ClickUp source and no `CLICKUP_API_TOKEN`
+- **GIVEN** a ClickUp source and no `CLICKUP_API_KEY`
 - **WHEN** the fetch runs
 - **THEN** it fails naming the variable and writes nothing; the model is never asked to fetch the card
 

@@ -13,7 +13,7 @@ const requirements = {
   'requirements.type_github_pr': 'GitHub pull request',
   'requirements.type_file': 'File',
   'requirements.type_text': 'Text',
-  'requirements.error_missing_token': 'Set CLICKUP_API_TOKEN in the environment the dashboard runs in and restart it.',
+  'requirements.error_missing_token': 'Set CLICKUP_API_KEY in the environment the dashboard runs in and restart it.',
   'requirements.error_invalid_source': 'This is not a recognised requirements source.',
   'requirements.error_not_found': 'The source was not found or is not accessible.',
   'requirements.error_fetch_failed': 'Fetching the requirements failed.',
@@ -33,7 +33,7 @@ const requirements = {
   'requirements.clickup_token': 'ClickUp token',
   'requirements.token_configured': 'configured',
   'requirements.token_missing': 'missing',
-  'requirements.clickup_token_hint': 'Set CLICKUP_API_TOKEN in the environment the dashboard runs in and restart it. The value is never shown here.',
+  'requirements.clickup_token_hint': 'Set CLICKUP_API_KEY in the environment the dashboard runs in and restart it. The value is never shown here.',
 }
 
 export { requirements }

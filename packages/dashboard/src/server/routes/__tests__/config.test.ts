@@ -81,22 +81,22 @@ describe('GET /api/config', () => {
 
 describe('GET /api/config — integrations', () => {
   it('reports the ClickUp token as configured/missing without leaking the value', async () => {
-    const prev = process.env['CLICKUP_API_TOKEN']
+    const prev = process.env['CLICKUP_API_KEY']
     try {
       resetChildEnvBaseForTests()
-      process.env['CLICKUP_API_TOKEN'] = 'pk_secret'
+      process.env['CLICKUP_API_KEY'] = 'pk_secret'
       initChildEnvBase(captureChildEnvBase('dev-direct-run'))
       const set = await api('GET')
       expect(set.body.integrations).toEqual({ clickup_token: 'configured' })
       expect(JSON.stringify(set.body)).not.toContain('pk_secret')
 
       resetChildEnvBaseForTests()
-      delete process.env['CLICKUP_API_TOKEN']
+      delete process.env['CLICKUP_API_KEY']
       initChildEnvBase(captureChildEnvBase('dev-direct-run'))
       expect((await api('GET')).body.integrations).toEqual({ clickup_token: 'missing' })
     } finally {
-      if (prev === undefined) delete process.env['CLICKUP_API_TOKEN']
-      else process.env['CLICKUP_API_TOKEN'] = prev
+      if (prev === undefined) delete process.env['CLICKUP_API_KEY']
+      else process.env['CLICKUP_API_KEY'] = prev
     }
   })
 })
