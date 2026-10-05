@@ -136,7 +136,7 @@ export function createConfigRouter(ocrDir: string, aiCliService: AiCliService): 
       workspaceName,
       gitBranch,
       // Presence only; the value never leaves the server.
-      integrations: { clickup_token: childEnv().env['CLICKUP_API_TOKEN'] ? 'configured' : 'missing' },
+      integrations: { clickup_token: childEnv().env['CLICKUP_API_KEY'] ? 'configured' : 'missing' },
       ...resolvedSettings(ocrDir, aiCliService),
     })
   })

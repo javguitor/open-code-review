@@ -76,7 +76,7 @@ describe('POST /api/requirements/preview', () => {
   })
 
   it('returns the CLI failure JSON as 200 even when the CLI exited 1', async () => {
-    const failure = { ok: false, code: 'missing-token', error: 'CLICKUP_API_TOKEN is not set' }
+    const failure = { ok: false, code: 'missing-token', error: 'CLICKUP_API_KEY is not set' }
     script = () => Object.assign(new Error('exit 1'), { stdout: JSON.stringify(failure) })
     const { status, body } = await api('POST', '/requirements/preview', { source: 'https://app.clickup.com/t/a' })
     expect(status).toBe(200)

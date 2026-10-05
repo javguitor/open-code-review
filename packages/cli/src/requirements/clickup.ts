@@ -8,7 +8,7 @@ import {
   type SourceComment,
 } from "./types.js";
 
-export const CLICKUP_TOKEN_ENV = "CLICKUP_API_TOKEN";
+export const CLICKUP_TOKEN_ENV = "CLICKUP_API_KEY";
 const API = "https://api.clickup.com/api/v2";
 const COMMENT_PAGE_SIZE = 25;
 const MAX_COMMENT_PAGES = 5;

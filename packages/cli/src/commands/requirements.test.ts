@@ -32,7 +32,7 @@ describe("requirements fetch", () => {
     const r = await runFetch(
       root,
       { source: "https://app.clickup.com/t/abc123", session: "s1" },
-      { fetchImpl: clickupFetch(), env: { CLICKUP_API_TOKEN: "t" }, now: () => new Date("2026-03-01T00:00:00Z") },
+      { fetchImpl: clickupFetch(), env: { CLICKUP_API_KEY: "t" }, now: () => new Date("2026-03-01T00:00:00Z") },
     );
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -61,7 +61,7 @@ describe("requirements fetch", () => {
   });
 
   it("a different url takes the next free slot and does not replace the session url", async () => {
-    const deps = { fetchImpl: clickupFetch(), env: { CLICKUP_API_TOKEN: "t" } };
+    const deps = { fetchImpl: clickupFetch(), env: { CLICKUP_API_KEY: "t" } };
     await runFetch(root, { source: "https://app.clickup.com/t/abc123", session: "s1" }, deps);
     const second = await runFetch(root, { source: "Another requirement\nbody", session: "s1" }, deps);
     expect(second.ok && second.files?.md).toBe(join(sessionDir, "requirements", "source-2.md"));
@@ -73,7 +73,7 @@ describe("requirements fetch", () => {
   });
 
   it("re-fetching a url replaces its files in place (same names, no source-2)", async () => {
-    const env = { CLICKUP_API_TOKEN: "t" };
+    const env = { CLICKUP_API_KEY: "t" };
     const url = "https://app.clickup.com/t/abc123";
     const first = await runFetch(root, { source: url, session: "s1" }, { env, fetchImpl: clickupFetch() });
     await runFetch(root, { source: "Other\nbody", session: "s1" }, { env });
@@ -118,7 +118,7 @@ describe("requirements fetch", () => {
   });
 
   it("re-fetching the same url updates updated_at", async () => {
-    const deps = { env: { CLICKUP_API_TOKEN: "t" } };
+    const deps = { env: { CLICKUP_API_KEY: "t" } };
     await runFetch(root, { source: "https://app.clickup.com/t/abc123", session: "s1" }, { ...deps, fetchImpl: clickupFetch() });
     const newer = JSON.parse(fixture("clickup-task.json"));
     newer.date_updated = "1769904000000";
@@ -136,7 +136,7 @@ describe("requirements fetch", () => {
     const r = await runFetch(
       root,
       { source: "https://app.clickup.com/t/abc123", dryRun: true },
-      { fetchImpl: clickupFetch(), env: { CLICKUP_API_TOKEN: "t" } },
+      { fetchImpl: clickupFetch(), env: { CLICKUP_API_KEY: "t" } },
     );
     expect(r).toMatchObject({ ok: true, files: null });
     expect(existsSync(join(sessionDir, "requirements"))).toBe(false);
@@ -145,13 +145,13 @@ describe("requirements fetch", () => {
 
   it("missing token → missing-token and nothing written", async () => {
     const r = await runFetch(root, { source: "https://app.clickup.com/t/abc123", session: "s1" }, { env: {} });
-    expect(r).toMatchObject({ ok: false, code: "missing-token", error: expect.stringContaining("CLICKUP_API_TOKEN") });
+    expect(r).toMatchObject({ ok: false, code: "missing-token", error: expect.stringContaining("CLICKUP_API_KEY") });
     expect(existsSync(join(sessionDir, "requirements"))).toBe(false);
   });
 
   it("unknown session → session-not-found before any fetch", async () => {
     const f = vi.fn();
-    const r = await runFetch(root, { source: "https://app.clickup.com/t/abc123", session: "nope" }, { fetchImpl: f, env: { CLICKUP_API_TOKEN: "t" } });
+    const r = await runFetch(root, { source: "https://app.clickup.com/t/abc123", session: "nope" }, { fetchImpl: f, env: { CLICKUP_API_KEY: "t" } });
     expect(r).toMatchObject({ ok: false, code: "session-not-found" });
     expect(f).not.toHaveBeenCalled();
   });
