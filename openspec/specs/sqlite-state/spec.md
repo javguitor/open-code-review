@@ -153,14 +153,20 @@ The system SHALL maintain an append-only event log in the `orchestration_events`
 - **WHEN** any consumer accesses the table
 - **THEN** rows SHALL NOT be updated or deleted
 - **AND** new events are always appended
+- **AND** the single exception SHALL be that an explicit, user-confirmed deletion of a session (see `session-management` "Session Deletion") SHALL delete that session's events together with the session row; no other operation (including `ocr db prune` and the FK-orphan sweep) deletes events
+
+#### Scenario: Session deletion removes only that session's events
+
+- **GIVEN** sessions A and B each have events
+- **WHEN** the user deletes session A
+- **THEN** every `orchestration_events` row with `session_id = A` SHALL be deleted
+- **AND** every event of session B SHALL be unchanged
 
 #### Scenario: Timeline reconstruction
 
 - **GIVEN** a session has multiple orchestration events
 - **WHEN** the dashboard queries events for a session
 - **THEN** a complete timeline of phase transitions, round starts, round completions, map completions, and status changes can be reconstructed from the event log
-
----
 
 ### Requirement: OCR State Init Command (SQLite)
 
