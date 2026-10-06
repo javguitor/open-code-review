@@ -971,7 +971,7 @@ Synthesis prose follows the configured `language`; headings, labels, verdicts an
 
    **`verdict`** — the **merge gate**, exactly one of three values (uppercase, verbatim): `"APPROVE"` | `"REQUEST CHANGES"` | `"NEEDS DISCUSSION"`. The verdict expresses **one** thing — can this land? — and nothing else. Do **not** invent composite verdicts like `accept_with_followups` or `approve_with_suggestions`: residual work is **not** a gate state. Follow-ups and suggestions are carried by finding `category` and surfaced as counts; an APPROVE with open `should_fix` items is normal and correct. The CLI **rejects** any off-vocabulary verdict (exit 7, writes nothing) so you must re-emit a canonical value.
 
-   **Optional per-finding fields**: `flagged_by` (array of reviewer handles) and `evidence` (string: what supports the finding, e.g. a command and its output). Both mirror the `**Flagged by**` / `**Evidence**` lines in `final.md`; omit them when there is nothing to say. `evidence` is prose and follows the output language.
+   **Optional per-finding fields**: `flagged_by` (array of reviewer handles) and `evidence` (string: what supports the finding, e.g. a command and its output). They live only in `round-meta.json` (the dashboard shows them): `final.md` never lists reviewers, and weaves any evidence into the item's prose. Omit them when there is nothing to say. `evidence` is prose and follows the output language.
 
    **Finding categories**: `"blocker"` | `"should_fix"` | `"suggestion"` | `"style"`
    **Finding severity**: `"critical"` | `"high"` | `"medium"` | `"low"` | `"info"`
@@ -992,7 +992,7 @@ Synthesis prose follows the configured `language`; headings, labels, verdicts an
 
    For each finding with `prior.status` other than `new`, add the `**Already reported**` line described in `references/final-template.md` (Step 10).
 
-   Write the **same keys** you piped in step 7: `**ID**: S<n>` under each numbered item of `## Blockers` and `## Should Fix`, and an `[S<n>]` prefix on each bullet of `## Suggestions`. Every item in `final.md` carries exactly one key, and every key appears exactly once.
+   Write the **same keys** you piped in step 7: `**ID**: S<n>` on the last line of each numbered item of `## Blockers` and `## Should Fix` (after its location), and an `[S<n>]` prefix on each bullet of `## Suggestions`. Every item in `final.md` carries exactly one key, and every key appears exactly once.
 
    See `references/final-template.md` for the template format.
 
