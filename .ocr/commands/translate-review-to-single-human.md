@@ -41,6 +41,7 @@ tags: [ocr, post, github, human-voice]
    - Read `rounds/round-{N}/final.md` for the synthesized review
    - Read ALL individual reviewer outputs in `rounds/round-{N}/reviews/*.md` for raw findings (exact file and line of each finding)
    - Read `rounds/round-{N}/round-meta.json` and note each synthesized finding's `prior` (`status` and `refs`); a finding without `prior` is `new`
+   - For every `ocr` ref (`session_id`, `round`, `key`), look it up in `rounds/round-{N}/prior-feedback.json` → `ocr_history[]` to learn whether that earlier finding was `posted`. If the file or the entry is missing, treat it as **not posted**
 
 3. **Apply the translation rules** below
 
@@ -88,7 +89,7 @@ A finding whose `prior.status` is not `new` was already raised on the PR. Decide
 | `resolved_still_present` | An inline comment as usual that says it is still present although the thread was marked resolved, with the link: "This is still here although the thread was resolved (<link>): …". |
 
 - The link is the `url` of the first GitHub ref. It is the PR's own URL, so it is allowed in the posted text.
-- An `ocr` ref has no public URL: if that finding was posted, say it was raised in an earlier review ("raised in an earlier review"), with no ids and no link. If it was not posted, treat the finding as `new`.
+- An `ocr` ref has no public URL: if that finding was posted (its `ocr_history[].posted`, looked up in step 2), say it was raised in an earlier review ("raised in an earlier review"), with no ids and no link. If it was not posted, treat the finding as `new`.
 - The comment still follows the voice rules: self-contained, up to ~100 words, no label prefix.
 
 ### Content rules (NON-NEGOTIABLE)

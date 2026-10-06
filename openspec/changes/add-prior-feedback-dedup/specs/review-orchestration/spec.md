@@ -2,14 +2,14 @@
 
 ### Requirement: Prior Feedback Is Gathered for PR Targets
 
-For a PR target, the review workflow SHALL run `ocr pr prior-feedback` after collecting the PR context and before synthesis, and SHALL NOT pass prior feedback to the reviewers, so their analysis stays independent.
+For a PR target, the review workflow SHALL run `ocr pr prior-feedback` only after the reviewers and the discourse have finished, at the start of synthesis and before findings are classified, and SHALL NOT copy prior feedback into any file the reviewers read, so their analysis stays independent.
 
 #### Scenario: PR review gathers prior feedback
 
 - **GIVEN** a review of a GitHub PR
 - **WHEN** the workflow prepares the round
-- **THEN** `rounds/round-N/prior-feedback.json` SHALL exist before synthesis
-- **AND** the reviewer prompts SHALL NOT include its content
+- **THEN** `rounds/round-N/prior-feedback.json` SHALL be written at the start of synthesis, before findings are classified
+- **AND** neither the reviewer prompts nor `context.md` SHALL include its content
 
 #### Scenario: Non-PR target
 

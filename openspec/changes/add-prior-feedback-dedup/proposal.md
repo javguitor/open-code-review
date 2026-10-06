@@ -10,7 +10,7 @@ A re-review of a PR re-reports what earlier reviews already said. Nothing in the
   - GitHub (via `gh`): inline review threads (path, line, author, author kind human/bot, body, `isResolved`, `isOutdated`, URL), review bodies (author, state, body, URL) and PR conversation comments (author, body, URL);
   - OCR history (local DB): synthesized findings of earlier rounds and earlier sessions with the same `pr_number`, with their decision (accepted/dismissed/…) and whether the round was posted.
   - `gh` unavailable or failing → the file records `github: { available: false, error }` and the review continues (never blocks a review).
-- **Reviewers stay blind** (Phase 4 unchanged): prior feedback is not shown to reviewers, so their analysis stays independent.
+- **Reviewers stay blind**: prior feedback is gathered only at the start of synthesis (after reviewers and discourse) and never copied into files reviewers read, so their analysis stays independent.
 - **Synthesis classifies against prior feedback** (Phase 7): for each synthesized finding the Tech Lead records `prior`:
   - `new` (default, may be omitted);
   - `open` — already reported and still present, the earlier comment not resolved;
@@ -24,5 +24,5 @@ A re-review of a PR re-reports what earlier reviews already said. Nothing in the
 ## Impact
 
 - Affected specs: `cli` (new OCR PR Prior-Feedback Command), `review-orchestration` (gather step for PR targets; synthesis classification), `sqlite-state` (synthesis finding prior column), `slash-commands` (posting policy for prior-reported findings), `dashboard` (Already-reported badge)
-- Affected code: `packages/cli` (new `pr prior-feedback` verb; `gh` GraphQL via platform helpers), `packages/shared/persistence` (migration 23, `round-meta.ts` validation, synthesis queries, OCR-history query by `pr_number`), `packages/dashboard` (synthesis finding API field + badge, i18n), `packages/agents` (workflow Phase 1 gather + Phase 7 classification, `final-template.md`, `translate-review-to-single-human.md`)
+- Affected code: `packages/cli` (new `pr prior-feedback` verb; `gh` GraphQL via platform helpers), `packages/shared/persistence` (migration 23, `round-meta.ts` validation, synthesis queries, OCR-history query by `pr_number`), `packages/dashboard` (synthesis finding API field + badge, i18n), `packages/agents` (workflow Phase 7 gather + classification, `final-template.md`, `translate-review-to-single-human.md`)
 - Additive and optional: reviews of non-PR targets and payloads without `prior` behave as today.
