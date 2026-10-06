@@ -2732,3 +2732,18 @@ The dashboard SHALL offer a delete action for a session on its card in the sessi
 - **GIVEN** an `active` session or one with a running execution
 - **WHEN** the user views its delete action
 - **THEN** the action SHALL be disabled with an explanation, and a request that still reaches the server SHALL get 409 with the reason code shown to the user
+
+### Requirement: Already-Reported Badge
+
+The dashboard SHALL show, on each synthesized finding with a prior status other than `new`, an "Already reported" badge naming the status (still open, marked fixed but still present, code changed, dismissed) and linking each original feedback item.
+
+#### Scenario: Badge with links
+
+- **GIVEN** a synthesized finding with `prior.status: "open"` and a GitHub thread ref
+- **WHEN** the round page lists the finding
+- **THEN** it SHALL show the badge with the status and a link to the thread
+
+#### Scenario: New findings unchanged
+
+- **WHEN** a finding has no prior or `prior.status: "new"`
+- **THEN** no badge SHALL be shown

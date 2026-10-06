@@ -314,19 +314,18 @@ The synthesizer SHALL choose the verdict and the `blocker`-category findings **t
 #### Scenario: Deduplication
 - **GIVEN** the same issue found by multiple reviewers
 - **WHEN** synthesis occurs
-- **THEN** the issue SHALL appear once with sources noted
+- **THEN** the issue SHALL appear once, with its sources recorded in `round-meta.json` (not named in `final.md`)
 
 #### Scenario: Final review structure
 - **GIVEN** synthesis is complete
 - **WHEN** final review is generated
-- **THEN** it SHALL include:
-  - Summary
-  - Verdict (APPROVE | REQUEST CHANGES | NEEDS DISCUSSION)
-  - Must Fix (Critical/High severity)
-  - Should Fix (Medium severity)
-  - Consider (Low/Note severity)
-  - What's Working Well
-  - Discussion Notes
+- **THEN** it SHALL include, in this order:
+  - `## What This Change Does` (the task, how it was built step by step, 1–2 diagrams)
+  - `## Verdict` with the verdict value, the count lines and a short plain explanation
+  - `## Blockers`, `## Should Fix`, `## Suggestions` with each problem told in plain language
+  - `## What's Working Well`
+  - `## Requirements Assessment` (when requirements were provided)
+  - `## Clarifying Questions` (when there are any)
 
 #### Scenario: Verdict is a closed merge-gate vocabulary
 - **GIVEN** synthesis is complete and an outcome must be recorded
@@ -733,13 +732,29 @@ The system SHALL provide a verifier task that examines one finding for evidence 
 
 ### Requirement: Plain-Language Overview in the Final Review
 
-`final.md` SHALL open, right after its header block and before `## Verdict`, with a `## What This Change Does` section for a reader who has not read the diff. It SHALL contain a `**What the task asks**` part (from the requirements or card when present; otherwise what the change is for, inferred from the PR description), a `**What the PR implements**` part (the behaviour change in plain words, without a file-by-file walk), and one Mermaid diagram (`sequenceDiagram` for interactions over time, `flowchart` for a decision or workflow) of at most about 12 nodes or messages, with plain-word labels, no HTML and no `click` directives. A second "before → after" diagram MAY be added only when the change alters an existing flow. The section SHALL stay under about 25 lines. The heading SHALL stay in English whatever the output language; the bold labels and prose follow the language.
+`final.md` SHALL open, right after its header block and before `## Verdict`, with a `## What This Change Does` section for a reader who has not read the diff, containing `**What the task asks**`, `**How it was built, step by step**` (numbered steps in the logical order of the implementation) and one or two Mermaid diagrams. The heading SHALL stay in English; the bold labels and prose follow the output language.
 
 #### Scenario: Overview precedes the verdict
 
 - **WHEN** the Tech Lead writes `final.md`
 - **THEN** `## What This Change Does` SHALL appear before `## Verdict`
-- **AND** it SHALL contain exactly one `mermaid` diagram unless the change alters an existing flow
+
+#### Scenario: What the task asks
+
+- **WHEN** the overview is written
+- **THEN** `**What the task asks**` SHALL state the goal in plain words, from the requirements or card when present, otherwise inferred from the PR description
+
+#### Scenario: Step by step in implementation order
+
+- **WHEN** the overview is written
+- **THEN** `**How it was built, step by step**` SHALL be a numbered list that starts from the base the rest depends on (data, contracts, types), then the logic that uses it, then where it connects (commands, API), then what the user sees
+- **AND** each step SHALL say in one to three sentences what was added or changed and why the next step needs it, mentioning files only in passing
+
+#### Scenario: One or two diagrams
+
+- **WHEN** the overview is written
+- **THEN** it SHALL contain one Mermaid diagram of the flow (at most about 12 nodes or messages, plain-word labels, no HTML, no `click` directives)
+- **AND** it MAY add a second one (a `sequenceDiagram`, or a before → after view) only when several components interact or an existing flow changes
 
 #### Scenario: Heading kept in English
 
@@ -756,7 +771,7 @@ The system SHALL provide a verifier task that examines one finding for evidence 
 
 ### Requirement: Synthesis Emits Synthesized Findings
 
-The Tech Lead's Phase 7 synthesis SHALL record the grouping it already performs: for every item it lists in `final.md` it SHALL emit one entry of `synthesis_findings` in the `complete-round` payload, with a key `S<n>`, the post-synthesis category and severity, the locations, a summary, optional evidence and `flagged_by`, and the reviewer findings it merges as `sources`. The same key SHALL be written in `final.md` next to the item: `**ID**: S<n>` under each numbered `## Blockers` and `## Should Fix` item, and a `[S<n>]` prefix on each `## Suggestions` bullet. The payload SHALL be piped before `final.md` is written, so the keys exist when the prose is written.
+The Tech Lead's Phase 7 synthesis SHALL record the grouping it already performs: for every item it lists in `final.md` it SHALL emit one entry of `synthesis_findings` in the `complete-round` payload, with a key `S<n>`, the post-synthesis category and severity, the locations, a summary, optional evidence and `flagged_by`, and the reviewer findings it merges as `sources`. The same key SHALL be written in `final.md` next to the item: `**ID**: S<n>` on the last line of each numbered `## Blockers` and `## Should Fix` item (after its location), and a `[S<n>]` prefix on each `## Suggestions` bullet. The payload SHALL be piped before `final.md` is written, so the keys exist when the prose is written.
 
 #### Scenario: One entry per final.md item
 
@@ -779,3 +794,75 @@ The Tech Lead's Phase 7 synthesis SHALL record the grouping it already performs:
 
 - **WHEN** the Tech Lead promotes or demotes a finding during synthesis
 - **THEN** the change is expressed in the synthesized finding's category and severity, and the reviewer's own entry keeps the category the reviewer assigned
+
+### Requirement: Prior Feedback Is Gathered for PR Targets
+
+For a PR target, the review workflow SHALL run `ocr pr prior-feedback` only after the reviewers and the discourse have finished, at the start of synthesis and before findings are classified, and SHALL NOT copy prior feedback into any file the reviewers read, so their analysis stays independent.
+
+#### Scenario: PR review gathers prior feedback
+
+- **GIVEN** a review of a GitHub PR
+- **WHEN** the workflow prepares the round
+- **THEN** `rounds/round-N/prior-feedback.json` SHALL be written at the start of synthesis, before findings are classified
+- **AND** neither the reviewer prompts nor `context.md` SHALL include its content
+
+#### Scenario: Non-PR target
+
+- **GIVEN** a review of staged changes or a branch without a PR
+- **WHEN** the workflow runs
+- **THEN** no prior-feedback step SHALL run and every synthesized finding is `new`
+
+### Requirement: Synthesis Classifies Findings Against Prior Feedback
+
+During synthesis the Tech Lead SHALL compare each synthesized finding with the prior feedback (same problem, helped by file and line) and record `prior` on its `synthesis_findings` entry, with a `status` of `new`, `open`, `resolved_still_present`, `changed` or `dismissed` (a rejected point; checked first), and `refs` to the original feedback for every status other than `new`.
+
+#### Scenario: New finding
+
+- **GIVEN** no prior feedback describes the problem
+- **WHEN** the Tech Lead synthesizes
+- **THEN** the finding SHALL have `prior.status: "new"` or no `prior`
+
+#### Scenario: Already reported and still open
+
+- **GIVEN** an unresolved GitHub thread on `a.py:10` describing the same problem as a synthesized finding
+- **WHEN** the Tech Lead synthesizes
+- **THEN** that finding SHALL have `prior.status: "open"` with a ref to the thread URL and author
+
+#### Scenario: Marked fixed but not fixed
+
+- **GIVEN** a resolved thread, or an earlier OCR finding decided as fixed, whose problem is still present in the reviewed code
+- **WHEN** the Tech Lead synthesizes
+- **THEN** the finding SHALL have `prior.status: "resolved_still_present"` with a ref to the original
+
+#### Scenario: Code changed since the earlier report
+
+- **GIVEN** an outdated thread whose lines changed, and the problem still present in the new code
+- **WHEN** the Tech Lead synthesizes
+- **THEN** the finding SHALL have `prior.status: "changed"` with a ref to the original
+
+#### Scenario: Rejected earlier
+
+- **GIVEN** a thread where the PR author replied "by design", or an earlier OCR finding decided `dismissed` or `wont_fix`, and the code is unchanged
+- **WHEN** the Tech Lead synthesizes
+- **THEN** the finding SHALL have `prior.status: "dismissed"` with a ref to the original
+
+### Requirement: Final Review Without Process Details
+
+`final.md` SHALL tell each problem in plain language and SHALL NOT contain details of the review process: no reviewer handles, no `**Reviewers**` or `**Flagged by**` lines, no consensus, dissent or discourse sections, no per-reviewer grouping. Each finding ends with one line holding its location and `**ID**: S<n>`. Provenance stays in `round-meta.json` and the dashboard.
+
+#### Scenario: Problem told in plain language
+
+- **WHEN** a finding is written under `## Blockers` or `## Should Fix`
+- **THEN** it SHALL have a plain title and one or two paragraphs saying what happens, why it matters and what to do, with any evidence woven into the prose
+- **AND** a suggestion SHALL be one bullet of one or two plain sentences saying the idea and why it helps
+- **AND** it SHALL NOT use form fields such as `**Type**`, `**Issue**`, `**Why this blocks**` or `**Evidence**`
+
+#### Scenario: No process sections
+
+- **WHEN** `final.md` is written
+- **THEN** it SHALL contain no `@reviewer` handle, no `## Consensus & Dissent`, no `## Individual Reviews` and no reference to the discourse
+
+#### Scenario: Keys still link to the dashboard
+
+- **WHEN** a finding is written
+- **THEN** it SHALL end with a line holding its location and `**ID**: S<n>` (or the `[S<n>]` prefix for a suggestion bullet), so each item still maps to its synthesized finding
