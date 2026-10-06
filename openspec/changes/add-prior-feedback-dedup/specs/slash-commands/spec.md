@@ -2,7 +2,7 @@
 
 ### Requirement: Human Review Skips Already-Reported Feedback
 
-The human-voice translation SHALL NOT post as an inline comment any synthesized finding whose prior status is `open`; an `open` blocker SHALL get one line in `final-human.md` linking the original feedback, and an `open` non-blocking finding SHALL NOT be posted at all. A `resolved_still_present` finding SHALL be posted and cite the original; `new` and `changed` findings are posted as usual.
+The human-voice translation SHALL NOT post as an inline comment any synthesized finding whose prior status is `open`; an `open` blocker SHALL get one line in `final-human.md` linking the original feedback, and an `open` non-blocking finding SHALL NOT be posted at all. A `resolved_still_present` finding SHALL be posted and cite the original; A `dismissed` finding SHALL NOT be posted at all, even a blocker. `new` and `changed` findings are posted as usual.
 
 #### Scenario: Open non-blocking point is not repeated
 
@@ -21,3 +21,9 @@ The human-voice translation SHALL NOT post as an inline comment any synthesized 
 - **GIVEN** a finding with `prior.status: "resolved_still_present"`
 - **WHEN** the human review is generated
 - **THEN** its inline comment SHALL say it is still present and link the original
+
+#### Scenario: Dismissed point is never posted
+
+- **GIVEN** a blocker with `prior.status: "dismissed"`
+- **WHEN** the human review is generated
+- **THEN** it SHALL appear neither in `final-human-comments.json` nor in `final-human.md`

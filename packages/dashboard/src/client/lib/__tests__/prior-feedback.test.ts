@@ -6,6 +6,7 @@ describe('priorStatusKey', () => {
     expect(priorStatusKey({ status: 'open' })).toBe('reviews.prior_open')
     expect(priorStatusKey({ status: 'resolved_still_present' })).toBe('reviews.prior_resolved_still_present')
     expect(priorStatusKey({ status: 'changed' })).toBe('reviews.prior_changed')
+    expect(priorStatusKey({ status: 'dismissed' })).toBe('reviews.prior_dismissed')
   })
 
   it('returns null for new, null and undefined', () => {

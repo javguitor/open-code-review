@@ -86,6 +86,7 @@ A finding whose `prior.status` is not `new` was already raised on the PR. Decide
 | `new`, `changed` or no `prior` | As usual. |
 | `open`, not blocking | Nothing: neither an inline comment nor a line in the summary. |
 | `open`, blocking | No inline comment. One line in `final-human.md`, right after the verdict, saying it still blocks, with the link: "Still blocking: the empty-order case, see <link>". |
+| `dismissed` | Nothing is posted (neither inline nor in the summary), even when it blocks. |
 | `resolved_still_present` | An inline comment as usual that says it is still present although the thread was marked resolved, with the link: "This is still here although the thread was resolved (<link>): …". |
 
 - The link is the `url` of the first GitHub ref. It is the PR's own URL, so it is allowed in the posted text.
@@ -94,7 +95,7 @@ A finding whose `prior.status` is not `new` was already raised on the PR. Decide
 
 ### Content rules (NON-NEGOTIABLE)
 
-- Preserve EVERY substantive technical finding. Do not drop or summarize away a concrete issue. The only exception is a finding with `prior.status: "open"` (see Already-reported findings above): it is suppressed, or reduced to one summary line when it blocks, because the PR already has it.
+- Preserve EVERY substantive technical finding. Do not drop or summarize away a concrete issue. The only exception is a finding with `prior.status: "open"` or `"dismissed"` (see Already-reported findings above): `open` is suppressed, or reduced to one summary line when it blocks; `dismissed` is never posted; the PR already has both.
 - Consolidate duplicates: if several reviewers flagged the same thing, write it once.
 - Use the exact file path (repo-relative) and the line numbers of the findings. For the inline `line`, use the line in the NEW version of the file (the head side of the diff).
 - A finding with no file or line goes in the summary only (not in the JSON).

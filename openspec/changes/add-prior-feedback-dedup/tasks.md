@@ -9,9 +9,9 @@
 
 ## 3. Agents
 - [x] 3.1 `workflow.md` Phase 7 step 0 (PR targets): run `ocr pr prior-feedback` after the reviewers and discourse, before classifying; never copied into files reviewers read; non-PR targets skip
-- [x] 3.2 `workflow.md` Phase 7: classify each synthesized finding against `prior-feedback.json` (`new`/`open`/`resolved_still_present`/`changed` + refs) and include `prior` in the `complete-round` payload; reviewers unchanged
+- [x] 3.2 `workflow.md` Phase 7: classify each synthesized finding against `prior-feedback.json` (`new`/`open`/`resolved_still_present`/`changed`/`dismissed` + refs) and include `prior` in the `complete-round` payload; reviewers unchanged
 - [x] 3.3 `final-template.md`: mark already-reported items (status + link)
-- [x] 3.4 `translate-review-to-single-human.md`: posting policy (suppress `open`; one summary line for `open` blockers; cite the original for `resolved_still_present`)
+- [x] 3.4 `translate-review-to-single-human.md`: posting policy (suppress `open`; one summary line for `open` blockers; never post `dismissed`; cite the original for `resolved_still_present`)
 - [x] 3.5 `nx run cli:update`
 
 ## 4. Dashboard

@@ -44,6 +44,7 @@ const reviews = {
   'reviews.prior_open': 'still open',
   'reviews.prior_resolved_still_present': 'marked fixed, still present',
   'reviews.prior_changed': 'code changed since',
+  'reviews.prior_dismissed': 'dismissed by the author',
   'reviews.prior_refs_label': 'Already reported in:',
   'reviews.prior_ocr_ref': 'round {round} · {key}',
   'reviews.prior_bot': '(bot)',

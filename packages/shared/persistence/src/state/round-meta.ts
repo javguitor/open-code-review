@@ -35,7 +35,7 @@ const MAX_EVIDENCE_LEN = 4000;
 /** Caps for the optional `prior` block. */
 const MAX_PRIOR_REFS = 20;
 const MAX_PRIOR_STR_LEN = 2000;
-const PRIOR_STATUSES = new Set(["new", "open", "resolved_still_present", "changed"]);
+const PRIOR_STATUSES = new Set(["new", "open", "resolved_still_present", "changed", "dismissed"]);
 const PRIOR_AUTHOR_KINDS = new Set(["human", "bot"]);
 const PRIOR_GITHUB_KINDS = new Set(["thread", "review", "comment"]);
 

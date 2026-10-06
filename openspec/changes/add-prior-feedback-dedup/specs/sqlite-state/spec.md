@@ -2,7 +2,7 @@
 
 ### Requirement: Synthesized Finding Prior Status
 
-The `synthesis_findings` table SHALL store the prior-feedback classification of each synthesized finding as nullable JSON (`prior_json`, migration 23), and `complete-round` SHALL validate it: `status` in `new`, `open`, `resolved_still_present`, `changed`; `refs` required and well-formed when the status is not `new` (`{ source: "github", url, author, author_kind, kind }` or `{ source: "ocr", session_id, round, key }`).
+The `synthesis_findings` table SHALL store the prior-feedback classification of each synthesized finding as nullable JSON (`prior_json`, migration 23), and `complete-round` SHALL validate it: `status` in `new`, `open`, `resolved_still_present`, `changed`, `dismissed`; `refs` required and well-formed when the status is not `new` (`{ source: "github", url, author, author_kind, kind }` or `{ source: "ocr", session_id, round, key }`).
 
 #### Scenario: Valid prior is persisted
 

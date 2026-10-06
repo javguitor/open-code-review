@@ -122,7 +122,7 @@ export type SynthesisSource = {
 };
 
 /** How a synthesized finding relates to feedback the PR already has (GitHub or an earlier OCR round). */
-export type PriorStatus = "new" | "open" | "resolved_still_present" | "changed";
+export type PriorStatus = "new" | "open" | "resolved_still_present" | "changed" | "dismissed";
 
 /** Where the prior feedback lives: a GitHub thread/review/comment, or an earlier OCR synthesized finding. */
 export type PriorRef =

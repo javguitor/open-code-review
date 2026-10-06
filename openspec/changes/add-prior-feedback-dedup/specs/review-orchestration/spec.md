@@ -19,7 +19,7 @@ For a PR target, the review workflow SHALL run `ocr pr prior-feedback` only afte
 
 ### Requirement: Synthesis Classifies Findings Against Prior Feedback
 
-During synthesis the Tech Lead SHALL compare each synthesized finding with the prior feedback (same problem, helped by file and line) and record `prior` on its `synthesis_findings` entry, with a `status` of `new`, `open`, `resolved_still_present` or `changed`, and `refs` to the original feedback for every status other than `new`.
+During synthesis the Tech Lead SHALL compare each synthesized finding with the prior feedback (same problem, helped by file and line) and record `prior` on its `synthesis_findings` entry, with a `status` of `new`, `open`, `resolved_still_present`, `changed` or `dismissed` (a rejected point; checked first), and `refs` to the original feedback for every status other than `new`.
 
 #### Scenario: New finding
 
@@ -44,3 +44,9 @@ During synthesis the Tech Lead SHALL compare each synthesized finding with the p
 - **GIVEN** an outdated thread whose lines changed, and the problem still present in the new code
 - **WHEN** the Tech Lead synthesizes
 - **THEN** the finding SHALL have `prior.status: "changed"` with a ref to the original
+
+#### Scenario: Rejected earlier
+
+- **GIVEN** a thread where the PR author replied "by design", or an earlier OCR finding decided `dismissed` or `wont_fix`, and the code is unchanged
+- **WHEN** the Tech Lead synthesizes
+- **THEN** the finding SHALL have `prior.status: "dismissed"` with a ref to the original

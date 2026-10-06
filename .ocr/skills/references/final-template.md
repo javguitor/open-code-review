@@ -254,6 +254,7 @@ For a synthesized finding whose `prior.status` is not `new` (see `references/wor
 - `open`: `**Already reported**: still open — <link>`
 - `resolved_still_present`: `**Already reported**: marked fixed but still present — <link>`
 - `changed`: `**Already reported**: code changed since — <link>`
+- `dismissed`: `**Already reported**: dismissed — <link or round n of session>`
 
 `<link>` is the `url` of each GitHub ref (several refs: separate them with `, `); for an `ocr` ref write the earlier round instead (`round <n> of <session_id>`). The label and the status words are prose and follow the configured language; the line is an internal pointer and is not posted as written (see `commands/translate-review-to-single-human.md` for what is).
 

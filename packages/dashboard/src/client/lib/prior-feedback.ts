@@ -5,6 +5,7 @@ const STATUS_KEY = {
   open: 'reviews.prior_open',
   resolved_still_present: 'reviews.prior_resolved_still_present',
   changed: 'reviews.prior_changed',
+  dismissed: 'reviews.prior_dismissed',
 } as const satisfies Record<string, MessageKey>
 
 /** i18n key for a prior status; null for `new` / no prior / an unknown status (no badge). */

@@ -376,12 +376,13 @@ describe("validateRoundMeta — synthesis prior", () => {
     return { schema_version: 1, verdict: "REQUEST CHANGES", reviewers: reviewers(), synthesis_findings: items };
   };
 
-  it("accepts new without refs, and open/changed/resolved_still_present with refs", () => {
+  it("accepts new without refs, and open/changed/resolved_still_present/dismissed with refs", () => {
     for (const prior of [
       { status: "new" },
       { status: "open", refs: [ghRef, ocrRef] },
       { status: "changed", refs: [ocrRef] },
       { status: "resolved_still_present", refs: [ghRef] },
+      { status: "dismissed", refs: [ghRef, ocrRef] },
     ]) {
       const out = validateRoundMeta(withPrior(prior));
       expect(out.synthesis_findings![1]!.prior).toEqual(prior);
@@ -395,6 +396,7 @@ describe("validateRoundMeta — synthesis prior", () => {
 
   it.each([
     ["unknown status", { status: "stale", refs: [ocrRef] }, /S2.*prior\.status/],
+    ["dismissed without refs", { status: "dismissed" }, /S2.*prior\.refs/],
     ["open without refs", { status: "open" }, /S2.*prior\.refs/],
     ["open with empty refs", { status: "open", refs: [] }, /S2.*prior\.refs/],
     ["not an object", "open", /S2.*invalid prior/],

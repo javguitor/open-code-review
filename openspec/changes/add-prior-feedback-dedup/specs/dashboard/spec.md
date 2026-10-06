@@ -2,7 +2,7 @@
 
 ### Requirement: Already-Reported Badge
 
-The dashboard SHALL show, on each synthesized finding with a prior status other than `new`, an "Already reported" badge naming the status (still open, marked fixed but still present, code changed) and linking each original feedback item.
+The dashboard SHALL show, on each synthesized finding with a prior status other than `new`, an "Already reported" badge naming the status (still open, marked fixed but still present, code changed, dismissed) and linking each original feedback item.
 
 #### Scenario: Badge with links
 
