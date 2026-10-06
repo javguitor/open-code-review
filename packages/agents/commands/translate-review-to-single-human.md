@@ -40,6 +40,8 @@ tags: [ocr, post, github, human-voice]
 2. **Read the source material**
    - Read `rounds/round-{N}/final.md` for the synthesized review
    - Read ALL individual reviewer outputs in `rounds/round-{N}/reviews/*.md` for raw findings (exact file and line of each finding)
+   - Read `rounds/round-{N}/round-meta.json` and note each synthesized finding's `prior` (`status` and `refs`); a finding without `prior` is `new`
+   - For every `ocr` ref (`session_id`, `round`, `key`), look it up in `rounds/round-{N}/prior-feedback.json` → `ocr_history[]` to learn whether that earlier finding was `posted`. If the file or the entry is missing, treat it as **not posted**
 
 3. **Apply the translation rules** below
 
@@ -75,9 +77,25 @@ You are rewriting a multi-reviewer review into ONE pull-request review that read
 
 Every comment still carries a `severity` in the JSON (the tooling groups and badges comments with it), but the body does NOT start with a label. Map the source categories: `blocker` -> `blocking`, `should_fix` -> `should_fix`, `suggestion` -> `optional`, `style` -> `nit`. A `blocking` body must say in words that it blocks the merge ("This blocks the merge: …", "Blocking: …" is not allowed as a prefix — write the sentence).
 
+### Already-reported findings (posting policy)
+
+A finding whose `prior.status` is not `new` was already raised on the PR. Decide what to post by status:
+
+| `prior.status` | What is posted |
+|---|---|
+| `new`, `changed` or no `prior` | As usual. |
+| `open`, not blocking | Nothing: neither an inline comment nor a line in the summary. |
+| `open`, blocking | No inline comment. One line in `final-human.md`, right after the verdict, saying it still blocks, with the link: "Still blocking: the empty-order case, see <link>". |
+| `dismissed` | Nothing is posted (neither inline nor in the summary), even when it blocks. |
+| `resolved_still_present` | An inline comment as usual that says it is still present although the thread was marked resolved, with the link: "This is still here although the thread was resolved (<link>): …". |
+
+- The link is the `url` of the first GitHub ref. It is the PR's own URL, so it is allowed in the posted text.
+- An `ocr` ref has no public URL: if that finding was posted (its `ocr_history[].posted`, looked up in step 2), say it was raised in an earlier review ("raised in an earlier review"), with no ids and no link. If it was not posted, treat the finding as `new`.
+- The comment still follows the voice rules: self-contained, up to ~100 words, no label prefix.
+
 ### Content rules (NON-NEGOTIABLE)
 
-- Preserve EVERY substantive technical finding. Do not drop or summarize away a concrete issue.
+- Preserve EVERY substantive technical finding. Do not drop or summarize away a concrete issue. The only exception is a finding with `prior.status: "open"` or `"dismissed"` (see Already-reported findings above): `open` is suppressed, or reduced to one summary line when it blocks; `dismissed` is never posted; the PR already has both.
 - Consolidate duplicates: if several reviewers flagged the same thing, write it once.
 - Use the exact file path (repo-relative) and the line numbers of the findings. For the inline `line`, use the line in the NEW version of the file (the head side of the diff).
 - A finding with no file or line goes in the summary only (not in the JSON).
@@ -87,7 +105,7 @@ Every comment still carries a `severity` in the JSON (the tooling groups and bad
 
 The text that gets posted must NEVER contain:
 - any mention of AI, agents, LLMs, automated analysis, reviewers (personas or handles such as `principal-1`, `quality-2`), "the team", rounds, sessions, consensus, OCR, or any tooling;
-- file paths under `.ocr/`, session ids, or the names of these output files;
+- file paths under `.ocr/`, session ids, or the names of these output files (a link to an earlier GitHub comment on the PR is allowed);
 - reviewer tables, "Individual Reviews", consensus/dissent sections, or verdict banners from `final.md`;
 - the `## What This Change Does` section of `final.md` and any `mermaid` diagram: they are internal explanations for the team and are NOT carried into `final-human.md` or into any comment;
 - a mention that the text was translated or rewritten.
@@ -99,7 +117,8 @@ The text that gets posted must NEVER contain:
 The summary body of the review: **one line**. Everything with a file and line lives in its inline comment, so the summary never repeats those points (the tooling moves any comment that cannot be placed inline into the body itself, so nothing is lost).
 
 1. **One-line verdict**, praise first when earned, saying what blocks the merge (or that nothing does): "Net improvement, GJ! The empty-order case blocks the merge." / "LGTM but a couple of leftovers inline." / "One issue blocks the merge: the third location question contradicts the acceptance criteria."
-2. **Only findings without a file or line** (they cannot go inline): one line each after the verdict, saying whether each blocks. Omit when there are none — which is the usual case.
+2. **`open` blockers**: one line each, saying it still blocks, with the link to the original (see Already-reported findings). Not part of the inline comments.
+3. **Only findings without a file or line** (they cannot go inline): one line each after the verdict, saying whether each blocks. Omit when there are none — which is the usual case.
 
 No list of the inline points, no "what is good" section, no closing offer of a call, no headings. Do not start with "Overall, this is a…".
 

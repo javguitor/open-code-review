@@ -14,6 +14,7 @@ import {
   type Database,
 } from '@open-code-review/persistence'
 import { validateSynthesisFindings } from '@open-code-review/persistence/state'
+import type { SynthesisPrior } from '@open-code-review/persistence'
 import { normalizeVerdict, resolveRoundCounts } from '@open-code-review/platform'
 import type { Server as SocketIOServer } from 'socket.io'
 import { parseMapMd } from './parsers/map-parser.js'
@@ -858,6 +859,7 @@ export class FilesystemSync {
         locations?: Array<{ file_path?: string; line_start?: number; line_end?: number }>
         summary?: string
         evidence?: string
+        prior?: SynthesisPrior
         flagged_by?: string[]
         sources?: Array<{ reviewer?: string; index?: number }>
       }>
@@ -1024,6 +1026,7 @@ export class FilesystemSync {
           summary: sf.summary ?? null,
           flaggedBy: Array.isArray(sf.flagged_by) ? sf.flagged_by : undefined,
           evidence: typeof sf.evidence === 'string' ? sf.evidence : undefined,
+          prior: sf.prior && typeof sf.prior === 'object' ? sf.prior : undefined,
           sourceFindingIds: (sf.sources ?? []).flatMap((src) => {
             const id = reviewerRowIds.get((src.reviewer ?? '').replace(/^@/, ''))?.[src.index ?? -1]
             return id === undefined ? [] : [id]

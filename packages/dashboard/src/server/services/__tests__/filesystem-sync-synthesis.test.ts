@@ -155,6 +155,20 @@ describe('synthesized finding ingestion', () => {
     expect(rows('SELECT status FROM user_finding_progress WHERE finding_id = ?', [copy])[0]?.['status']).toBe('fixed')
   })
 
+  it('persists prior_json on insert and clears it when a re-synthesis drops prior', async () => {
+    const prior = { status: 'resolved_still_present', refs: [{ source: 'ocr', session_id: 's0', round: 2, key: 'S3' }] }
+    writeMeta([{ ...S1, prior }, S2])
+    await scan()
+    const id = synthId('S1')
+    expect(getSynthesisFinding(db, id)!.prior).toEqual(prior)
+    expect(getSynthesisFinding(db, synthId('S2'))!.prior).toBeNull()
+
+    writeMeta([S1, S2])
+    await scan()
+    expect(synthId('S1')).toBe(id)
+    expect(getSynthesisFinding(db, id)!.prior).toBeNull()
+  })
+
   it('renumbered keys never move a decision: it is retired with its history, the new key starts clean', async () => {
     writeMeta([S1, S2])
     await scan()

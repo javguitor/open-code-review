@@ -121,6 +121,23 @@ export type SynthesisSource = {
   index: number;
 };
 
+/** How a synthesized finding relates to feedback the PR already has (GitHub or an earlier OCR round). */
+export type PriorStatus = "new" | "open" | "resolved_still_present" | "changed" | "dismissed";
+
+/** Where the prior feedback lives: a GitHub thread/review/comment, or an earlier OCR synthesized finding. */
+export type PriorRef =
+  | {
+      source: "github";
+      url: string;
+      author: string;
+      author_kind: "human" | "bot";
+      kind: "thread" | "review" | "comment";
+    }
+  | { source: "ocr"; session_id: string; round: number; key: string };
+
+/** `refs` is required (non-empty) whenever `status` is not `new`. */
+export type SynthesisPrior = { status: PriorStatus; refs?: PriorRef[] };
+
 /**
  * A deduplicated finding emitted by the Phase 7 synthesis. `category` and
  * `severity` are the post-synthesis values. `sources` makes the grouping
@@ -140,6 +157,8 @@ export type SynthesisFinding = {
   evidence?: string;
   /** Reviewer ids that independently raised this finding (non-empty strings, max 20). */
   flagged_by?: string[];
+  /** Prior-feedback classification; omitted = `new`. */
+  prior?: SynthesisPrior;
   /** Non-empty. */
   sources: SynthesisSource[];
 };

@@ -365,3 +365,49 @@ describe("stateCompleteRound - synthesis_findings", () => {
     expect(() => readFileSync(join(dir, "rounds", "round-1", "round-meta.json"))).toThrow();
   });
 });
+
+describe("validateRoundMeta — synthesis prior", () => {
+  const ghRef = { source: "github", url: "https://github.com/o/r/pull/1#discussion_r1", author: "ana", author_kind: "human", kind: "thread" };
+  const ocrRef = { source: "ocr", session_id: "s0", round: 1, key: "S2" };
+
+  const withPrior = (prior: unknown): Obj => {
+    const items = validSynthesis();
+    items[1] = { ...items[1], prior };
+    return { schema_version: 1, verdict: "REQUEST CHANGES", reviewers: reviewers(), synthesis_findings: items };
+  };
+
+  it("accepts new without refs, and open/changed/resolved_still_present/dismissed with refs", () => {
+    for (const prior of [
+      { status: "new" },
+      { status: "open", refs: [ghRef, ocrRef] },
+      { status: "changed", refs: [ocrRef] },
+      { status: "resolved_still_present", refs: [ghRef] },
+      { status: "dismissed", refs: [ghRef, ocrRef] },
+    ]) {
+      const out = validateRoundMeta(withPrior(prior));
+      expect(out.synthesis_findings![1]!.prior).toEqual(prior);
+    }
+  });
+
+  it("omitted prior stays omitted", () => {
+    const out = validateRoundMeta(withPrior(undefined));
+    expect(out.synthesis_findings![1]!.prior).toBeUndefined();
+  });
+
+  it.each([
+    ["unknown status", { status: "stale", refs: [ocrRef] }, /S2.*prior\.status/],
+    ["dismissed without refs", { status: "dismissed" }, /S2.*prior\.refs/],
+    ["open without refs", { status: "open" }, /S2.*prior\.refs/],
+    ["open with empty refs", { status: "open", refs: [] }, /S2.*prior\.refs/],
+    ["not an object", "open", /S2.*invalid prior/],
+    ["too many refs", { status: "open", refs: Array.from({ length: 21 }, () => ocrRef) }, /S2.*prior\.refs/],
+    ["unknown source", { status: "open", refs: [{ source: "jira" }] }, /prior\.refs\[0\]\.source/],
+    ["github bad author_kind", { status: "open", refs: [{ ...ghRef, author_kind: "robot" }] }, /author_kind/],
+    ["github bad kind", { status: "open", refs: [{ ...ghRef, kind: "pr" }] }, /refs\[0\]\.kind/],
+    ["github empty url", { status: "open", refs: [{ ...ghRef, url: " " }] }, /refs\[0\]\.url/],
+    ["ocr round zero", { status: "open", refs: [{ ...ocrRef, round: 0 }] }, /refs\[0\]\.round/],
+    ["ocr empty key", { status: "open", refs: [ocrRef, { ...ocrRef, key: "" }] }, /refs\[1\]\.key/],
+  ])("rejects %s", (_l, prior, re) => {
+    expect(() => validateRoundMeta(withPrior(prior))).toThrow(re);
+  });
+});

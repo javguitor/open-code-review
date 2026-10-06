@@ -17,7 +17,7 @@
  */
 
 import type { Database } from "./engine.js";
-import type { SynthesisLocation } from "../state/types.js";
+import type { SynthesisLocation, SynthesisPrior, PriorStatus, PriorRef } from "../state/types.js";
 import { resultToRow, resultToRows } from "./result-mapper.js";
 import {
   DECISION_STATUSES,
@@ -90,7 +90,7 @@ export type FindingRevisionRow = {
   created_at: string;
 };
 
-export type { SynthesisLocation };
+export type { SynthesisLocation, SynthesisPrior, PriorStatus, PriorRef };
 
 /** A deduplicated finding emitted by the synthesis (`synthesis_findings` row + its decision). */
 export type SynthesisFindingRow = {
@@ -118,6 +118,8 @@ export type SynthesisFindingRow = {
   verification_file: string | null;
   /** Set when the finding left the synthesis but kept a decision/revisions; excluded from counts and verdict. */
   retired_at: string | null;
+  /** Prior-feedback classification; null = `new` (nothing stored, or unparseable). */
+  prior: SynthesisPrior | null;
   decision: FindingRow["decision"];
 };
 
@@ -245,10 +247,21 @@ function parseLocations(raw: unknown): SynthesisLocation[] | null {
   }
 }
 
+function parsePrior(raw: unknown): SynthesisPrior | null {
+  if (typeof raw !== "string") return null;
+  try {
+    const parsed = JSON.parse(raw) as SynthesisPrior | null;
+    return parsed && typeof parsed === "object" && typeof parsed.status === "string" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 function toSynthesisRow(db: Database, row: Record<string, unknown>): SynthesisFindingRow {
-  const { locations_json, ...rest } = row;
+  const { locations_json, prior_json, ...rest } = row;
   return {
     ...(rest as unknown as SynthesisFindingRow),
+    prior: parsePrior(prior_json),
     flagged_by: parseFlaggedBy(row.flagged_by),
     locations: parseLocations(locations_json),
     decision: getDecision(db, { kind: "synthesis", id: Number(row.id) }),
@@ -635,4 +648,62 @@ export function applySubjectProposal<S extends FindingSubject>(
 export function applyProposal(db: Database, p: ApplyProposalParams): FindingRow {
   const { findingId, ...rest } = p;
   return applySubjectProposal(db, { kind: "reviewer", id: findingId }, rest);
+}
+
+/** A synthesized finding of an earlier round on the same PR, as shown to the next review. */
+export type PriorOcrFinding = {
+  session_id: string;
+  round: number;
+  key: string;
+  title: string;
+  summary: string | null;
+  category: string | null;
+  severity: string;
+  locations: SynthesisLocation[] | null;
+  /** Status of the finding's decision row; null when nobody triaged it. */
+  decision_status: FindingDecisionStatus | null;
+  /** Whether that round was posted to GitHub (`review_rounds.posted_at`). */
+  posted: boolean;
+};
+
+/**
+ * Live synthesized findings of every round of every session reviewing
+ * `prNumber`, except the round being written (`exclude`). Sessions are linked
+ * to a PR only by `sessions.pr_number`. Oldest first, so callers see the
+ * history in the order it happened.
+ */
+export function getPriorOcrFindingsForPr(
+  db: Database,
+  prNumber: number,
+  exclude: { sessionId: string; round: number },
+): PriorOcrFinding[] {
+  const rows = resultToRows<Record<string, unknown>>(
+    db.exec(
+      `SELECT rr.session_id AS session_id, rr.round_number AS round, sf.key AS key, sf.title AS title,
+              sf.summary AS summary, sf.category AS category, sf.severity AS severity,
+              sf.locations_json AS locations_json, d.status AS decision_status,
+              rr.posted_at IS NOT NULL AS posted
+         FROM synthesis_findings sf
+         JOIN review_rounds rr ON rr.id = sf.round_id
+         JOIN sessions s ON s.id = rr.session_id
+         LEFT JOIN synthesis_finding_decisions d ON d.synthesis_finding_id = sf.id
+        WHERE s.pr_number = ?
+          AND sf.retired_at IS NULL
+          AND NOT (rr.session_id = ? AND rr.round_number = ?)
+        ORDER BY rr.id ASC, sf.id ASC`,
+      [prNumber, exclude.sessionId, exclude.round],
+    ),
+  );
+  return rows.map((r) => ({
+    session_id: String(r.session_id),
+    round: Number(r.round),
+    key: String(r.key),
+    title: String(r.title),
+    summary: (r.summary as string | null) ?? null,
+    category: (r.category as string | null) ?? null,
+    severity: String(r.severity),
+    locations: parseLocations(r.locations_json),
+    decision_status: (r.decision_status as FindingDecisionStatus | null) ?? null,
+    posted: Number(r.posted) === 1,
+  }));
 }

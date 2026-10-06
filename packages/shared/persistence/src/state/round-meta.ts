@@ -32,6 +32,13 @@ const MIN_TITLE_LEN = 8;
 const MAX_FLAGGED_BY = 20;
 const MAX_EVIDENCE_LEN = 4000;
 
+/** Caps for the optional `prior` block. */
+const MAX_PRIOR_REFS = 20;
+const MAX_PRIOR_STR_LEN = 2000;
+const PRIOR_STATUSES = new Set(["new", "open", "resolved_still_present", "changed", "dismissed"]);
+const PRIOR_AUTHOR_KINDS = new Set(["human", "bot"]);
+const PRIOR_GITHUB_KINDS = new Set(["thread", "review", "comment"]);
+
 /** `S1`, `S12`, ... — assigned by the Tech Lead and written next to the item in final.md. */
 const SYNTHESIS_KEY_RE = /^S[0-9]+$/;
 
@@ -110,6 +117,7 @@ export function validateSynthesisFindings(obj: Record<string, unknown>): void {
     }
     f.summary = sanitizeMetadataString(f.summary);
     validateSynthesisLocations(label, f);
+    validateSynthesisPrior(label, f);
     if (f.flagged_by !== undefined) {
       if (
         !Array.isArray(f.flagged_by) ||
@@ -166,6 +174,61 @@ export function validateSynthesisFindings(obj: Record<string, unknown>): void {
         `each reviewer finding must be the source of exactly one synthesized finding`,
     );
   }
+}
+
+function priorString(label: string, where: string, v: unknown): string {
+  if (typeof v !== "string" || v.trim() === "" || v.length > MAX_PRIOR_STR_LEN) {
+    throw new Error(`${label} has invalid ${where}: expected a non-empty string of at most ${MAX_PRIOR_STR_LEN} characters`);
+  }
+  return sanitizeMetadataString(v, { maxLen: MAX_PRIOR_STR_LEN }).trim();
+}
+
+function validatePriorRef(label: string, i: number, raw: unknown): void {
+  const where = `prior.refs[${i}]`;
+  const r = raw as Record<string, unknown> | null;
+  if (!r || typeof r !== "object") {
+    throw new Error(`${label} has invalid ${where}: expected an object`);
+  }
+  if (r.source === "github") {
+    r.url = priorString(label, `${where}.url`, r.url);
+    r.author = priorString(label, `${where}.author`, r.author);
+    if (typeof r.author_kind !== "string" || !PRIOR_AUTHOR_KINDS.has(r.author_kind)) {
+      throw new Error(`${label} has invalid ${where}.author_kind: must be one of: ${[...PRIOR_AUTHOR_KINDS].join(", ")}`);
+    }
+    if (typeof r.kind !== "string" || !PRIOR_GITHUB_KINDS.has(r.kind)) {
+      throw new Error(`${label} has invalid ${where}.kind: must be one of: ${[...PRIOR_GITHUB_KINDS].join(", ")}`);
+    }
+  } else if (r.source === "ocr") {
+    r.session_id = priorString(label, `${where}.session_id`, r.session_id);
+    r.key = priorString(label, `${where}.key`, r.key);
+    if (typeof r.round !== "number" || !Number.isInteger(r.round) || r.round < 1) {
+      throw new Error(`${label} has invalid ${where}.round: expected a positive integer`);
+    }
+  } else {
+    throw new Error(`${label} has invalid ${where}.source: must be "github" or "ocr"`);
+  }
+}
+
+/** Validate the optional `prior` block in place: a status, and refs when the status is not `new`. */
+function validateSynthesisPrior(label: string, f: Record<string, unknown>): void {
+  if (f.prior === undefined) return;
+  const p = f.prior as Record<string, unknown> | null;
+  if (!p || typeof p !== "object" || Array.isArray(p)) {
+    throw new Error(`${label} has invalid prior: expected an object { status, refs? }`);
+  }
+  if (typeof p.status !== "string" || !PRIOR_STATUSES.has(p.status)) {
+    throw new Error(
+      `${label} has invalid prior.status: "${String(p.status)}". Must be one of: ${[...PRIOR_STATUSES].join(", ")}`,
+    );
+  }
+  if (p.refs === undefined && p.status === "new") return;
+  if (!Array.isArray(p.refs) || p.refs.length > MAX_PRIOR_REFS || (p.refs.length === 0 && p.status !== "new")) {
+    throw new Error(
+      `${label} has invalid prior.refs: expected ${p.status === "new" ? "an array" : "a non-empty array"} of at most ${MAX_PRIOR_REFS} refs` +
+        (p.status === "new" ? "" : ` (required when prior.status is "${p.status}")`),
+    );
+  }
+  p.refs.forEach((ref: unknown, i: number) => validatePriorRef(label, i, ref));
 }
 
 function validateSynthesisLocations(label: string, f: Record<string, unknown>): void {

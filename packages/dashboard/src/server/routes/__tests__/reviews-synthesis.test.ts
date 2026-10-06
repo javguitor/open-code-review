@@ -97,6 +97,18 @@ describe('round with synthesized findings', () => {
     expect(f.sources.map((s: any) => [s.finding_id, s.reviewer, s.earlier_decision])).toEqual(r.slice(0, 3).map((id) => [id, 'principal-1', null]))
   })
 
+  it('exposes prior as parsed JSON, null when absent and null when the stored JSON is invalid', async () => {
+    const { blocker, should } = synthesizedRound()
+    const prior = { status: 'open', refs: [{ source: 'github', url: 'https://github.com/o/r/pull/1#discussion_r1', author: 'alice', author_kind: 'human', kind: 'thread' }] }
+    db.run('UPDATE synthesis_findings SET prior_json = ? WHERE id = ?', [JSON.stringify(prior), blocker])
+    let list = (await get('/s1/rounds/1/findings')).body
+    expect(list.find((x: any) => x.id === blocker).prior).toEqual(prior)
+    expect(list.find((x: any) => x.id === should).prior).toBeNull()
+    db.run('UPDATE synthesis_findings SET prior_json = ? WHERE id = ?', ['{not json', blocker])
+    list = (await get('/s1/rounds/1/findings')).body
+    expect(list.find((x: any) => x.id === blocker).prior).toBeNull()
+  })
+
   it('counts, open counts and verdict after decisions follow the synthesized findings', async () => {
     const { blocker, r } = synthesizedRound()
     let rd = (await get('/s1/rounds/1')).body
