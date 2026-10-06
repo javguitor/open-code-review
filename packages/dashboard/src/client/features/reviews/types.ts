@@ -1,3 +1,4 @@
+import type { SynthesisPrior } from '@open-code-review/persistence'
 import type { Finding, FindingKind, ReviewRound, SynthesizedBy } from '../../lib/api-types'
 
 export { DECISION_STATUSES, type DecisionStatus } from '@open-code-review/persistence/finding-rules'
@@ -18,6 +19,8 @@ export type RoundFinding = Omit<Finding, 'reviewer_output_id'> & {
   synthesis_category?: string | null
   decision?: FindingDecision | null
   revision_count?: number
+  /** Synthesized findings only: already raised in earlier feedback (null / absent: no prior). */
+  prior?: SynthesisPrior | null
   /** Set when the finding left the synthesis; kept for history and excluded from counts. */
   retired_at?: string | null
 }

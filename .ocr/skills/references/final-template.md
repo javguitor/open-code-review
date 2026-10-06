@@ -247,6 +247,16 @@ Every item in `final.md` is one synthesized finding, and its id is the `key` you
 - Keys are unique within the round and each appears exactly once. Items under `### Style` are tagged `[S<n>]` like any other bullet, but their `category` is `"style"`, so they are not counted as suggestions: `synthesis_counts.suggestions` is the number of `synthesis_findings` with `category: "suggestion"`. With `synthesis_findings` present, `synthesis_counts` is optional (derived from them).
 - `ID` and `S<n>` are literal tokens: they stay as written whatever the output language.
 
+### Step 10: Mark Already-Reported Items
+
+For a synthesized finding whose `prior.status` is not `new` (see `references/workflow.md`, Phase 7 step 7), add one `**Already reported**` line to its item, right after `**Location**` (Blockers and Should Fix) or at the end of its bullet (Suggestions). Items that are `new` get nothing.
+
+- `open`: `**Already reported**: still open — <link>`
+- `resolved_still_present`: `**Already reported**: marked fixed but still present — <link>`
+- `changed`: `**Already reported**: code changed since — <link>`
+
+`<link>` is the `url` of each GitHub ref (several refs: separate them with `, `); for an `ocr` ref write the earlier round instead (`round <n> of <session_id>`). The label and the status words are prose and follow the configured language; the line is an internal pointer and is not posted as written (see `commands/translate-review-to-single-human.md` for what is).
+
 ---
 
 ## Final Review Template
@@ -322,6 +332,7 @@ sequenceDiagram
 **ID**: S2
 **Flagged by**: @principal-1, @quality-1
 **Location**: `path/to/file.ts:42-50`
+**Already reported**: {Optional — only when `prior.status` is not `new`; see Step 10}
 **Evidence**: {Optional — omit when there is none}
 
 {Description and why it should be fixed.}

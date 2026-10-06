@@ -720,6 +720,17 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 23,
+    description:
+      "Add nullable synthesis_findings.prior_json (prior-feedback classification: status + refs to existing PR feedback)",
+    // Nullable, no default: NULL = new (rounds stored before this migration, or no prior feedback).
+    run: (db) => {
+      if (!columnExists(db, "synthesis_findings", "prior_json")) {
+        db.run("ALTER TABLE synthesis_findings ADD COLUMN prior_json TEXT;");
+      }
+    },
+  },
 ];
 
 /** Whether `table` currently has a column named `column` (for idempotent DDL). */

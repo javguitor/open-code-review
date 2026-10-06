@@ -10,7 +10,7 @@
  * revisions is retired (`retired_at`), not reassigned.
  */
 
-import type { Database, SynthesisLocation } from '@open-code-review/persistence'
+import type { Database, SynthesisLocation, SynthesisPrior } from '@open-code-review/persistence'
 import { FINAL_DECISIONS } from '@open-code-review/persistence/finding-rules'
 
 export type IncomingFinding = {
@@ -209,6 +209,8 @@ export type IncomingSynthesisFinding = {
   summary: string | null
   flaggedBy?: string[]
   evidence?: string
+  /** Prior-feedback classification; absent clears any stored one. */
+  prior?: SynthesisPrior
   /** `review_findings.id` of every reviewer finding this one merges. */
   sourceFindingIds: number[]
 }
@@ -286,16 +288,17 @@ export function reconcileSynthesisFindings(
     const primary = f.locations[0]
     const locations = f.locations.length > 0 ? JSON.stringify(f.locations) : null
     const flagged = f.flaggedBy === undefined ? null : JSON.stringify(f.flaggedBy)
+    const prior = f.prior === undefined ? null : JSON.stringify(f.prior)
     const row = matches.get(i)
     if (!row) {
       db.run(
         `INSERT INTO synthesis_findings
            (round_id, key, title, severity, category, file_path, line_start, line_end, locations_json,
-            summary, evidence, flagged_by, is_blocker, parsed_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            summary, evidence, flagged_by, is_blocker, parsed_at, prior_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [roundId, f.key, f.title, f.severity, f.category, primary?.file_path ?? null, primary?.line_start ?? null,
          primary?.line_end ?? null, locations, f.summary, f.evidence ?? null, flagged,
-         f.category === 'blocker' ? 1 : 0, sqlNow],
+         f.category === 'blocker' ? 1 : 0, sqlNow, prior],
       )
       rowId = lastInsertId(db)
     } else {
@@ -309,14 +312,15 @@ export function reconcileSynthesisFindings(
            category = CASE WHEN ? OR ? IS NULL THEN category ELSE ? END,
            is_blocker = CASE WHEN ? THEN is_blocker ELSE ? END,
            flagged_by = COALESCE(?, flagged_by),
-           evidence = COALESCE(?, evidence)
+           evidence = COALESCE(?, evidence),
+           prior_json = ?
          WHERE id = ?`,
         [f.title, primary?.file_path ?? null, primary?.line_start ?? null, primary?.line_end ?? null, locations,
          f.summary, sqlNow,
          row.revisedSeverity ? 1 : 0, f.severity,
          row.revisedCategory ? 1 : 0, f.category, f.category,
          row.revisedCategory ? 1 : 0, f.category === 'blocker' ? 1 : 0,
-         flagged, f.evidence ?? null, row.id],
+         flagged, f.evidence ?? null, prior, row.id],
       )
     }
     db.run('DELETE FROM synthesis_finding_sources WHERE synthesis_finding_id = ?', [rowId])

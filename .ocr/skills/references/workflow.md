@@ -328,12 +328,26 @@ If any are found, PRINT `Requirements found in the PR body: <urls> — re-run wi
 
 See `references/context-discovery.md` for detailed algorithm.
 
+**1f. Gather Prior Feedback (PR targets only)**
+
+For a PR target (`pr:<n>` or a PR URL), once the PR context is written and before any reviewer is spawned, collect the feedback the PR already has (GitHub threads, review bodies and comments, and earlier OCR rounds for the same PR):
+
+```bash
+ocr pr prior-feedback "$PR_URL" --session-id "$SESSION_ID" --json
+```
+
+It writes `rounds/round-{n}/prior-feedback.json`, which Phase 7 reads to classify findings. Non-PR targets (staged, branch, commit range) skip this step: every finding is `new`.
+
+- `github.available: false` is not an error: the command still exits 0 and the file still has the OCR history. Note it in `context.md` and continue.
+- **Do NOT pass `prior-feedback.json`, or anything from it, to the reviewers in Phase 4.** They stay blind so their analysis is independent; only the Tech Lead reads it, in Phase 7.
+
 ### Phase 1 Checkpoint
 
 **STOP and verify before proceeding:**
 - [ ] `discovered-standards.md` written to session directory
 - [ ] If user provided requirements: `requirements/source*.md` fetched by the CLI (URL/path/text) and `requirements.md` written per `references/requirements-normalization.md`
 - [ ] If the CLI reported a fetch failure: requirements skipped (user agreed, or noted in `context.md` in non-interactive runs)
+- [ ] PR targets: `ocr pr prior-feedback` ran (a `github.available: false` result is fine); non-PR targets: step skipped
 
 ---
 
@@ -873,6 +887,12 @@ Synthesis prose follows the configured `language`; headings, labels, verdicts an
          "summary": "User input passed directly to raw SQL...",
          "evidence": "Ran the query with `' OR 1=1 --`; all rows returned.",
          "flagged_by": ["@principal-1", "@security-1"],
+         "prior": {
+           "status": "open",
+           "refs": [
+             { "source": "github", "url": "https://github.com/acme/app/pull/12#discussion_r1", "author": "alice", "author_kind": "human", "kind": "thread" }
+           ]
+         },
          "sources": [
            { "reviewer": "principal-1", "index": 0 },
            { "reviewer": "security-1", "index": 0 }
@@ -938,6 +958,12 @@ Synthesis prose follows the configured `language`; headings, labels, verdicts an
    - `key`: `S<n>`, unique within the round; the same token goes in `final.md`.
    - `title`, `category`, `severity`, `summary`: the **post-synthesis** values (same vocabularies and 8-character title floor as reviewer findings). `title`, `summary` and `evidence` are prose and follow the output language.
    - `locations[]`: optional; the first entry is the primary location (diff marker, previous-round matching). `evidence` and `flagged_by` are optional.
+   - `prior`: optional; omitted means `new`. PR targets only: after merging reviewer findings, compare each synthesized finding with `rounds/round-{n}/prior-feedback.json` (`github.threads`, `github.reviews`, `github.comments` and `ocr_history`). Match the **same problem**, not just the same line: use the meaning of the earlier comment, helped by file and line; a different problem on the same line is not a match. `status` is one of:
+     - `open`: already reported, the earlier comment is unresolved with no reply saying it was fixed (or the OCR finding was not decided fixed/dismissed), and the problem is still in the code.
+     - `resolved_still_present`: the earlier thread is resolved, or a reply in it (`threads[].replies`, from the PR author or anyone) says it was fixed/addressed, or the OCR finding was decided fixed, but the problem is still in the code. A "Fixed in <sha>" reply on a thread that is still `is_resolved: false` counts as resolved; the common shape after a fix commit is `is_outdated: true` plus such a reply. Ref the thread. If the code shows it really is fixed, there is no finding: do not emit one just to say "fixed".
+     - `changed`: the earlier report was on code that has since changed (thread `is_outdated`); you re-evaluated the new code and it is still a problem.
+     - `new`: nothing earlier describes it.
+     `refs[]` is **required** when `status` is not `new` and points at the exact original(s): `{ "source": "github", "url", "author", "author_kind": "human"|"bot", "kind": "thread"|"review"|"comment" }` or `{ "source": "ocr", "session_id", "round", "key" }`. Prior feedback never changes `category` or `severity`, and a prior-reported finding keeps its own `title`/`summary`: the summary still explains the problem itself, never "already reported" (the status and links carry that).
    - `sources[]`: `{ "reviewer": "<type>-<instance>", "index": <n> }`, where `reviewer` matches an entry of `reviewers[]` (a leading `@` is tolerated) and `index` is the **0-based** position in that reviewer's `findings[]`.
    - **Complete partition**: every reviewer finding MUST be the source of **exactly one** synthesized finding. A finding you do not want to list still needs an entry (as a `suggestion` or `style`); do not leave reviewer findings uncovered.
    - **Withdrawn or refuted findings** (retracted in discourse, or shown to be wrong): add them as a `source` of the synthesized finding they were discussed under. If there is none, keep only the actionable point that survives the discussion (e.g. "document that recovery starts after the last failure") as a `suggestion`, written as that point. Never list an item whose content is "objection withdrawn" or "no change recommended"; the discussion itself lives in `discourse.md`.
@@ -956,7 +982,7 @@ Synthesis prose follows the configured `language`; headings, labels, verdicts an
 
    > **Do NOT write `round-meta.json` directly** — always pipe through the CLI so the schema is validated and the event is recorded atomically.
 
-   > **The CLI fails fast (exit 7, nothing written) — self-correct and re-pipe** if: the `verdict` is not one of the three canonical values; any finding `title` is shorter than 8 characters (a degenerate title like `"s"` carries no information); a `synthesis_counts` value **exceeds** the number of findings of that category present (you cannot dedup to *more* than you started with — a count ≤ the tally is fine, that's the legitimate cross-reviewer dedup case); or the `verdict` contradicts the deduplicated **blocker count** — `APPROVE` requires **0** blockers and `REQUEST CHANGES` requires **≥ 1** (`NEEDS DISCUSSION` is unconstrained). If nothing is a blocker, use `APPROVE` and carry the work as `should_fix`/`suggestion`; if something must block merge, categorize it `blocker` and use `REQUEST CHANGES`. When `synthesis_findings` is present the blocker count is the number of synthesized blockers. It also fails (exit 7) for these `synthesis_findings` causes, each naming the offending key or source: a reviewer finding that is the source of **no** synthesized finding (orphan source, e.g. `principal-1[3]`); a reviewer finding that is the source of **more than one** (duplicated source); a source whose `reviewer` or `index` does not exist in `reviewers[]` (unknown reviewer or index); a duplicate or malformed `key`; and a `synthesis_counts` that does not **equal** the synthesized tally (count mismatch; with `synthesis_findings` present the check is equality, not an upper bound). Read the message, correct the payload and pipe it again; this is the same self-correct-and-re-pipe loop as for the other causes.
+   > **The CLI fails fast (exit 7, nothing written) — self-correct and re-pipe** if: the `verdict` is not one of the three canonical values; any finding `title` is shorter than 8 characters (a degenerate title like `"s"` carries no information); a `synthesis_counts` value **exceeds** the number of findings of that category present (you cannot dedup to *more* than you started with — a count ≤ the tally is fine, that's the legitimate cross-reviewer dedup case); or the `verdict` contradicts the deduplicated **blocker count** — `APPROVE` requires **0** blockers and `REQUEST CHANGES` requires **≥ 1** (`NEEDS DISCUSSION` is unconstrained). If nothing is a blocker, use `APPROVE` and carry the work as `should_fix`/`suggestion`; if something must block merge, categorize it `blocker` and use `REQUEST CHANGES`. When `synthesis_findings` is present the blocker count is the number of synthesized blockers. It also fails (exit 7) for these `synthesis_findings` causes, each naming the offending key or source: a reviewer finding that is the source of **no** synthesized finding (orphan source, e.g. `principal-1[3]`); a reviewer finding that is the source of **more than one** (duplicated source); a source whose `reviewer` or `index` does not exist in `reviewers[]` (unknown reviewer or index); a duplicate or malformed `key`; a `prior` with an unknown `status`, or a non-`new` `prior` without well-formed `refs`; and a `synthesis_counts` that does not **equal** the synthesized tally (count mismatch; with `synthesis_findings` present the check is equality, not an upper bound). Read the message, correct the payload and pipe it again; this is the same self-correct-and-re-pipe loop as for the other causes.
 
 8. **Write the final review file**:
    ```bash
@@ -965,6 +991,8 @@ Synthesis prose follows the configured `language`; headings, labels, verdicts an
    ```
 
    Save synthesized review to `$FINAL_FILE`.
+
+   For each finding with `prior.status` other than `new`, add the `**Already reported**` line described in `references/final-template.md` (Step 10).
 
    Write the **same keys** you piped in step 7: `**ID**: S<n>` under each numbered item of `## Blockers` and `## Should Fix`, and an `[S<n>]` prefix on each bullet of `## Suggestions`. Every item in `final.md` carries exactly one key, and every key appears exactly once.
 

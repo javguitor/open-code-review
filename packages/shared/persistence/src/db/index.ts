@@ -191,6 +191,7 @@ export {
   recordSubjectVerification,
   applyProposal,
   applySubjectProposal,
+  getPriorOcrFindingsForPr,
 } from "./findings.js";
 export type {
   FindingRow,
@@ -207,7 +208,11 @@ export type {
   SubjectRow,
   SynthesisFindingRow,
   SynthesisSourceRow,
+  PriorOcrFinding,
   SynthesisLocation,
+  SynthesisPrior,
+  PriorStatus,
+  PriorRef,
   ReviseSubjectParams,
   SetSubjectDecisionParams,
   RecordSubjectVerificationParams,

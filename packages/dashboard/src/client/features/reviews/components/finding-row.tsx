@@ -13,6 +13,7 @@ import { isActionable, MIN_DECISION_REASON_LENGTH, requiresReason } from '@open-
 import { currentStatus, reasonMessageKey, synthesisNote } from '../decisions'
 import { CATEGORY_LABEL_KEY, DECISION_LABEL_KEY, SEVERITY_LABEL_KEY } from '../labels'
 import { findingRef, type FindingRef } from '../../../lib/finding-ref'
+import { priorRefLink, priorStatusKey } from '../../../lib/prior-feedback'
 
 type FindingRowProps = {
   finding: RoundFinding
@@ -73,6 +74,9 @@ export function FindingRow({ finding, onTriageChange, synthesizedHref }: Finding
   const severityNote = synthesisNote(finding.severity, finding.synthesis_severity)
   const categoryNote = synthesisNote(finding.category, finding.synthesis_category)
 
+  const priorKey = priorStatusKey(finding.prior)
+  const priorRefs = finding.prior?.refs ?? []
+
   const lineRange =
     finding.line_start != null
       ? finding.line_end != null && finding.line_end !== finding.line_start
@@ -127,6 +131,11 @@ export function FindingRow({ finding, onTriageChange, synthesizedHref }: Finding
         </td>
         <td className="border-b border-zinc-200 px-4 py-2 text-zinc-900 dark:border-zinc-800 dark:text-zinc-100">
           {finding.title}
+          {priorKey && (
+            <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+              {t('reviews.prior_badge')} · {t(priorKey)}
+            </span>
+          )}
           {finding.retired_at && (
             <span className="ml-2 rounded bg-zinc-200 px-1.5 py-0.5 text-[10px] font-medium text-zinc-700 dark:bg-zinc-700 dark:text-zinc-200">
               {t('reviews.retired')}
@@ -261,16 +270,36 @@ export function FindingRow({ finding, onTriageChange, synthesizedHref }: Finding
           </td>
         </tr>
       )}
-      {expanded && finding.summary && (
+      {expanded && (finding.summary || (priorKey && priorRefs.length > 0)) && (
         <tr>
           <td
             colSpan={6}
             className="border-b border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/50"
           >
-            <MarkdownRenderer
-              content={finding.summary}
-              className="text-sm"
-            />
+            {priorKey && priorRefs.length > 0 && (
+              <p className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-600 dark:text-zinc-400">
+                <span>{t('reviews.prior_refs_label')}</span>
+                {priorRefs.map((ref, i) => {
+                  const link = priorRefLink(ref)
+                  const text =
+                    link.label.type === 'github'
+                      ? `${link.label.author}${link.label.bot ? ` ${t('reviews.prior_bot')}` : ''} · ${link.label.kind}`
+                      : t('reviews.prior_ocr_ref', { round: link.label.round, key: link.label.key })
+                  const cls = 'text-indigo-600 hover:underline dark:text-indigo-400'
+                  return link.external ? (
+                    <a key={i} href={link.href} target="_blank" rel="noreferrer" className={cls}>
+                      {text}
+                      <ExternalLink className="ml-1 inline h-3 w-3" />
+                    </a>
+                  ) : (
+                    <Link key={i} to={link.href} className={cls}>
+                      {text}
+                    </Link>
+                  )
+                })}
+              </p>
+            )}
+            {finding.summary && <MarkdownRenderer content={finding.summary} className="text-sm" />}
           </td>
         </tr>
       )}

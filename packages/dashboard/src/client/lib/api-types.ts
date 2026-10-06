@@ -1,6 +1,7 @@
 import type { GitHubReviewState } from '@open-code-review/platform/verdict'
 import type { SessionStatus, WorkflowType, FindingTriage, FindingSeverity, ChatTargetType, RoundTriage, PostReviewStep } from '../../shared/types'
 import type { IdeType } from './utils'
+import type { SynthesisPrior } from '@open-code-review/persistence'
 
 export type { SessionStatus, WorkflowType, FindingTriage, FindingSeverity, ChatTargetType, RoundTriage, PostReviewStep }
 
@@ -723,6 +724,8 @@ export type SynthesizedFindingView = FindingViewCommon & {
   /** Every location; `[0]` is the primary one. */
   locations: FindingLocation[] | null
   sources: SynthesisSource[]
+  /** Prior-feedback classification; null when the round had none. */
+  prior?: SynthesisPrior | null
 }
 
 /** One row of `GET /api/sessions/:id/rounds/:n/findings` (current values + provenance). */
