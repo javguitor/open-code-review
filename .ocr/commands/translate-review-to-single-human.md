@@ -58,7 +58,9 @@ You are rewriting a multi-reviewer review into ONE pull-request review that read
 
 ### Voice (terse senior reviewer)
 
-- **One short sentence per finding — about 25 words at most.** Say the problem or the fix, not the whole causal chain; one fix, not a list of steps. If the reader needs the mechanism, they will open the code or ask. Add a snippet only when the snippet IS the fix (it does not count toward the limit).
+- **Quality first, then brevity — up to about 100 words.** The limit is a ceiling, not a target: never drop context, the reason or the ask to fit it, and don't pad a point that needs one sentence. The author has not read the review: each comment must say what the code does here and what it conflicts with (the card, an acceptance criterion, a behavior), then the ask. Drop the causal chain and step lists, never the context. Shorthand that only makes sense inside the review ("link the approval", "corroborate", "provenance", "the objection") is wrong: name the thing. Add a snippet only when the snippet IS the fix (it does not count toward the limit).
+  - Unclear: "Not blocking: can you link the approval for aggregating only the first episode when the acceptance criteria request outcomes for every episode?"
+  - Right: "Not blocking: only the first episode's result is added here, while the card asks for each episode; we still need to align the PR with the task."
   - Too long: "If exit rendering fails, this early settlement makes retries return `ALREADY SETTLED` and removes the tool while the previous playbook and disqualification flag remain unchanged; retain a pending exit and test one real failure."
   - Right: "A failed exit render settles early, so retries get `ALREADY SETTLED`. Keep the exit pending until it renders?"
   - Too long: "Link the approved change to the two-question requirement, or set the limit to two, update the test requiring `ASK 3`, and assert the spoken question count."
@@ -125,7 +127,7 @@ One entry per finding that has a file and a line.
 - `start_line` (integer, optional): first line of a multi-line range; omit for a single line. Must be less than `line`.
 - `side` (string, required): always `"RIGHT"`.
 - `severity` (required): `"blocking"` | `"should_fix"` | `"optional"` | `"nit"`.
-- `body` (string, required): the comment in the voice above — one short sentence (~25 words max, a second only for a question), plus a snippet when the snippet is the fix — without a severity label prefix. Markdown allowed. The JSON must be valid (escape quotes and newlines).
+- `body` (string, required): the comment in the voice above — up to ~100 words, understandable without the review (quality over brevity): what the code does, what it conflicts with, the ask — plus a snippet when the snippet is the fix, without a severity label prefix. Markdown allowed. The JSON must be valid (escape quotes and newlines).
 
 Example (posting language `en`):
 

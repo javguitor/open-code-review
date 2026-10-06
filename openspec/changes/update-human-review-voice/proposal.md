@@ -7,7 +7,7 @@ The human-voice review that gets posted to GitHub currently follows a didactic P
 ## What Changes
 
 - The `translate-review-to-single-human` command's voice is replaced by a terse senior-reviewer voice:
-  - one short, direct sentence per finding, about 25 words at most — the problem or one fix, not the causal chain (a snippet only when it is the fix itself); rhetorical questions with mild irony are allowed when they make the point faster ("4 lines of comments for an if?"), never sarcasm aimed at the person;
+  - one direct comment per finding, up to about 100 words (quality over length), self-contained (what the code does, what it conflicts with, the ask) — no causal chain, no review-internal shorthand (a snippet only when it is the fix itself); rhetorical questions with mild irony are allowed when they make the point faster ("4 lines of comments for an if?"), never sarcasm aimed at the person;
   - praise first, in one line, only when earned; no list of what is fine and no restating of the PR description;
   - explicit about blocking in plain words ("This blocks the merge: …", "LGTM but …", "Not blocking: …") instead of fixed severity labels;
   - when blocking on design, the fix is named in one sentence; when unsure, ask instead of asserting and say what to check.
