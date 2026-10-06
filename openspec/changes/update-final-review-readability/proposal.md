@@ -17,5 +17,5 @@ The final review (`final.md`, shown as "Revisión final" in the dashboard) is ha
 
 ## Impact
 
-- Affected specs: `review-orchestration` (Final Review Synthesis, Plain-Language Overview in the Final Review; new Final Review Without Process Details)
-- Affected code: `packages/agents/skills/ocr/references/final-template.md` (template + steps), `workflow.md` (Phase 7 step 8 and the `flagged_by`/`evidence` wording); synced to `.ocr/` with `nx run cli:update`. No CLI/dashboard code change: the dashboard parser only needs `## Verdict` and the count lines, kept as they are.
+- Affected specs: `review-orchestration` (Final Review Synthesis, Plain-Language Overview in the Final Review, Synthesis Emits Synthesized Findings — `**ID**` position; new Final Review Without Process Details)
+- Affected code: `packages/agents/skills/ocr/references/final-template.md` (template + steps), `workflow.md` (Phase 7 overview line, step 8 and the `flagged_by`/`evidence` wording), `session-files.md` (what `final.md` must include); synced to `.ocr/` with `nx run cli:update`. No CLI/dashboard code change: the dashboard parser only needs `## Verdict` and the count lines, kept as they are.

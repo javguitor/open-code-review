@@ -212,12 +212,13 @@ See `references/reviewer-task.md` for complete output format.
 ### final.md
 
 Must include:
-- Verdict (APPROVE / REQUEST CHANGES / NEEDS DISCUSSION)
-- Blockers section (if any)
-- Suggestions section
+- `## What This Change Does` (what the task asks, how it was built step by step, one or two diagrams)
+- Verdict (APPROVE / REQUEST CHANGES / NEEDS DISCUSSION) with the count lines and a short explanation
+- Blockers / Should Fix / Suggestions sections, each problem told in plain language
 - Requirements Assessment (if requirements provided)
 - Clarifying Questions section
-- Individual Reviews table with file references
+
+No reviewer names, consensus or discourse sections: provenance lives in `round-meta.json` and the dashboard.
 
 See `references/final-template.md` for complete template.
 

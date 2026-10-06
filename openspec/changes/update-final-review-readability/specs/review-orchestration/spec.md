@@ -20,7 +20,7 @@ The synthesizer SHALL choose the verdict and the `blocker`-category findings **t
 #### Scenario: Deduplication
 - **GIVEN** the same issue found by multiple reviewers
 - **WHEN** synthesis occurs
-- **THEN** the issue SHALL appear once with sources noted
+- **THEN** the issue SHALL appear once, with its sources recorded in `round-meta.json` (not named in `final.md`)
 
 #### Scenario: Final review structure
 - **GIVEN** synthesis is complete
@@ -30,6 +30,7 @@ The synthesizer SHALL choose the verdict and the `blocker`-category findings **t
   - `## Verdict` with the verdict value, the count lines and a short plain explanation
   - `## Blockers`, `## Should Fix`, `## Suggestions` with each problem told in plain language
   - `## What's Working Well`
+  - `## Requirements Assessment` (when requirements were provided)
   - `## Clarifying Questions` (when there are any)
 
 #### Scenario: Verdict is a closed merge-gate vocabulary
@@ -85,6 +86,33 @@ The synthesizer SHALL choose the verdict and the `blocker`-category findings **t
 - **WHEN** it is parsed for verdict and counts
 - **THEN** the verdict and the blocker, should-fix and suggestion counts SHALL be the same as without the section
 
+
+### Requirement: Synthesis Emits Synthesized Findings
+
+The Tech Lead's Phase 7 synthesis SHALL record the grouping it already performs: for every item it lists in `final.md` it SHALL emit one entry of `synthesis_findings` in the `complete-round` payload, with a key `S<n>`, the post-synthesis category and severity, the locations, a summary, optional evidence and `flagged_by`, and the reviewer findings it merges as `sources`. The same key SHALL be written in `final.md` next to the item: `**ID**: S<n>` on the last line of each numbered `## Blockers` and `## Should Fix` item (after its location), and a `[S<n>]` prefix on each `## Suggestions` bullet. The payload SHALL be piped before `final.md` is written, so the keys exist when the prose is written.
+
+#### Scenario: One entry per final.md item
+
+- **GIVEN** a synthesis whose `final.md` lists 1 blocker, 3 should-fix items and 5 suggestion bullets
+- **WHEN** the Tech Lead finalizes the round
+- **THEN** the payload carries 9 `synthesis_findings`, each key appears exactly once in `final.md`, and `synthesis_counts` (if present) is 1, 3 and 5
+
+#### Scenario: Merged reviewers are recorded
+
+- **GIVEN** `@principal-1`, `@quality-2` and `@security-1` flagged the same problem under different titles
+- **WHEN** the Tech Lead synthesizes
+- **THEN** one synthesized finding lists the three reviewer findings as sources and `flagged_by` names the three reviewers
+
+#### Scenario: Validation failure is self-corrected
+
+- **WHEN** `complete-round` rejects the payload for an orphan source, a duplicated source or a count mismatch
+- **THEN** the Tech Lead corrects the payload and pipes it again, as for the other exit-7 causes
+
+#### Scenario: Reviewer findings keep the reviewer's own classification
+
+- **WHEN** the Tech Lead promotes or demotes a finding during synthesis
+- **THEN** the change is expressed in the synthesized finding's category and severity, and the reviewer's own entry keeps the category the reviewer assigned
+
 ## ADDED Requirements
 
 ### Requirement: Final Review Without Process Details
@@ -93,8 +121,9 @@ The synthesizer SHALL choose the verdict and the `blocker`-category findings **t
 
 #### Scenario: Problem told in plain language
 
-- **WHEN** a finding is written under `## Blockers`, `## Should Fix` or `## Suggestions`
+- **WHEN** a finding is written under `## Blockers` or `## Should Fix`
 - **THEN** it SHALL have a plain title and one or two paragraphs saying what happens, why it matters and what to do, with any evidence woven into the prose
+- **AND** a suggestion SHALL be one bullet of one or two plain sentences saying the idea and why it helps
 - **AND** it SHALL NOT use form fields such as `**Type**`, `**Issue**`, `**Why this blocks**` or `**Evidence**`
 
 #### Scenario: No process sections
