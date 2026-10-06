@@ -21,7 +21,7 @@ The system SHALL provide a mechanism to translate multi-reviewer synthesis into 
 
 ### Requirement: Human-Voice Review Translation
 
-The translate-review command SHALL rewrite a multi-reviewer review as a single human-voice PR review in a terse senior-reviewer voice: one short, direct sentence per finding of about 25 words at most, the problem or one fix rather than the causal chain (a snippet only when it is the fix itself; a rhetorical question with mild irony is allowed when it makes the point faster, never aimed at the person); praise first and in one line, only when earned; no list of what is fine and no restating of the PR description; explicit in plain words about what blocks the merge and what does not; the fix named in one sentence when blocking on design; a question instead of an assertion when unsure. The output SHALL NOT mention AI, agents, reviewer handles, rounds, sessions, OCR, tooling, or paths under `.ocr/`. It SHALL write two files in the round directory:
+The translate-review command SHALL rewrite a multi-reviewer review as a single human-voice PR review in a terse senior-reviewer voice: one short, direct comment per finding of about 35 words at most that is understandable without the review — what the code does, what it conflicts with, and the ask, without the causal chain (a snippet only when it is the fix itself; a rhetorical question with mild irony is allowed when it makes the point faster, never aimed at the person); praise first and in one line, only when earned; no list of what is fine and no restating of the PR description; explicit in plain words about what blocks the merge and what does not; the fix named in one sentence when blocking on design; a question instead of an assertion when unsure. The output SHALL NOT mention AI, agents, reviewer handles, rounds, sessions, OCR, tooling, or paths under `.ocr/`. It SHALL write two files in the round directory:
 
 - `final-human.md`: a one-line verdict (praise first when earned) saying what blocks the merge, followed only by findings that have no file or line (one line each); it SHALL NOT repeat points that have an inline comment; no "what is good" section, no closing sync offer, no reviewer tables or consensus sections.
 - `final-human-comments.json`: `{ "comments": [ { path, line, start_line?, side: "RIGHT", severity, body } ] }`, one entry per finding with a file and line, where `line` is on the new (head) side and `severity` is `blocking`, `should_fix`, `optional` or `nit`.
@@ -38,7 +38,7 @@ Comment bodies SHALL NOT start with a fixed severity label; whether a point bloc
 
 - **GIVEN** a completed round with blocking and non-blocking findings
 - **WHEN** the command runs
-- **THEN** each comment body SHALL be one short direct sentence of about 25 words at most, stating the problem or one fix rather than the whole causal chain (plus a snippet only when it is the fix)
+- **THEN** each comment body SHALL be short (about 35 words at most) and self-contained: what the code does, what it conflicts with and the ask, without shorthand that only makes sense inside the review (plus a snippet only when it is the fix)
 - **AND** blocking comments SHALL say in plain words that they block the merge
 - **AND** no body SHALL start with `Blocking:`, `Should fix:`, `Optional:`, `Bloqueante:`, `Importante:` or `Opcional:`
 
